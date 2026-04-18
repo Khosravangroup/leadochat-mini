@@ -11,29 +11,28 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('social_post_media', function (Blueprint $table) {
+        Schema::create('social_posts', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('social_post_id')->constrained('social_posts')->cascadeOnDelete();
             $table->foreignId('workspace_id')->constrained()->cascadeOnDelete();
             $table->foreignId('provider_connection_id')->constrained()->cascadeOnDelete();
             $table->string('provider', 32)->default('instagram');
             $table->string('provider_media_id');
-            $table->string('parent_provider_media_id')->nullable();
             $table->string('media_type', 50)->nullable();
+            $table->text('caption')->nullable();
+            $table->text('permalink')->nullable();
             $table->text('media_url')->nullable();
             $table->text('thumbnail_url')->nullable();
-            $table->unsignedInteger('position')->default(0);
-            $table->boolean('is_cover')->default(false);
             $table->timestamp('posted_at')->nullable();
+            $table->unsignedInteger('comments_count')->default(0);
+            $table->unsignedInteger('like_count')->default(0);
+            $table->string('status', 32)->default('published');
             $table->jsonb('raw')->nullable();
             $table->timestamps();
 
-            $table->unique(['provider', 'provider_media_id'], 'social_post_media_provider_media_unique');
-            $table->index(['social_post_id', 'position']);
+            $table->unique(['provider', 'provider_media_id'], 'social_posts_provider_media_unique');
             $table->index(['workspace_id', 'provider']);
             $table->index(['provider_connection_id', 'posted_at']);
-            $table->index(['parent_provider_media_id']);
-            $table->index(['is_cover']);
+            $table->index(['status']);
         });
     }
 
@@ -42,6 +41,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('social_post_media');
+        Schema::dropIfExists('social_posts');
     }
 };
