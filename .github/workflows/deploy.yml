@@ -9,13 +9,18 @@ jobs:
 
     steps:
       - name: Configure SSH key
+        shell: bash
         run: |
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-          printf "%s" "${{ secrets.SERVER_SSH_KEY }}" > ~/.ssh/deploy_key
+          cat > ~/.ssh/deploy_key <<'EOF'
+          ${{ secrets.SERVER_SSH_KEY }}
+          EOF
           chmod 600 ~/.ssh/deploy_key
+          ssh-keygen -y -f ~/.ssh/deploy_key >/dev/null
           ssh-keyscan -H "${{ secrets.SERVER_HOST }}" >> ~/.ssh/known_hosts
 
       - name: Run deploy on server
+        shell: bash
         run: |
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} 'bash /opt/leadochat/deploy.sh'
