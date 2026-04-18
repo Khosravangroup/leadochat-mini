@@ -1,0 +1,77 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/app/Dockerfile
+    container_name: leadochat-mini-app
+    working_dir: /var/www/html
+    restart: unless-stopped
+    env_file:
+      - ./src/.env
+    volumes:
+      - ./src:/var/www/html
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - leadochat-mini
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: leadochat-mini-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./src:/var/www/html
+      - ./docker/nginx/default.prod.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - app
+    networks:
+      - leadochat-mini
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: leadochat-mini-postgres
+    restart: unless-stopped
+    env_file:
+      - ./src/.env
+    environment:
+      POSTGRES_DB: ${DB_DATABASE}
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - leadochat-mini
+
+  reverb:
+    build:
+      context: .
+      dockerfile: docker/app/Dockerfile
+    container_name: leadochat-mini-reverb
+    working_dir: /var/www/html
+    restart: unless-stopped
+    command: php artisan reverb:start --host=0.0.0.0 --port=8081
+    env_file:
+      - ./src/.env
+    volumes:
+      - ./src:/var/www/html
+    depends_on:
+      - app
+    ports:
+      - "8081:8081"
+    networks:
+      - leadochat-mini
+
+volumes:
+  postgres_data:
+
+networks:
+  leadochat-mini:
+    driver: bridge
