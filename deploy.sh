@@ -4,6 +4,33 @@ set -euo pipefail
 APP_DIR="/opt/leadochat"
 BRANCH="${DEPLOY_BRANCH:-main}"
 COMPOSE_FILE="docker-compose.prod.yml"
+MIN_NODE_MAJOR=20
+
+require_command() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    echo "ERROR: required command '$1' is not installed on the server."
+    exit 1
+  fi
+}
+
+check_node_version() {
+  require_command node
+  require_command npm
+
+  local node_version
+  local node_major
+
+  node_version="$(node -v | sed 's/^v//')"
+  node_major="$(printf '%s' "$node_version" | cut -d. -f1)"
+
+  if [ "${node_major}" -lt "${MIN_NODE_MAJOR}" ]; then
+    echo "ERROR: Node.js ${MIN_NODE_MAJOR}+ is required. Current version: v${node_version}"
+    exit 1
+  fi
+
+  echo "==> node version: v${node_version}"
+  echo "==> npm version: $(npm -v)"
+}
 
 cd "$APP_DIR"
 
@@ -19,6 +46,27 @@ if [ ! -f src/.env ]; then
 fi
 
 ln -sfn src/.env .env
+
+echo "==> checking frontend build requirements"
+check_node_version
+
+echo "==> installing frontend dependencies"
+cd "$APP_DIR/src"
+if [ -f package-lock.json ]; then
+  npm ci
+else
+  npm install
+fi
+
+echo "==> building frontend assets"
+npm run build
+
+if [ ! -f "$APP_DIR/src/public/build/manifest.json" ]; then
+  echo "ERROR: Vite build did not produce public/build/manifest.json"
+  exit 1
+fi
+
+cd "$APP_DIR"
 
 echo "==> building containers"
 docker compose -f "$COMPOSE_FILE" build app reverb
@@ -39,6 +87,15 @@ docker compose -f "$COMPOSE_FILE" up -d app reverb nginx
 
 echo "==> installing php dependencies"
 docker compose -f "$COMPOSE_FILE" exec -T app composer install --no-interaction --prefer-dist --optimize-autoloader
+
+echo "==> fixing laravel permissions"
+docker compose -f "$COMPOSE_FILE" exec -T app sh -lc '
+  chown -R www-data:www-data storage bootstrap/cache &&
+  chmod -R 775 storage bootstrap/cache &&
+  touch storage/logs/laravel.log &&
+  chown www-data:www-data storage/logs/laravel.log &&
+  chmod 664 storage/logs/laravel.log
+'
 
 echo "==> generating app key if missing"
 if ! grep -q '^APP_KEY=base64:' src/.env; then
