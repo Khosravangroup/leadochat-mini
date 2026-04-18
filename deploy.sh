@@ -2,7 +2,7 @@
 set -euo pipefail
 
 APP_DIR="/opt/leadochat"
-BRANCH="main"
+BRANCH="${DEPLOY_BRANCH:-main}"
 COMPOSE_FILE="docker-compose.prod.yml"
 
 cd "$APP_DIR"
