@@ -129,7 +129,7 @@ class InstagramWebhookController extends Controller
 
     protected function validateSignature(Request $request): void
     {
-        $secret = (string) config('services.instagram.app_secret');
+        $secret = (string) config('services.instagram.webhook_app_secret');
 
         if ($secret === '' || app()->environment('local')) {
             return;
@@ -169,12 +169,26 @@ class InstagramWebhookController extends Controller
             return null;
         }
 
-        return ProviderConnection::query()
+        $connection = ProviderConnection::query()
             ->where('provider', 'instagram')
             ->where('status', 'connected')
             ->whereIn('provider_account_id', $candidates->all())
             ->latest('id')
             ->first();
+
+        if ($connection) {
+            return $connection;
+        }
+
+        $connectedConnections = ProviderConnection::query()
+            ->where('provider', 'instagram')
+            ->where('status', 'connected')
+            ->limit(2)
+            ->get();
+
+        return $connectedConnections->count() === 1
+            ? $connectedConnections->first()
+            : null;
     }
 
     protected function buildProviderEventId(array $payload, array $entry, array $change): string

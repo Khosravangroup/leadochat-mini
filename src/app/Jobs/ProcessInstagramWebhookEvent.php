@@ -2,6 +2,10 @@
 
 namespace App\Jobs;
 
+use App\Events\WorkspaceRealtimeUpdated;
+use App\Models\ProviderConnection;
+use App\Models\SocialComment;
+use App\Models\SocialPost;
 use App\Models\WebhookEvent;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -174,6 +178,10 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
             return $this->normalizeMessagePayload($change, $entry);
         }
 
+        if ($normalizedType === 'comment') {
+            return $this->normalizeCommentPayload($change, $entry);
+        }
+
         return [
             'kind' => $normalizedType,
             'provider_message_id' => null,
@@ -187,6 +195,63 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
                 'payload' => $payload,
                 'entry' => $entry,
                 'change' => $change,
+            ],
+        ];
+    }
+
+    protected function normalizeCommentPayload(array $change, array $entry): array
+    {
+        $value = Arr::get($change, 'value', []);
+        $verb = (string) (Arr::get($value, 'verb') ?? Arr::get($value, 'item') ?? '');
+        $providerCommentId = (string) (
+            Arr::get($value, 'id')
+            ?? Arr::get($value, 'comment_id')
+            ?? Arr::get($value, 'comment.id')
+            ?? ''
+        );
+        $providerMediaId = (string) (
+            Arr::get($value, 'media.id')
+            ?? Arr::get($value, 'media_id')
+            ?? Arr::get($value, 'media.media_id')
+            ?? Arr::get($value, 'post_id')
+            ?? ''
+        );
+        $providerUserId = (string) (
+            Arr::get($value, 'from.id')
+            ?? Arr::get($value, 'user.id')
+            ?? Arr::get($value, 'sender.id')
+            ?? ''
+        );
+        $username = (string) (
+            Arr::get($value, 'from.username')
+            ?? Arr::get($value, 'username')
+            ?? Arr::get($value, 'user.username')
+            ?? ''
+        );
+        $text = Arr::get($value, 'text') ?? Arr::get($value, 'message');
+        $timestamp = Arr::get($value, 'timestamp')
+            ?? Arr::get($value, 'created_time')
+            ?? Arr::get($entry, 'time');
+
+        return [
+            'kind' => 'comment',
+            'provider_comment_id' => $providerCommentId !== '' ? $providerCommentId : null,
+            'provider_media_id' => $providerMediaId !== '' ? $providerMediaId : null,
+            'parent_provider_comment_id' => $this->normalizeNullableString(
+                Arr::get($value, 'parent_id')
+                ?? Arr::get($value, 'parent_comment_id')
+                ?? Arr::get($value, 'parent.comment_id')
+            ),
+            'provider_user_id' => $providerUserId !== '' ? $providerUserId : null,
+            'username' => $username !== '' ? $username : null,
+            'text' => is_string($text) ? trim($text) : null,
+            'status' => in_array($verb, ['remove', 'delete', 'deleted'], true) ? 'deleted' : 'active',
+            'is_hidden' => (bool) (Arr::get($value, 'hidden') ?? Arr::get($value, 'is_hidden') ?? false),
+            'commented_at' => $timestamp,
+            'raw' => [
+                'entry' => $entry,
+                'change' => $change,
+                'value' => is_array($value) ? $value : [],
             ],
         ];
     }
@@ -512,6 +577,139 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
             && $resolvedConversation instanceof Conversation;
     }
 
+    protected function normalizeNullableString(mixed $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $value = trim((string) $value);
+
+        return $value !== '' ? $value : null;
+    }
+
+    protected function resolveSocialPostForComment(WebhookEvent $event, array $normalized): ?SocialPost
+    {
+        $providerMediaId = (string) ($normalized['provider_media_id'] ?? '');
+
+        if ($providerMediaId === '') {
+            return null;
+        }
+
+        $post = SocialPost::query()->firstOrNew([
+            'provider' => 'instagram',
+            'provider_media_id' => $providerMediaId,
+        ]);
+
+        $post->workspace_id = $event->workspace_id;
+        $post->provider_connection_id = $event->provider_connection_id;
+        $post->provider = 'instagram';
+        $post->provider_media_id = $providerMediaId;
+        $post->media_type = $post->media_type ?: $this->normalizeNullableString(Arr::get($normalized, 'raw.value.media.media_product_type'));
+        $post->status = $post->status ?: 'published';
+        $post->raw = array_merge(
+            is_array($post->raw) ? $post->raw : [],
+            [
+                'last_comment_webhook_at' => now()->toIso8601String(),
+                'last_comment_webhook_value' => Arr::get($normalized, 'raw.value', []),
+            ]
+        );
+        $post->save();
+
+        return $post;
+    }
+
+    protected function persistNormalizedComment(WebhookEvent $event, array $normalized): array
+    {
+        $providerCommentId = (string) ($normalized['provider_comment_id'] ?? '');
+
+        if ($providerCommentId === '') {
+            return [
+                'comment_id' => null,
+                'social_post_id' => null,
+                'skipped_reason' => 'missing_provider_comment_id',
+            ];
+        }
+
+        /** @var ProviderConnection|null $connection */
+        $connection = $event->providerConnection;
+        if (! $connection) {
+            return [
+                'comment_id' => null,
+                'social_post_id' => null,
+                'skipped_reason' => 'provider_connection_not_loaded',
+            ];
+        }
+
+        return DB::transaction(function () use ($event, $normalized, $providerCommentId) {
+            $comment = SocialComment::query()->firstOrNew([
+                'provider' => 'instagram',
+                'provider_comment_id' => $providerCommentId,
+            ]);
+
+            $parentComment = null;
+            $parentProviderCommentId = (string) ($normalized['parent_provider_comment_id'] ?? '');
+            if ($parentProviderCommentId !== '') {
+                $parentComment = SocialComment::query()
+                    ->where('provider', 'instagram')
+                    ->where('provider_comment_id', $parentProviderCommentId)
+                    ->first();
+
+                if (blank($normalized['provider_media_id'] ?? null) && $parentComment?->provider_media_id) {
+                    $normalized['provider_media_id'] = $parentComment->provider_media_id;
+                }
+            }
+
+            $post = $this->resolveSocialPostForComment($event, $normalized)
+                ?: $parentComment?->socialPost
+                ?: $comment->socialPost;
+            $commentedAt = $this->normalizeInstagramTimestamp($normalized['commented_at'] ?? null);
+            $existingRaw = is_array($comment->raw) ? $comment->raw : [];
+
+            $comment->workspace_id = $event->workspace_id;
+            $comment->provider_connection_id = $event->provider_connection_id;
+            $comment->social_post_id = $post?->id ?? $comment->social_post_id;
+            $comment->provider = 'instagram';
+            $comment->provider_media_id = $normalized['provider_media_id'] ?? $comment->provider_media_id;
+            $comment->provider_comment_id = $providerCommentId;
+            $comment->parent_provider_comment_id = $normalized['parent_provider_comment_id'] ?? $comment->parent_provider_comment_id;
+            $comment->provider_user_id = $normalized['provider_user_id'] ?? $comment->provider_user_id;
+            $comment->username = $normalized['username'] ?? $comment->username;
+            $comment->text = $normalized['text'] ?? $comment->text;
+            $comment->status = $normalized['status'] ?? $comment->status ?? 'active';
+            $comment->is_hidden = (bool) ($normalized['is_hidden'] ?? $comment->is_hidden ?? false);
+            $comment->commented_at = $commentedAt ?? $comment->commented_at;
+            $comment->raw = array_merge(
+                $existingRaw,
+                Arr::get($normalized, 'raw.value', []),
+                [
+                    'last_webhook_event_id' => $event->id,
+                    'last_webhook_at' => now()->toIso8601String(),
+                ]
+            );
+            $comment->save();
+
+            if ($post) {
+                $storedCommentCount = SocialComment::query()
+                    ->where('social_post_id', $post->id)
+                    ->where('provider', 'instagram')
+                    ->where('status', '!=', 'deleted')
+                    ->count();
+
+                if ($storedCommentCount > (int) $post->comments_count) {
+                    $post->comments_count = $storedCommentCount;
+                    $post->save();
+                }
+            }
+
+            return [
+                'comment_id' => $comment->id,
+                'social_post_id' => $comment->social_post_id,
+                'skipped_reason' => null,
+            ];
+        });
+    }
+
     protected function updateConversationSnapshot(Conversation $conversation, array $normalized, array $resolvedParticipants): void
     {
         $messageTime = $this->normalizeInstagramTimestamp($normalized['sent_at'] ?? null) ?? now();
@@ -555,6 +753,19 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
             && $event->processed_at !== null;
     }
 
+    protected function broadcastWorkspaceUpdate(WebhookEvent $event, string $domain, string $action, array $payload = []): void
+    {
+        if (blank($event->workspace_id)) {
+            return;
+        }
+
+        try {
+            event(new WorkspaceRealtimeUpdated((int) $event->workspace_id, $domain, $action, $payload));
+        } catch (\Throwable $exception) {
+            report($exception);
+        }
+    }
+
     public function handle(): void
     {
         $event = WebhookEvent::find($this->webhookEventId);
@@ -585,6 +796,7 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
             $normalizedDirection = $this->detectNormalizedDirection($normalized, $event);
             $normalized['direction'] = $normalizedDirection;
             $isMessageEvent = ($normalized['kind'] ?? 'unknown') === 'message';
+            $isCommentEvent = ($normalized['kind'] ?? 'unknown') === 'comment';
             $resolvedConversation = null;
             $resolvedParticipants = [
                 'self_participant_id' => null,
@@ -593,6 +805,7 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
                 'customer_provider_user_id' => null,
             ];
             $persistedMessage = ['message_id' => null, 'attachment_ids' => [], 'skipped_reason' => null];
+            $persistedComment = ['comment_id' => null, 'social_post_id' => null, 'skipped_reason' => null];
 
             $shouldIgnore = blank($event->workspace_id) || blank($event->provider_connection_id);
             if (! $shouldIgnore && $isMessageEvent) {
@@ -607,11 +820,17 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
                 }
             }
 
+            if (! $shouldIgnore && $isCommentEvent) {
+                $persistedComment = $this->persistNormalizedComment($event, $normalized);
+            }
+
             $ignoredReason = null;
             if ($shouldIgnore) {
                 $ignoredReason = 'provider_connection_not_resolved';
             } elseif ($isMessageEvent && ! $resolvedConversation) {
                 $ignoredReason = 'conversation_not_resolved';
+            } elseif ($isCommentEvent && $persistedComment['skipped_reason']) {
+                $ignoredReason = $persistedComment['skipped_reason'];
             }
 
             $finalStatus = $ignoredReason ? 'ignored' : 'processed';
@@ -651,6 +870,11 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
                         'persisted_message_id' => $persistedMessage['message_id'],
                         'persisted_attachment_ids' => $persistedMessage['attachment_ids'],
                         'persistence_skipped_reason' => $persistedMessage['skipped_reason'],
+                        'provider_comment_id' => $normalized['provider_comment_id'] ?? null,
+                        'provider_media_id' => $normalized['provider_media_id'] ?? null,
+                        'persisted_comment_id' => $persistedComment['comment_id'],
+                        'persisted_social_post_id' => $persistedComment['social_post_id'],
+                        'comment_persistence_skipped_reason' => $persistedComment['skipped_reason'],
                         'raw' => $normalized['raw'] ?? [],
                     ],
                     'processing' => [
@@ -662,6 +886,23 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
                     ],
                 ]),
             ]);
+
+            if (! $ignoredReason && $isMessageEvent && $persistedMessage['message_id']) {
+                $this->broadcastWorkspaceUpdate($event, 'inbox', 'instagram_message_received', [
+                    'conversation_id' => $resolvedConversation?->id,
+                    'message_id' => $persistedMessage['message_id'],
+                    'direction' => $normalizedDirection,
+                ]);
+            }
+
+            if (! $ignoredReason && $isCommentEvent && $persistedComment['comment_id']) {
+                $this->broadcastWorkspaceUpdate($event, 'social', 'instagram_comment_received', [
+                    'social_post_id' => $persistedComment['social_post_id'],
+                    'comment_id' => $persistedComment['comment_id'],
+                    'provider_media_id' => $normalized['provider_media_id'] ?? null,
+                    'provider_comment_id' => $normalized['provider_comment_id'] ?? null,
+                ]);
+            }
         } catch (\Throwable $exception) {
             $event->update([
                 'status' => 'failed',
