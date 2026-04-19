@@ -21,7 +21,7 @@ class InstagramTokenExchangeService
             'client_id' => config('services.instagram.client_id'),
             'client_secret' => config('services.instagram.client_secret'),
             'grant_type' => 'authorization_code',
-            'redirect_uri' => config('services.instagram.redirect_uri'),
+            'redirect_uri' => $this->resolveRedirectUri(),
             'code' => $authorizationCode,
         ]);
 
@@ -37,19 +37,27 @@ class InstagramTokenExchangeService
             throw new RuntimeException('Instagram token exchange returned an empty access token.');
         }
 
-        $identity = $this->fetchInstagramIdentity($accessToken);
+        $longLivedToken = $this->exchangeForLongLivedToken($accessToken);
+        $storedAccessToken = (string) ($longLivedToken['access_token'] ?? $accessToken);
+        $identity = $this->fetchInstagramIdentity($storedAccessToken);
 
         return $this->storeExchangeResult($connection, [
-            'access_token' => $accessToken,
+            'access_token' => $storedAccessToken,
             'user_id' => $identity['provider_account_id'] ?: $oauthUserId,
             'oauth_user_id' => $oauthUserId,
             'provider_account_id' => $identity['provider_account_id'] ?: $oauthUserId,
             'provider_account_name' => $identity['provider_account_name'] ?: 'Instagram OAuth User',
             'provider_account_type' => $identity['provider_account_type'] ?: 'instagram_account',
             'scopes' => config('services.instagram.scopes'),
-            'mode' => 'staging_or_production',
-            'raw_payload' => $payload,
+            'mode' => 'staging_or_production_long_lived',
+            'raw_payload' => [
+                'short_lived' => $payload,
+                'long_lived' => $longLivedToken,
+            ],
             'identity_payload' => $identity['raw_payload'] ?? [],
+            'expires_at' => isset($longLivedToken['expires_in'])
+                ? now()->addSeconds((int) $longLivedToken['expires_in'])
+                : null,
         ]);
     }
 
@@ -97,6 +105,45 @@ class InstagramTokenExchangeService
         ];
     }
 
+    protected function exchangeForLongLivedToken(string $shortLivedAccessToken): array
+    {
+        $appSecret = $this->resolveAppSecret();
+
+        $response = Http::acceptJson()->get('https://graph.instagram.com/access_token', [
+            'grant_type' => 'ig_exchange_token',
+            'client_secret' => $appSecret,
+            'access_token' => $shortLivedAccessToken,
+        ]);
+
+        if (! $response->successful()) {
+            throw new RuntimeException('Instagram long-lived token exchange failed: ' . $response->body());
+        }
+
+        $payload = $response->json();
+
+        if (blank($payload['access_token'] ?? null)) {
+            throw new RuntimeException('Instagram long-lived token exchange returned an empty access token.');
+        }
+
+        return $payload;
+    }
+
+    protected function resolveRedirectUri(): string
+    {
+        return (string) (config('services.instagram.redirect_uri') ?: route('connections.instagram.callback'));
+    }
+
+    protected function resolveAppSecret(): string
+    {
+        $appSecret = (string) (config('services.instagram.app_secret') ?: config('services.instagram.client_secret'));
+
+        if ($appSecret === '') {
+            throw new RuntimeException('Instagram app secret is not configured.');
+        }
+
+        return $appSecret;
+    }
+
     protected function storeExchangeResult(ProviderConnection $connection, array $result): array
     {
         return DB::transaction(function () use ($connection, $result) {
@@ -128,7 +175,7 @@ class InstagramTokenExchangeService
                 'token_type' => 'access_token',
                 'access_token' => (string) ($result['access_token'] ?? ''),
                 'refresh_token' => null,
-                'expires_at' => null,
+                'expires_at' => $result['expires_at'] ?? null,
                 'scopes' => (string) ($result['scopes'] ?? ''),
                 'is_primary' => true,
             ]);

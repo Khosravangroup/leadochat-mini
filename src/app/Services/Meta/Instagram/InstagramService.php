@@ -147,17 +147,23 @@ class InstagramService
             throw new RuntimeException('Instagram DM reply text cannot be empty.');
         }
 
-        $recipientId = $this->resolveCommentDmRecipientId($comment);
-        if ($recipientId === null) {
-            throw new RuntimeException('Instagram comment author recipient id was not found for DM reply.');
+        $commentId = trim((string) ($comment->provider_comment_id ?? ''));
+        if ($commentId === '') {
+            throw new RuntimeException('Instagram comment id was not found for DM reply.');
         }
 
-        $sendResult = $this->instagramMessagingService->sendTextMessage(
+        $sendResult = $this->instagramMessagingService->sendPrivateReplyToComment(
             $connection,
-            $recipientId,
+            $commentId,
             $text,
             $options
         );
+        $recipientId = $this->resolveSentRecipientId($sendResult)
+            ?? $this->resolveCommentDmRecipientId($comment);
+
+        if ($recipientId === null) {
+            throw new RuntimeException('Instagram comment private reply did not return a recipient id.');
+        }
 
         $inboxResult = $this->persistCommentDmReplyInInbox($connection, $comment, $recipientId, $text, $sendResult);
 
@@ -383,6 +389,18 @@ class InstagramService
         }
 
         return 'instagram-comment-dm-' . now()->timestamp . '-' . random_int(1000, 9999);
+    }
+
+    protected function resolveSentRecipientId(array $sendResult): ?string
+    {
+        $recipientId = trim((string) (
+            $sendResult['recipient_id']
+            ?? $sendResult['response']['recipient_id']
+            ?? $sendResult['mock_response']['recipient_id']
+            ?? ''
+        ));
+
+        return $recipientId !== '' ? $recipientId : null;
     }
 
     protected function resolveCommentAuthorName(SocialComment $comment): ?string

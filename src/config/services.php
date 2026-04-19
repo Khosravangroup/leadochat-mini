@@ -26,8 +26,10 @@ return [
     'instagram' => [
         'client_id' => env('INSTAGRAM_CLIENT_ID'),
         'client_secret' => env('INSTAGRAM_CLIENT_SECRET'),
-        'redirect_uri' => env('INSTAGRAM_REDIRECT_URI', 'http://localhost:8080/connect/instagram/callback'),
-        'scopes' => env('INSTAGRAM_SCOPES', 'instagram_business_basic,instagram_business_content_publish,instagram_business_manage_messages,instagram_business_manage_comments'),
+        'app_secret' => env('INSTAGRAM_APP_SECRET', env('INSTAGRAM_CLIENT_SECRET')),
+        'redirect_uri' => env('INSTAGRAM_REDIRECT_URI'),
+        'graph_version' => env('INSTAGRAM_GRAPH_VERSION', 'v23.0'),
+        'scopes' => env('INSTAGRAM_SCOPES', 'instagram_business_basic,instagram_business_manage_messages,instagram_business_manage_comments,instagram_business_content_publish,instagram_business_manage_insights'),
         'webhook_verify_token' => env('INSTAGRAM_WEBHOOK_VERIFY_TOKEN', 'leadochat-mini-instagram-verify-token'),
     ],
 
