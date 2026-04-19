@@ -24,7 +24,7 @@ class InstagramWebhookSubscriptionServiceTest extends TestCase
         ]);
 
         Http::fake([
-            'https://graph.instagram.com/v23.0/17841439585523723/subscribed_apps*' => Http::sequence()
+            'https://graph.instagram.com/v23.0/test-instagram-account/subscribed_apps*' => Http::sequence()
                 ->push(['success' => true], 200)
                 ->push([
                     'data' => [
@@ -46,7 +46,7 @@ class InstagramWebhookSubscriptionServiceTest extends TestCase
             'workspace_id' => $workspace->id,
             'provider' => 'instagram',
             'provider_account_type' => 'instagram_account',
-            'provider_account_id' => '17841439585523723',
+            'provider_account_id' => 'test-instagram-account',
             'provider_account_name' => 'sechenov.ir',
             'status' => 'connected',
         ]);
@@ -77,7 +77,7 @@ class InstagramWebhookSubscriptionServiceTest extends TestCase
             parse_str($request->body(), $body);
 
             return $request->method() === 'POST'
-                && $request->url() === 'https://graph.instagram.com/v23.0/17841439585523723/subscribed_apps'
+                && $request->url() === 'https://graph.instagram.com/v23.0/test-instagram-account/subscribed_apps'
                 && ($body['subscribed_fields'] ?? null) === 'messages,comments'
                 && ($body['access_token'] ?? null) === 'test-access-token';
         });
