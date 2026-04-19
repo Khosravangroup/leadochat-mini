@@ -5,6 +5,7 @@ namespace App\Services\Meta\Instagram;
 use App\Models\ProviderConnection;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
 class InstagramWebhookSubscriptionService
@@ -20,6 +21,14 @@ class InstagramWebhookSubscriptionService
         }
 
         $endpoint = $this->resolveSubscriptionEndpoint($accountId);
+
+        $this->logWebhookSubscription('subscription_started', [
+            'connection_id' => $connection->id,
+            'provider_account_id' => $accountId,
+            'endpoint' => $endpoint,
+            'requested_fields' => $subscribedFields,
+        ]);
+
         $response = Http::asForm()
             ->acceptJson()
             ->post($endpoint, [
@@ -39,6 +48,13 @@ class InstagramWebhookSubscriptionService
             ];
 
             $this->recordSubscriptionResult($connection, $result);
+            $this->logWebhookSubscription('subscription_failed', [
+                'connection_id' => $connection->id,
+                'provider_account_id' => $accountId,
+                'status' => $result['status'],
+                'error' => $result['error'],
+                'requested_fields' => $subscribedFields,
+            ], 'warning');
 
             throw new RuntimeException('Instagram webhook subscription failed: ' . $result['error']);
         }
@@ -59,6 +75,14 @@ class InstagramWebhookSubscriptionService
         ];
 
         $this->recordSubscriptionResult($connection, $result);
+        $this->logWebhookSubscription('subscription_completed', [
+            'connection_id' => $connection->id,
+            'provider_account_id' => $accountId,
+            'success' => $result['success'],
+            'requested_fields' => $subscribedFields,
+            'verified_fields' => $verifiedFields,
+            'missing_fields' => $missingFields,
+        ], $result['success'] ? 'info' : 'warning');
 
         return $result;
     }
@@ -164,8 +188,20 @@ class InstagramWebhookSubscriptionService
 
     protected function resolveSubscriptionEndpoint(string $accountId): string
     {
-        $version = (string) config('services.instagram.graph_version', 'v23.0');
+        $version = (string) config('services.instagram.graph_version', 'v25.0');
 
         return "https://graph.instagram.com/{$version}/{$accountId}/subscribed_apps";
+    }
+
+    protected function logWebhookSubscription(string $event, array $context = [], string $level = 'info'): void
+    {
+        try {
+            Log::channel('instagram_webhooks')->{$level}($event, array_merge([
+                'graph_version' => config('services.instagram.graph_version'),
+                'service' => static::class,
+            ], $context));
+        } catch (\Throwable) {
+            // Subscription logging is diagnostic only.
+        }
     }
 }

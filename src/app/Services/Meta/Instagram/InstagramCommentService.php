@@ -486,6 +486,6 @@ class InstagramCommentService
 
     protected function resolveGraphVersion(): string
     {
-        return (string) config('services.instagram.graph_version', 'v23.0');
+        return (string) config('services.instagram.graph_version', 'v25.0');
     }
 }
