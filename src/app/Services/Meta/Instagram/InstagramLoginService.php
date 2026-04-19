@@ -67,12 +67,14 @@ class InstagramLoginService
         $exchangeResult = null;
 
         if ($status === 'callback_received' && $workspaceId) {
+            $pendingAccountId = 'pending-instagram-account-' . $workspaceId;
+
             $connection = ProviderConnection::updateOrCreate(
                 [
                     'workspace_id' => $workspaceId,
                     'provider' => 'instagram',
                     'provider_account_type' => 'instagram_account',
-                    'provider_account_id' => 'pending-instagram-account',
+                    'provider_account_id' => $pendingAccountId,
                 ],
                 [
                     'provider_account_name' => 'Pending Instagram Connection',
@@ -80,11 +82,11 @@ class InstagramLoginService
                     'connected_at' => now(),
                     'last_synced_at' => null,
                     'meta' => [
-                        'callback_code' => $request->input('code'),
+                        'callback_code_received' => true,
                         'callback_state' => $decodedState,
                         'incoming_state' => $incomingState,
                         'authorization_url' => Session::get('instagram_debug_authorization_url'),
-                        'mode' => 'local_debug',
+                        'mode' => app()->environment('local') ? 'local_debug' : 'instagram_login',
                     ],
                 ]
             );
