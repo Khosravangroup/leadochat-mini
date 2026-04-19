@@ -69,7 +69,7 @@ fi
 cd "$APP_DIR"
 
 echo "==> building containers"
-docker compose -f "$COMPOSE_FILE" build app reverb
+docker compose -f "$COMPOSE_FILE" build app reverb queue
 
 echo "==> starting postgres first"
 docker compose -f "$COMPOSE_FILE" up -d postgres
@@ -82,8 +82,8 @@ for i in {1..30}; do
   sleep 2
 done
 
-echo "==> starting app, reverb, nginx"
-docker compose -f "$COMPOSE_FILE" up -d app reverb nginx
+echo "==> starting app, reverb, queue, nginx"
+docker compose -f "$COMPOSE_FILE" up -d app reverb queue nginx
 
 echo "==> installing php dependencies"
 docker compose -f "$COMPOSE_FILE" exec -T app composer install --no-interaction --prefer-dist --optimize-autoloader

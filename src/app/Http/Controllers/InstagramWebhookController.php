@@ -14,9 +14,9 @@ class InstagramWebhookController extends Controller
 {
     public function verify(Request $request): Response
     {
-        $mode = $request->query('hub_mode');
-        $token = $request->query('hub_verify_token');
-        $challenge = $request->query('hub_challenge');
+        $mode = $request->query('hub_mode', $request->query('hub.mode'));
+        $token = $request->query('hub_verify_token', $request->query('hub.verify_token'));
+        $challenge = $request->query('hub_challenge', $request->query('hub.challenge'));
 
         if (
             $mode === 'subscribe' &&
@@ -43,7 +43,8 @@ class InstagramWebhookController extends Controller
                 continue;
             }
 
-            $changes = collect($entry['changes'] ?? []);
+            $changes = collect($entry['changes'] ?? [])
+                ->merge($this->buildEntryMessagingChanges($entry));
 
             if ($changes->isEmpty()) {
                 $providerConnection = $this->resolveProviderConnectionFromChange($payload, $entry, []);
@@ -153,6 +154,8 @@ class InstagramWebhookController extends Controller
             Arr::get($change, 'value.metadata.instagram_account_id'),
             Arr::get($change, 'value.metadata.phone_number_id'),
             Arr::get($change, 'value.recipient.id'),
+            Arr::get($change, 'value.messaging.0.recipient.id'),
+            Arr::get($change, 'value.messaging.0.sender.id'),
             Arr::get($change, 'value.id'),
             Arr::get($entry, 'id'),
             Arr::get($payload, 'id'),
@@ -180,10 +183,46 @@ class InstagramWebhookController extends Controller
             (string) ($payload['object'] ?? 'instagram'),
             (string) ($entry['id'] ?? 'entry'),
             (string) ($change['field'] ?? 'change'),
-            (string) (Arr::get($change, 'value.mid') ?? Arr::get($change, 'value.message.mid') ?? Arr::get($change, 'value.comment_id') ?? Arr::get($change, 'value.id') ?? Arr::get($change, 'value.post_id') ?? ''),
-            (string) ($entry['time'] ?? now()->timestamp),
+            (string) (
+                Arr::get($change, 'value.mid')
+                ?? Arr::get($change, 'value.message.mid')
+                ?? Arr::get($change, 'value.message.id')
+                ?? Arr::get($change, 'value.messaging.0.message.mid')
+                ?? Arr::get($change, 'value.messaging.0.message.id')
+                ?? Arr::get($change, 'value.messages.0.mid')
+                ?? Arr::get($change, 'value.messages.0.id')
+                ?? Arr::get($change, 'value.comment_id')
+                ?? Arr::get($change, 'value.id')
+                ?? Arr::get($change, 'value.post_id')
+                ?? ''
+            ),
+            (string) (Arr::get($change, 'value.timestamp') ?? Arr::get($change, 'value.messaging.0.timestamp') ?? $entry['time'] ?? now()->timestamp),
         ];
 
         return implode(':', $parts);
+    }
+
+    protected function buildEntryMessagingChanges(array $entry): array
+    {
+        $messagingItems = Arr::get($entry, 'messaging', []);
+
+        if (!is_array($messagingItems) || empty($messagingItems)) {
+            return [];
+        }
+
+        return collect($messagingItems)
+            ->filter(fn ($messagingItem) => is_array($messagingItem))
+            ->map(fn (array $messagingItem) => [
+                'field' => 'messages',
+                'value' => [
+                    'messaging' => [$messagingItem],
+                    'sender' => Arr::get($messagingItem, 'sender', []),
+                    'recipient' => Arr::get($messagingItem, 'recipient', []),
+                    'message' => Arr::get($messagingItem, 'message', []),
+                    'timestamp' => Arr::get($messagingItem, 'timestamp') ?? Arr::get($entry, 'time'),
+                ],
+            ])
+            ->values()
+            ->all();
     }
 }

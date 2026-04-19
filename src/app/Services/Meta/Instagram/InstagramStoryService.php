@@ -21,8 +21,9 @@ class InstagramStoryService
             throw new RuntimeException('Instagram story media_url is required.');
         }
 
-        $containerEndpoint = "https://graph.facebook.com/v23.0/{$accountId}/media";
-        $publishEndpoint = "https://graph.facebook.com/v23.0/{$accountId}/media_publish";
+        $graphVersion = $this->resolveGraphVersion();
+        $containerEndpoint = "https://graph.instagram.com/{$graphVersion}/{$accountId}/media";
+        $publishEndpoint = "https://graph.instagram.com/{$graphVersion}/{$accountId}/media_publish";
 
         $containerPayload = [
             'media_type' => strtoupper($mediaType),
@@ -103,5 +104,10 @@ class InstagramStoryService
         }
 
         return $accountId;
+    }
+
+    protected function resolveGraphVersion(): string
+    {
+        return (string) config('services.instagram.graph_version', 'v23.0');
     }
 }

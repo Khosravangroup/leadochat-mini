@@ -38,6 +38,35 @@ class InstagramMessagingService
         return $this->performSend($connection, $payload, 'text');
     }
 
+    public function sendPrivateReplyToComment(
+        ProviderConnection $connection,
+        string $commentId,
+        string $text,
+        array $options = []
+    ): array {
+        $commentId = trim($commentId);
+        $text = trim($text);
+
+        if ($commentId === '') {
+            throw new RuntimeException('Instagram comment id cannot be empty for private replies.');
+        }
+
+        if ($text === '') {
+            throw new RuntimeException('Instagram private reply text cannot be empty.');
+        }
+
+        $payload = [
+            'recipient' => [
+                'comment_id' => $commentId,
+            ],
+            'message' => [
+                'text' => $text,
+            ],
+        ];
+
+        return $this->performSend($connection, $payload, 'comment_private_reply');
+    }
+
     public function sendAttachment(
         ProviderConnection $connection,
         string $recipientId,
@@ -82,14 +111,22 @@ class InstagramMessagingService
         $endpoint = $this->resolveMessagesEndpoint($connection);
 
         if (app()->environment('local')) {
+            $recipientId = Arr::get($payload, 'recipient.id')
+                ?: (Arr::get($payload, 'recipient.comment_id')
+                    ? 'local-debug-comment-author-' . sha1((string) Arr::get($payload, 'recipient.comment_id'))
+                    : null);
+            $messageId = 'local-debug-instagram-msg-' . now()->timestamp;
+
             return [
                 'mode' => 'local_debug',
                 'kind' => $kind,
                 'endpoint' => $endpoint,
                 'payload' => $payload,
+                'recipient_id' => $recipientId,
+                'message_id' => $messageId,
                 'mock_response' => [
-                    'recipient_id' => Arr::get($payload, 'recipient.id'),
-                    'message_id' => 'local-debug-instagram-msg-' . now()->timestamp,
+                    'recipient_id' => $recipientId,
+                    'message_id' => $messageId,
                 ],
             ];
         }
@@ -140,6 +177,11 @@ class InstagramMessagingService
             throw new RuntimeException('Instagram provider_account_id is empty.');
         }
 
-        return "https://graph.facebook.com/v23.0/{$accountId}/messages";
+        return "https://graph.instagram.com/{$this->resolveGraphVersion()}/{$accountId}/messages";
+    }
+
+    protected function resolveGraphVersion(): string
+    {
+        return (string) config('services.instagram.graph_version', 'v23.0');
     }
 }

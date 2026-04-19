@@ -30,7 +30,7 @@ class InstagramContentService
             $query['after'] = $options['after'];
         }
 
-        $endpoint = "https://graph.facebook.com/v23.0/{$accountId}/media";
+        $endpoint = "https://graph.instagram.com/{$this->resolveGraphVersion()}/{$accountId}/media";
 
         if (app()->environment('local')) {
             return [
@@ -110,7 +110,7 @@ class InstagramContentService
         $fields = $options['fields']
             ?? 'id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count,children{id,media_type,media_url,thumbnail_url,timestamp}';
 
-        $endpoint = "https://graph.facebook.com/v23.0/{$mediaId}";
+        $endpoint = "https://graph.instagram.com/{$this->resolveGraphVersion()}/{$mediaId}";
 
         if (app()->environment('local')) {
             return [
@@ -400,5 +400,10 @@ class InstagramContentService
         }
 
         return $accountId;
+    }
+
+    protected function resolveGraphVersion(): string
+    {
+        return (string) config('services.instagram.graph_version', 'v23.0');
     }
 }

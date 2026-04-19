@@ -31,7 +31,7 @@ class InstagramLoginService
 
         $query = http_build_query([
             'client_id' => config('services.instagram.client_id'),
-            'redirect_uri' => route('connections.instagram.callback'),
+            'redirect_uri' => $this->resolveRedirectUri(),
             'response_type' => 'code',
             'scope' => config('services.instagram.scopes'),
             'state' => $state,
@@ -106,10 +106,15 @@ class InstagramLoginService
             'incoming_state' => $incomingState,
             'session_state' => $sessionState,
             'state_is_valid' => $stateIsValid,
-            'redirect_uri' => route('connections.instagram.callback'),
+            'redirect_uri' => $this->resolveRedirectUri(),
             'authorization_url' => Session::get('instagram_debug_authorization_url'),
             'saved_connection_id' => $savedConnectionId,
             'exchange_result' => $exchangeResult,
         ];
+    }
+
+    protected function resolveRedirectUri(): string
+    {
+        return (string) (config('services.instagram.redirect_uri') ?: route('connections.instagram.callback'));
     }
 }

@@ -17,7 +17,7 @@ class InstagramCommentService
         $accessToken = $this->resolveAccessToken($connection);
 
         $fields = $options['fields']
-            ?? 'id,text,username,timestamp,parent_id,hidden,like_count,replies{id,text,username,timestamp,parent_id,hidden}';
+            ?? 'id,text,from{id,username},username,timestamp,parent_id,hidden,like_count,replies{id,text,from{id,username},username,timestamp,parent_id,hidden}';
 
         $query = [
             'fields' => $fields,
@@ -29,7 +29,7 @@ class InstagramCommentService
             $query['after'] = $options['after'];
         }
 
-        $endpoint = "https://graph.facebook.com/v23.0/{$mediaId}/comments";
+        $endpoint = "https://graph.instagram.com/{$this->resolveGraphVersion()}/{$mediaId}/comments";
 
         if (app()->environment('local')) {
             return [
@@ -254,7 +254,7 @@ class InstagramCommentService
             'access_token' => $accessToken,
         ];
 
-        $endpoint = "https://graph.facebook.com/v23.0/{$commentId}/replies";
+        $endpoint = "https://graph.instagram.com/{$this->resolveGraphVersion()}/{$commentId}/replies";
 
         if (app()->environment('local')) {
             return [
@@ -287,7 +287,7 @@ class InstagramCommentService
     public function deleteComment(ProviderConnection $connection, string $commentId): array
     {
         $accessToken = $this->resolveAccessToken($connection);
-        $endpoint = "https://graph.facebook.com/v23.0/{$commentId}";
+        $endpoint = "https://graph.instagram.com/{$this->resolveGraphVersion()}/{$commentId}";
 
         if (app()->environment('local')) {
             return [
@@ -379,7 +379,7 @@ class InstagramCommentService
             'access_token' => $accessToken,
         ];
 
-        $endpoint = "https://graph.facebook.com/v23.0/{$commentId}";
+        $endpoint = "https://graph.instagram.com/{$this->resolveGraphVersion()}/{$commentId}";
 
         if (app()->environment('local')) {
             return [
@@ -482,5 +482,10 @@ class InstagramCommentService
         }
 
         return $accessToken;
+    }
+
+    protected function resolveGraphVersion(): string
+    {
+        return (string) config('services.instagram.graph_version', 'v23.0');
     }
 }
