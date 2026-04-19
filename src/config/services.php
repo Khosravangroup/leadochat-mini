@@ -27,6 +27,8 @@ return [
         'client_id' => env('INSTAGRAM_CLIENT_ID'),
         'client_secret' => env('INSTAGRAM_CLIENT_SECRET'),
         'app_secret' => env('INSTAGRAM_APP_SECRET', env('INSTAGRAM_CLIENT_SECRET')),
+        'webhook_app_id' => env('INSTAGRAM_WEBHOOK_APP_ID', env('META_APP_ID', env('INSTAGRAM_CLIENT_ID'))),
+        'webhook_app_secret' => env('INSTAGRAM_WEBHOOK_APP_SECRET', env('META_APP_SECRET', env('INSTAGRAM_APP_SECRET', env('INSTAGRAM_CLIENT_SECRET')))),
         'redirect_uri' => env('INSTAGRAM_REDIRECT_URI'),
         'graph_version' => env('INSTAGRAM_GRAPH_VERSION', 'v23.0'),
         'scopes' => env('INSTAGRAM_SCOPES', 'instagram_business_basic,instagram_business_manage_messages,instagram_business_manage_comments,instagram_business_content_publish,instagram_business_manage_insights'),

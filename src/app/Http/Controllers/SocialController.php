@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\WorkspaceRealtimeUpdated;
 use App\Models\ProviderConnection;
 use App\Models\SocialComment;
 use App\Models\SocialPost;
@@ -169,6 +170,63 @@ class SocialController extends Controller
         return $pageData;
     }
 
+    protected function loadInstagramCommentsData(Request $request, array $pageData): array
+    {
+        $activeConnection = $pageData['activeInstagramConnection'] ?? null;
+        $workspace = $pageData['workspace'];
+        $syncResult = null;
+        $syncError = null;
+        $commentSyncErrors = [];
+
+        if ($activeConnection && $activeConnection->status === 'connected') {
+            try {
+                $syncResult = app(InstagramService::class)->syncMediaFeed($activeConnection, [
+                    'limit' => 24,
+                ]);
+            } catch (\Throwable $exception) {
+                $syncError = $exception->getMessage();
+            }
+
+            $posts = SocialPost::query()
+                ->where('workspace_id', $workspace->id)
+                ->where('provider', 'instagram')
+                ->latest('posted_at')
+                ->latest('id')
+                ->get();
+
+            foreach ($posts as $post) {
+                try {
+                    app(InstagramService::class)->syncMediaComments($activeConnection, $post, [
+                        'limit' => 50,
+                    ]);
+                } catch (\Throwable $exception) {
+                    $commentSyncErrors[$post->id] = $exception->getMessage();
+                }
+            }
+        }
+
+        $comments = SocialComment::query()
+            ->where('workspace_id', $workspace->id)
+            ->where('provider', 'instagram')
+            ->where('status', '!=', 'deleted')
+            ->with('socialPost')
+            ->latest('commented_at')
+            ->latest('id')
+            ->limit(100)
+            ->get();
+
+        $pageData['comments'] = $comments;
+        $pageData['syncResult'] = $syncResult;
+        $pageData['syncError'] = $syncError;
+        $pageData['commentSyncErrors'] = $commentSyncErrors;
+        $pageData['socialCounts']['comments'] = SocialComment::query()
+            ->where('workspace_id', $workspace->id)
+            ->where('provider', 'instagram')
+            ->count();
+
+        return $pageData;
+    }
+
     protected function resolveWorkspaceInstagramConnection(Request $request): ProviderConnection
     {
         $workspace = $request->user()?->currentWorkspace();
@@ -280,6 +338,61 @@ class SocialController extends Controller
         return view('social.instagram.index', $this->loadInstagramPostsData($request, $pageData));
     }
 
+    protected function respondWithInstagramComments(Request $request, ?string $successMessage = null, ?string $errorMessage = null): View|RedirectResponse
+    {
+        if (! $request->ajax()) {
+            $response = redirect()->route('social.instagram.comments');
+
+            if ($successMessage !== null) {
+                $response = $response->with('social_success', $successMessage);
+            }
+
+            if ($errorMessage !== null) {
+                $response = $response->with('social_error', $errorMessage);
+            }
+
+            return $response;
+        }
+
+        if ($successMessage !== null) {
+            session()->flash('social_success', $successMessage);
+        }
+
+        if ($errorMessage !== null) {
+            session()->flash('social_error', $errorMessage);
+        }
+
+        $pageData = $this->buildInstagramPageData(
+            $request,
+            'comments',
+            'Social — Instagram Comments'
+        );
+
+        return view('social.instagram.index', $this->loadInstagramCommentsData($request, $pageData));
+    }
+
+    protected function respondWithInstagramAction(Request $request, ?string $successMessage = null, ?string $errorMessage = null): View|RedirectResponse
+    {
+        return $request->input('return_tab') === 'comments'
+            ? $this->respondWithInstagramComments($request, $successMessage, $errorMessage)
+            : $this->respondWithInstagramPosts($request, $successMessage, $errorMessage);
+    }
+
+    protected function broadcastSocialUpdate(Request $request, string $action, array $payload = []): void
+    {
+        $workspace = $request->user()?->currentWorkspace();
+
+        if (! $workspace) {
+            return;
+        }
+
+        try {
+            event(new WorkspaceRealtimeUpdated((int) $workspace->id, 'social', $action, $payload));
+        } catch (\Throwable $exception) {
+            report($exception);
+        }
+    }
+
     public function instagramPosts(Request $request): View
     {
         $pageData = $this->buildInstagramPageData(
@@ -293,11 +406,13 @@ class SocialController extends Controller
 
     public function instagramComments(Request $request): View
     {
-        return view('social.instagram.index', $this->buildInstagramPageData(
+        $pageData = $this->buildInstagramPageData(
             $request,
             'comments',
             'Social — Instagram Comments'
-        ));
+        );
+
+        return view('social.instagram.index', $this->loadInstagramCommentsData($request, $pageData));
     }
 
     public function instagramStories(Request $request): View
@@ -499,7 +614,7 @@ class SocialController extends Controller
         $replyText = trim((string) $request->input('reply_text', ''));
 
         if ($replyText === '') {
-            return $this->respondWithInstagramPosts($request, null, 'Reply text is required.');
+            return $this->respondWithInstagramAction($request, null, 'Reply text is required.');
         }
 
         try {
@@ -515,10 +630,14 @@ class SocialController extends Controller
                 ]
             );
             $comment->save();
+            $this->broadcastSocialUpdate($request, 'instagram_comment_replied', [
+                'comment_id' => $comment->id,
+                'social_post_id' => $comment->social_post_id,
+            ]);
 
-            return $this->respondWithInstagramPosts($request, 'Comment reply sent successfully.');
+            return $this->respondWithInstagramAction($request, 'Comment reply sent successfully.');
         } catch (\Throwable $exception) {
-            return $this->respondWithInstagramPosts($request, null, 'Comment reply failed: ' . $exception->getMessage());
+            return $this->respondWithInstagramAction($request, null, 'Comment reply failed: ' . $exception->getMessage());
         }
     }
 
@@ -529,7 +648,7 @@ class SocialController extends Controller
         $replyText = trim((string) $request->input('reply_text', ''));
 
         if ($replyText === '') {
-            return $this->respondWithInstagramPosts($request, null, 'DM reply text is required.');
+            return $this->respondWithInstagramAction($request, null, 'DM reply text is required.');
         }
 
         try {
@@ -550,10 +669,16 @@ class SocialController extends Controller
                 ]
             );
             $comment->save();
+            $this->broadcastSocialUpdate($request, 'instagram_comment_replied_via_dm', [
+                'comment_id' => $comment->id,
+                'social_post_id' => $comment->social_post_id,
+                'conversation_id' => $sendResult['inbox']['conversation_id'] ?? null,
+                'message_id' => $sendResult['inbox']['message_id'] ?? null,
+            ]);
 
-            return $this->respondWithInstagramPosts($request, 'DM reply sent successfully.');
+            return $this->respondWithInstagramAction($request, 'DM reply sent successfully.');
         } catch (\Throwable $exception) {
-            return $this->respondWithInstagramPosts($request, null, 'DM reply failed: ' . $exception->getMessage());
+            return $this->respondWithInstagramAction($request, null, 'DM reply failed: ' . $exception->getMessage());
         }
     }
 
@@ -567,10 +692,14 @@ class SocialController extends Controller
 
             $comment->is_hidden = true;
             $comment->save();
+            $this->broadcastSocialUpdate($request, 'instagram_comment_hidden', [
+                'comment_id' => $comment->id,
+                'social_post_id' => $comment->social_post_id,
+            ]);
 
-            return $this->respondWithInstagramPosts($request, 'Comment hidden successfully.');
+            return $this->respondWithInstagramAction($request, 'Comment hidden successfully.');
         } catch (\Throwable $exception) {
-            return $this->respondWithInstagramPosts($request, null, 'Hide comment failed: ' . $exception->getMessage());
+            return $this->respondWithInstagramAction($request, null, 'Hide comment failed: ' . $exception->getMessage());
         }
     }
 
@@ -584,10 +713,14 @@ class SocialController extends Controller
 
             $comment->is_hidden = false;
             $comment->save();
+            $this->broadcastSocialUpdate($request, 'instagram_comment_unhidden', [
+                'comment_id' => $comment->id,
+                'social_post_id' => $comment->social_post_id,
+            ]);
 
-            return $this->respondWithInstagramPosts($request, 'Comment unhidden successfully.');
+            return $this->respondWithInstagramAction($request, 'Comment unhidden successfully.');
         } catch (\Throwable $exception) {
-            return $this->respondWithInstagramPosts($request, null, 'Unhide comment failed: ' . $exception->getMessage());
+            return $this->respondWithInstagramAction($request, null, 'Unhide comment failed: ' . $exception->getMessage());
         }
     }
 
@@ -601,10 +734,14 @@ class SocialController extends Controller
 
             $comment->status = 'deleted';
             $comment->save();
+            $this->broadcastSocialUpdate($request, 'instagram_comment_deleted', [
+                'comment_id' => $comment->id,
+                'social_post_id' => $comment->social_post_id,
+            ]);
 
-            return $this->respondWithInstagramPosts($request, 'Comment deleted successfully.');
+            return $this->respondWithInstagramAction($request, 'Comment deleted successfully.');
         } catch (\Throwable $exception) {
-            return $this->respondWithInstagramPosts($request, null, 'Delete comment failed: ' . $exception->getMessage());
+            return $this->respondWithInstagramAction($request, null, 'Delete comment failed: ' . $exception->getMessage());
         }
     }
 }

@@ -3503,4 +3503,28 @@
             filterWorkspaceTags();
         });
     </script>
+
+    <script>
+        (function () {
+            const workspaceId = @json($workspace?->id);
+
+            if (!workspaceId || !window.Echo) {
+                return;
+            }
+
+            let reloadTimer = null;
+
+            window.Echo.private(`workspace.${workspaceId}`)
+                .listen('.workspace.updated', function (event) {
+                    if (!event || event.domain !== 'inbox') {
+                        return;
+                    }
+
+                    clearTimeout(reloadTimer);
+                    reloadTimer = setTimeout(function () {
+                        window.location.reload();
+                    }, 700);
+                });
+        })();
+    </script>
 </x-app-layout>

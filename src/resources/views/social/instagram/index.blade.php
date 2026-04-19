@@ -1404,22 +1404,179 @@
                         })();
                     </script>
                 @elseif ($tab === 'comments')
-                    <h3 class="social-section-title">Comments moderation shell — {{ $socialCounts['comments'] }} stored comments</h3>
+                    <div id="social-comments-root">
+                        <h3 class="social-section-title">Comments moderation — {{ $socialCounts['comments'] }} stored comments</h3>
 
-                    <div class="social-placeholder-grid">
-                        <div class="social-placeholder-box">
-                            <div class="social-placeholder-label">Comment stream</div>
-                            <div class="social-placeholder-text">
-                                This section will list post comments, reply actions, moderation actions, and filters like unreplied, hidden, or selected post.
+                        @if (!empty($syncError))
+                            <div class="social-sync-banner error">
+                                Feed sync failed: {{ $syncError }}
                             </div>
-                        </div>
+                        @elseif (!empty($syncResult))
+                            <div class="social-sync-banner success">
+                                Feed sync completed. {{ $syncResult['count'] ?? 0 }} post item(s) checked before loading comments.
+                            </div>
+                        @endif
 
-                        <div class="social-placeholder-box">
-                            <div class="social-placeholder-label">Reply via DM bridge</div>
-                            <div class="social-placeholder-text">
-                                This section will bridge Social and Inbox so a comment can be answered privately via Instagram DM using the messaging pipeline.
+                        @if (!empty($commentSyncErrors))
+                            <div class="social-sync-banner error">
+                                Some comments could not be synced from Instagram yet. Open the related post panel to see per-post errors.
                             </div>
-                        </div>
+                        @endif
+
+                        @if (session('social_success'))
+                            <div class="social-sync-banner success">
+                                {{ session('social_success') }}
+                            </div>
+                        @endif
+
+                        @if (session('social_error'))
+                            <div class="social-sync-banner error">
+                                {{ session('social_error') }}
+                            </div>
+                        @endif
+
+                        @if (($comments ?? collect())->isEmpty())
+                            <div class="social-placeholder-grid">
+                                <div class="social-placeholder-box">
+                                    <div class="social-placeholder-label">No comments stored yet</div>
+                                    <div class="social-placeholder-text">
+                                        Instagram is connected and posts can sync, but no comment records are available in this workspace yet. New comment webhooks will be stored here, and page refresh sync will also check recent posts.
+                                    </div>
+                                </div>
+
+                                <div class="social-placeholder-box">
+                                    <div class="social-placeholder-label">Webhook check</div>
+                                    <div class="social-placeholder-text">
+                                        If real Instagram comments still do not arrive here, the Meta app needs the Instagram webhook fields for comments and messages subscribed for the published app.
+                                    </div>
+                                </div>
+                            </div>
+                        @else
+                            <div class="social-comment-list" style="max-height:none;">
+                                @foreach ($comments as $comment)
+                                    @php
+                                        $replyFormId = 'comments-tab-reply-form-' . $comment->id;
+                                        $commentAuthor = $comment->username ?: 'Instagram user';
+                                        $commentAvatarLetter = mb_strtoupper(mb_substr(trim($commentAuthor), 0, 1));
+                                        $commentPost = $comment->socialPost;
+                                        $commentRaw = is_array($comment->raw) ? $comment->raw : [];
+                                        $lastPublicReplyText = is_string($commentRaw['last_public_reply_text'] ?? null)
+                                            ? trim($commentRaw['last_public_reply_text'])
+                                            : null;
+                                        $lastDmReplyText = is_string($commentRaw['last_dm_reply_text'] ?? null)
+                                            ? trim($commentRaw['last_dm_reply_text'])
+                                            : null;
+                                    @endphp
+
+                                    <div class="social-comment-card">
+                                        <div class="social-comment-top">
+                                            <div class="social-comment-main">
+                                                <div class="social-comment-avatar">{{ $commentAvatarLetter ?: 'U' }}</div>
+                                                <div class="social-comment-author">{{ $commentAuthor }}</div>
+                                                <div class="social-comment-text">
+                                                    {{ $comment->text ?: 'No comment text available.' }}
+                                                </div>
+                                            </div>
+
+                                            <div class="social-comment-date">
+                                                {{ $comment->commented_at ? $comment->commented_at->format('Y-m-d H:i') : 'No date' }}
+                                            </div>
+                                        </div>
+
+                                        <div class="social-comment-reply-note">
+                                            <span class="social-post-badge">
+                                                {{ $comment->is_hidden ? 'Hidden' : 'Visible' }}
+                                            </span>
+                                            <span>
+                                                Post: <strong>{{ $commentPost?->caption ? \Illuminate\Support\Str::limit($commentPost->caption, 90) : ($comment->provider_media_id ?: 'Unknown post') }}</strong>
+                                            </span>
+                                        </div>
+
+                                        @if ($lastPublicReplyText)
+                                            <div class="social-comment-reply-note">
+                                                <span class="social-post-badge">Public reply</span>
+                                                <span>{{ $lastPublicReplyText }}</span>
+                                            </div>
+                                        @endif
+
+                                        @if ($lastDmReplyText)
+                                            <div class="social-comment-reply-note">
+                                                <span class="social-post-badge">DM sent</span>
+                                                <span>{{ $lastDmReplyText }}</span>
+                                            </div>
+                                        @endif
+
+                                        <div class="social-comment-actions">
+                                            <button
+                                                type="button"
+                                                class="social-comment-action-button"
+                                                onclick="const form = document.getElementById('{{ $replyFormId }}'); const mode = form ? form.querySelector('[data-reply-mode-label]') : null; const button = form ? form.querySelector('[data-reply-submit-button]') : null; const input = form ? form.querySelector('input[name=reply_text]') : null; if (form) { form.hidden = false; form.action = '{{ route('social.instagram.comments.reply', $comment) }}'; if (mode) mode.textContent = 'Public reply'; if (button) button.textContent = 'Send reply'; if (input) { input.placeholder = 'Write your public reply here...'; input.focus(); } }"
+                                            >
+                                                Reply
+                                            </button>
+
+                                            <button
+                                                type="button"
+                                                class="social-comment-action-button"
+                                                onclick="const form = document.getElementById('{{ $replyFormId }}'); const mode = form ? form.querySelector('[data-reply-mode-label]') : null; const button = form ? form.querySelector('[data-reply-submit-button]') : null; const input = form ? form.querySelector('input[name=reply_text]') : null; if (form) { form.hidden = false; form.action = '{{ route('social.instagram.comments.reply_dm', $comment) }}'; if (mode) mode.textContent = 'DM reply'; if (button) button.textContent = 'Send DM reply'; if (input) { input.placeholder = 'Write your private DM reply here...'; input.focus(); } }"
+                                            >
+                                                Reply via DM
+                                            </button>
+
+                                            <form method="POST" action="{{ $comment->is_hidden ? route('social.instagram.comments.unhide', $comment) : route('social.instagram.comments.hide', $comment) }}" style="display:inline;">
+                                                @csrf
+                                                <input type="hidden" name="return_tab" value="comments">
+                                                <button type="submit" class="social-comment-action-button">
+                                                    {{ $comment->is_hidden ? 'Unhide' : 'Hide' }}
+                                                </button>
+                                            </form>
+
+                                            <form method="POST" action="{{ route('social.instagram.comments.delete', $comment) }}" style="display:inline;">
+                                                @csrf
+                                                @method('DELETE')
+                                                <input type="hidden" name="return_tab" value="comments">
+                                                <button type="submit" class="social-comment-action-button">
+                                                    Delete
+                                                </button>
+                                            </form>
+                                        </div>
+
+                                        <form
+                                            id="{{ $replyFormId }}"
+                                            method="POST"
+                                            action="{{ route('social.instagram.comments.reply', $comment) }}"
+                                            class="social-comment-reply-form"
+                                            hidden
+                                        >
+                                            @csrf
+                                            <input type="hidden" name="return_tab" value="comments">
+                                            <span class="social-post-badge" data-reply-mode-label>Public reply</span>
+                                            <input
+                                                type="text"
+                                                name="reply_text"
+                                                class="social-comment-reply-textarea"
+                                                placeholder="Write your public reply here..."
+                                                required
+                                            >
+
+                                            <div class="social-comment-reply-actions">
+                                                <button type="submit" class="social-comment-action-button" data-reply-submit-button>
+                                                    Send reply
+                                                </button>
+
+                                                <button
+                                                    type="button"
+                                                    class="social-comment-action-button"
+                                                    onclick="const form = document.getElementById('{{ $replyFormId }}'); const button = form ? form.querySelector('[data-reply-submit-button]') : null; const mode = form ? form.querySelector('[data-reply-mode-label]') : null; const input = form ? form.querySelector('input[name=reply_text]') : null; if (form) { form.hidden = true; form.action = '{{ route('social.instagram.comments.reply', $comment) }}'; if (button) button.textContent = 'Send reply'; if (mode) mode.textContent = 'Public reply'; if (input) { input.value = ''; input.placeholder = 'Write your public reply here...'; } }"
+                                                >
+                                                    Cancel
+                                                </button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                @endforeach
+                            </div>
+                        @endif
                     </div>
                 @else
                     <h3 class="social-section-title">Stories — {{ $socialCounts['stories'] }} stored stories</h3>
@@ -1722,6 +1879,30 @@ const showVideo = (src) => {
                         </div>
                     @endif
                 @endif
+
+                <script>
+                    (function () {
+                        const workspaceId = @json($workspace->id ?? null);
+
+                        if (!workspaceId || !window.Echo) {
+                            return;
+                        }
+
+                        let reloadTimer = null;
+
+                        window.Echo.private(`workspace.${workspaceId}`)
+                            .listen('.workspace.updated', function (event) {
+                                if (!event || event.domain !== 'social') {
+                                    return;
+                                }
+
+                                clearTimeout(reloadTimer);
+                                reloadTimer = setTimeout(function () {
+                                    window.location.reload();
+                                }, 700);
+                            });
+                    })();
+                </script>
             </div>
         </div>
     </div>
