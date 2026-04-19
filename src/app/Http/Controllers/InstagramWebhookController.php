@@ -9,6 +9,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Log;
 
 class InstagramWebhookController extends Controller
 {
@@ -17,11 +18,20 @@ class InstagramWebhookController extends Controller
         $mode = $request->query('hub_mode', $request->query('hub.mode'));
         $token = $request->query('hub_verify_token', $request->query('hub.verify_token'));
         $challenge = $request->query('hub_challenge', $request->query('hub.challenge'));
+        $tokenMatches = is_string($token) &&
+            hash_equals((string) config('services.instagram.webhook_verify_token'), $token);
+
+        $this->logWebhook('verification_request', [
+            'mode' => $mode,
+            'token_matches' => $tokenMatches,
+            'challenge_present' => filled($challenge),
+            'ip' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+        ]);
 
         if (
             $mode === 'subscribe' &&
-            is_string($token) &&
-            hash_equals((string) config('services.instagram.webhook_verify_token'), $token)
+            $tokenMatches
         ) {
             return response((string) $challenge, 200)
                 ->header('Content-Type', 'text/plain');
@@ -32,6 +42,16 @@ class InstagramWebhookController extends Controller
 
     public function receive(Request $request): JsonResponse
     {
+        $this->logWebhook('receive_started', [
+            'signature_present' => filled($request->header('X-Hub-Signature-256')),
+            'body_sha256' => hash('sha256', $request->getContent()),
+            'content_length' => $request->server('CONTENT_LENGTH'),
+            'object' => $request->input('object'),
+            'entry_count' => is_array($request->input('entry')) ? count($request->input('entry')) : 0,
+            'ip' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+        ]);
+
         $this->validateSignature($request);
 
         $payload = $request->all();
@@ -46,7 +66,16 @@ class InstagramWebhookController extends Controller
             $changes = collect($entry['changes'] ?? [])
                 ->merge($this->buildEntryMessagingChanges($entry));
 
+            $this->logWebhook('entry_parsed', [
+                'entry_id' => Arr::get($entry, 'id'),
+                'entry_time' => Arr::get($entry, 'time'),
+                'change_count' => $changes->count(),
+                'raw_change_count' => is_array(Arr::get($entry, 'changes')) ? count(Arr::get($entry, 'changes')) : 0,
+                'messaging_count' => is_array(Arr::get($entry, 'messaging')) ? count(Arr::get($entry, 'messaging')) : 0,
+            ], 'debug');
+
             if ($changes->isEmpty()) {
+                $candidateIds = $this->resolveProviderConnectionCandidateIds($payload, $entry, []);
                 $providerConnection = $this->resolveProviderConnectionFromChange($payload, $entry, []);
                 $providerEventId = $this->buildProviderEventId($payload, $entry, []);
 
@@ -76,6 +105,17 @@ class InstagramWebhookController extends Controller
                     ProcessInstagramWebhookEvent::dispatch($event->id);
                 }
 
+                $this->logWebhook('event_stored', [
+                    'event_id' => $event->id,
+                    'event_type' => 'entry',
+                    'provider_event_id' => $providerEventId,
+                    'was_recently_created' => $event->wasRecentlyCreated,
+                    'queued' => $event->wasRecentlyCreated,
+                    'provider_connection_id' => $providerConnection?->id,
+                    'workspace_id' => $providerConnection?->workspace_id,
+                    'candidate_ids' => $candidateIds,
+                ]);
+
                 $createdEventIds[] = $event->id;
                 continue;
             }
@@ -85,6 +125,7 @@ class InstagramWebhookController extends Controller
                     continue;
                 }
 
+                $candidateIds = $this->resolveProviderConnectionCandidateIds($payload, $entry, $change);
                 $providerConnection = $this->resolveProviderConnectionFromChange($payload, $entry, $change);
                 $providerEventId = $this->buildProviderEventId($payload, $entry, $change);
                 $eventType = (string) ($change['field'] ?? 'unknown');
@@ -116,9 +157,31 @@ class InstagramWebhookController extends Controller
                     ProcessInstagramWebhookEvent::dispatch($event->id);
                 }
 
+                $this->logWebhook('event_stored', [
+                    'event_id' => $event->id,
+                    'event_type' => $eventType,
+                    'provider_event_id' => $providerEventId,
+                    'was_recently_created' => $event->wasRecentlyCreated,
+                    'queued' => $event->wasRecentlyCreated,
+                    'provider_connection_id' => $providerConnection?->id,
+                    'workspace_id' => $providerConnection?->workspace_id,
+                    'candidate_ids' => $candidateIds,
+                    'message_mid' => Arr::get($change, 'value.message.mid')
+                        ?? Arr::get($change, 'value.messaging.0.message.mid')
+                        ?? Arr::get($change, 'value.messages.0.mid'),
+                    'sender_id' => Arr::get($change, 'value.sender.id')
+                        ?? Arr::get($change, 'value.messaging.0.sender.id'),
+                    'recipient_id' => Arr::get($change, 'value.recipient.id')
+                        ?? Arr::get($change, 'value.messaging.0.recipient.id'),
+                ]);
+
                 $createdEventIds[] = $event->id;
             }
         }
+
+        $this->logWebhook('receive_completed', [
+            'created_event_ids' => collect($createdEventIds)->unique()->values()->all(),
+        ]);
 
         return response()->json([
             'status' => 'received',
@@ -132,11 +195,20 @@ class InstagramWebhookController extends Controller
         $secret = (string) config('services.instagram.webhook_app_secret');
 
         if ($secret === '' || app()->environment('local')) {
+            $this->logWebhook('signature_skipped', [
+                'reason' => $secret === '' ? 'missing_secret' : 'local_environment',
+            ], 'warning');
+
             return;
         }
 
         $signature = (string) $request->header('X-Hub-Signature-256', '');
         if ($signature === '' || !str_starts_with($signature, 'sha256=')) {
+            $this->logWebhook('signature_failed', [
+                'reason' => 'missing_or_invalid_header',
+                'body_sha256' => hash('sha256', $request->getContent()),
+            ], 'warning');
+
             abort(403, 'Missing or invalid webhook signature header.');
         }
 
@@ -144,35 +216,31 @@ class InstagramWebhookController extends Controller
         $expected = 'sha256=' . hash_hmac('sha256', $rawBody, $secret);
 
         if (! hash_equals($expected, $signature)) {
+            $this->logWebhook('signature_failed', [
+                'reason' => 'mismatch',
+                'body_sha256' => hash('sha256', $rawBody),
+            ], 'warning');
+
             abort(403, 'Webhook signature validation failed.');
         }
+
+        $this->logWebhook('signature_valid', [
+            'body_sha256' => hash('sha256', $rawBody),
+        ], 'debug');
     }
 
     protected function resolveProviderConnectionFromChange(array $payload, array $entry, array $change): ?ProviderConnection
     {
-        $candidates = collect([
-            Arr::get($change, 'value.metadata.instagram_account_id'),
-            Arr::get($change, 'value.metadata.phone_number_id'),
-            Arr::get($change, 'value.recipient.id'),
-            Arr::get($change, 'value.messaging.0.recipient.id'),
-            Arr::get($change, 'value.messaging.0.sender.id'),
-            Arr::get($change, 'value.id'),
-            Arr::get($entry, 'id'),
-            Arr::get($payload, 'id'),
-        ])
-            ->filter(fn ($value) => filled($value))
-            ->map(fn ($value) => (string) $value)
-            ->unique()
-            ->values();
+        $candidates = $this->resolveProviderConnectionCandidateIds($payload, $entry, $change);
 
-        if ($candidates->isEmpty()) {
+        if (empty($candidates)) {
             return null;
         }
 
         $connection = ProviderConnection::query()
             ->where('provider', 'instagram')
             ->where('status', 'connected')
-            ->whereIn('provider_account_id', $candidates->all())
+            ->whereIn('provider_account_id', $candidates)
             ->latest('id')
             ->first();
 
@@ -189,6 +257,25 @@ class InstagramWebhookController extends Controller
         return $connectedConnections->count() === 1
             ? $connectedConnections->first()
             : null;
+    }
+
+    protected function resolveProviderConnectionCandidateIds(array $payload, array $entry, array $change): array
+    {
+        return collect([
+            Arr::get($change, 'value.metadata.instagram_account_id'),
+            Arr::get($change, 'value.metadata.phone_number_id'),
+            Arr::get($change, 'value.recipient.id'),
+            Arr::get($change, 'value.messaging.0.recipient.id'),
+            Arr::get($change, 'value.messaging.0.sender.id'),
+            Arr::get($change, 'value.id'),
+            Arr::get($entry, 'id'),
+            Arr::get($payload, 'id'),
+        ])
+            ->filter(fn ($value) => filled($value))
+            ->map(fn ($value) => (string) $value)
+            ->unique()
+            ->values()
+            ->all();
     }
 
     protected function buildProviderEventId(array $payload, array $entry, array $change): string
@@ -238,5 +325,17 @@ class InstagramWebhookController extends Controller
             ])
             ->values()
             ->all();
+    }
+
+    protected function logWebhook(string $event, array $context = [], string $level = 'info'): void
+    {
+        try {
+            Log::channel('instagram_webhooks')->{$level}($event, array_merge([
+                'graph_version' => config('services.instagram.graph_version'),
+                'app_url' => config('app.url'),
+            ], $context));
+        } catch (\Throwable) {
+            // Webhook logging must never block Meta's delivery handshake.
+        }
     }
 }

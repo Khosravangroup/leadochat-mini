@@ -19,12 +19,12 @@ class InstagramWebhookSubscriptionServiceTest extends TestCase
     public function test_it_subscribes_connected_account_to_configured_webhook_fields(): void
     {
         config([
-            'services.instagram.graph_version' => 'v23.0',
+            'services.instagram.graph_version' => 'v25.0',
             'services.instagram.webhook_subscribed_fields' => ['messages', 'comments'],
         ]);
 
         Http::fake([
-            'https://graph.instagram.com/v23.0/test-instagram-account/subscribed_apps*' => Http::sequence()
+            'https://graph.instagram.com/v25.0/test-instagram-account/subscribed_apps*' => Http::sequence()
                 ->push(['success' => true], 200)
                 ->push([
                     'data' => [
@@ -77,7 +77,7 @@ class InstagramWebhookSubscriptionServiceTest extends TestCase
             parse_str($request->body(), $body);
 
             return $request->method() === 'POST'
-                && $request->url() === 'https://graph.instagram.com/v23.0/test-instagram-account/subscribed_apps'
+                && $request->url() === 'https://graph.instagram.com/v25.0/test-instagram-account/subscribed_apps'
                 && ($body['subscribed_fields'] ?? null) === 'messages,comments'
                 && ($body['access_token'] ?? null) === 'test-access-token';
         });

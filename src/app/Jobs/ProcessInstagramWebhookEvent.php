@@ -17,6 +17,7 @@ use App\Models\Message;
 use App\Models\MessageAttachment;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class ProcessInstagramWebhookEvent implements ShouldQueue
 {
@@ -771,12 +772,33 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
         $event = WebhookEvent::find($this->webhookEventId);
 
         if (! $event) {
+            $this->logWebhookProcessing('processing_skipped', [
+                'webhook_event_id' => $this->webhookEventId,
+                'reason' => 'event_not_found',
+            ], 'warning');
+
             return;
         }
 
         if ($this->shouldSkipAlreadyFinalizedEvent($event)) {
+            $this->logWebhookProcessing('processing_skipped', [
+                'webhook_event_id' => $event->id,
+                'provider_event_id' => $event->provider_event_id,
+                'status' => $event->status,
+                'reason' => 'already_finalized',
+            ], 'debug');
+
             return;
         }
+
+        $this->logWebhookProcessing('processing_started', [
+            'webhook_event_id' => $event->id,
+            'provider_event_id' => $event->provider_event_id,
+            'event_type' => $event->event_type,
+            'status' => $event->status,
+            'workspace_id' => $event->workspace_id,
+            'provider_connection_id' => $event->provider_connection_id,
+        ]);
 
         $event->update([
             'status' => 'processing',
@@ -797,6 +819,23 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
             $normalized['direction'] = $normalizedDirection;
             $isMessageEvent = ($normalized['kind'] ?? 'unknown') === 'message';
             $isCommentEvent = ($normalized['kind'] ?? 'unknown') === 'comment';
+
+            $this->logWebhookProcessing('event_normalized', [
+                'webhook_event_id' => $event->id,
+                'provider_event_id' => $event->provider_event_id,
+                'kind' => $normalized['kind'] ?? 'unknown',
+                'direction' => $normalizedDirection,
+                'provider_message_id' => $normalized['provider_message_id'] ?? null,
+                'sender_id' => $normalized['sender_id'] ?? null,
+                'recipient_id' => $normalized['recipient_id'] ?? null,
+                'text_present' => filled($normalized['text'] ?? null),
+                'text_length' => is_string($normalized['text'] ?? null) ? mb_strlen($normalized['text']) : 0,
+                'attachment_count' => is_array($normalized['attachments'] ?? null) ? count($normalized['attachments']) : 0,
+                'message_context_type' => $normalized['message_context_type'] ?? null,
+                'provider_comment_id' => $normalized['provider_comment_id'] ?? null,
+                'provider_media_id' => $normalized['provider_media_id'] ?? null,
+            ], 'debug');
+
             $resolvedConversation = null;
             $resolvedParticipants = [
                 'self_participant_id' => null,
@@ -903,7 +942,27 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
                     'provider_comment_id' => $normalized['provider_comment_id'] ?? null,
                 ]);
             }
+
+            $this->logWebhookProcessing('processing_completed', [
+                'webhook_event_id' => $event->id,
+                'provider_event_id' => $event->provider_event_id,
+                'final_status' => $finalStatus,
+                'ignored_reason' => $ignoredReason,
+                'resolved_conversation_id' => $resolvedConversation?->id,
+                'persisted_message_id' => $persistedMessage['message_id'],
+                'persisted_comment_id' => $persistedComment['comment_id'],
+                'persisted_attachment_ids' => $persistedMessage['attachment_ids'],
+                'workspace_id' => $event->workspace_id,
+                'provider_connection_id' => $event->provider_connection_id,
+            ]);
         } catch (\Throwable $exception) {
+            $this->logWebhookProcessing('processing_failed', [
+                'webhook_event_id' => $event->id,
+                'provider_event_id' => $event->provider_event_id,
+                'exception_class' => $exception::class,
+                'error' => $exception->getMessage(),
+            ], 'error');
+
             $event->update([
                 'status' => 'failed',
                 'last_error' => $exception->getMessage(),
@@ -911,6 +970,18 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
             ]);
 
             throw $exception;
+        }
+    }
+
+    protected function logWebhookProcessing(string $event, array $context = [], string $level = 'info'): void
+    {
+        try {
+            Log::channel('instagram_webhooks')->{$level}($event, array_merge([
+                'graph_version' => config('services.instagram.graph_version'),
+                'job' => static::class,
+            ], $context));
+        } catch (\Throwable) {
+            // Diagnostics must not change webhook processing behavior.
         }
     }
 }
