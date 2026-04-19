@@ -8,9 +8,15 @@ use App\Models\ProviderPermission;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
+use Throwable;
 
 class InstagramTokenExchangeService
 {
+    public function __construct(
+        protected InstagramWebhookSubscriptionService $instagramWebhookSubscriptionService
+    ) {
+    }
+
     public function exchangeAndStore(ProviderConnection $connection, string $authorizationCode): array
     {
         if (app()->environment('local')) {
@@ -41,7 +47,7 @@ class InstagramTokenExchangeService
         $storedAccessToken = (string) ($longLivedToken['access_token'] ?? $accessToken);
         $identity = $this->fetchInstagramIdentity($storedAccessToken);
 
-        return $this->storeExchangeResult($connection, [
+        $storedResult = $this->storeExchangeResult($connection, [
             'access_token' => $storedAccessToken,
             'user_id' => $identity['provider_account_id'] ?: $oauthUserId,
             'oauth_user_id' => $oauthUserId,
@@ -59,6 +65,12 @@ class InstagramTokenExchangeService
                 ? now()->addSeconds((int) $longLivedToken['expires_in'])
                 : null,
         ]);
+
+        $storedResult['webhook_subscription'] = $this->ensureWebhookSubscription(
+            (int) $storedResult['connection_id']
+        );
+
+        return $storedResult;
     }
 
     protected function storeLocalDebugResult(ProviderConnection $connection, string $authorizationCode): array
@@ -223,6 +235,39 @@ class InstagramTokenExchangeService
                 'mode' => $result['mode'] ?? null,
             ];
         });
+    }
+
+    protected function ensureWebhookSubscription(int $connectionId): array
+    {
+        $connection = ProviderConnection::find($connectionId);
+
+        if (! $connection) {
+            return [
+                'success' => false,
+                'error' => 'Instagram connection was not found after token exchange.',
+            ];
+        }
+
+        try {
+            return $this->instagramWebhookSubscriptionService->ensureSubscribed($connection);
+        } catch (Throwable $exception) {
+            report($exception);
+
+            $connection->forceFill([
+                'meta' => array_merge(is_array($connection->meta) ? $connection->meta : [], [
+                    'webhook_subscription' => [
+                        'success' => false,
+                        'error' => $exception->getMessage(),
+                        'verified_at' => now()->toIso8601String(),
+                    ],
+                ]),
+            ])->save();
+
+            return [
+                'success' => false,
+                'error' => $exception->getMessage(),
+            ];
+        }
     }
 
     protected function resolveExchangeTargetConnection(ProviderConnection $connection, array $result): ProviderConnection
