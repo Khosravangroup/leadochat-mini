@@ -137,6 +137,7 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
             ?? '');
 
         $timestamp = Arr::get($messageNode, 'created_time')
+            ?? Arr::get($messagingItems, '0.timestamp')
             ?? Arr::get($value, 'timestamp')
             ?? Arr::get($entry, 'time');
 
@@ -432,6 +433,7 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
             if ($providerMessageId !== '') {
                 $message = Message::query()->firstOrNew([
                     'conversation_id' => $conversation->id,
+                    'provider' => 'instagram',
                     'provider_message_id' => $providerMessageId,
                 ]);
             } else {
@@ -440,6 +442,7 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
             }
 
             $message->sender_participant_id = $senderParticipantId;
+            $message->provider = 'instagram';
             $message->direction = $direction === 'outbound_or_echo' ? 'outbound' : 'inbound';
             $message->message_type = $messageType;
             $message->text_body = $messageType === 'text' && $textBody !== '' ? $textBody : null;

@@ -27,7 +27,8 @@ class SocialController extends Controller
             ->latest('id')
             ->get();
 
-        $activeConnection = $instagramConnections->first();
+        $activeConnection = $instagramConnections->firstWhere('status', 'connected')
+            ?? $instagramConnections->first();
 
         $postCount = SocialPost::query()
             ->where('workspace_id', $workspace->id)

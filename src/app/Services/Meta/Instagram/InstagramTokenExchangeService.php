@@ -21,7 +21,7 @@ class InstagramTokenExchangeService
             'client_id' => config('services.instagram.client_id'),
             'client_secret' => config('services.instagram.client_secret'),
             'grant_type' => 'authorization_code',
-            'redirect_uri' => config('services.instagram.redirect_uri'),
+            'redirect_uri' => $this->resolveRedirectUri(),
             'code' => $authorizationCode,
         ]);
 
@@ -37,19 +37,27 @@ class InstagramTokenExchangeService
             throw new RuntimeException('Instagram token exchange returned an empty access token.');
         }
 
-        $identity = $this->fetchInstagramIdentity($accessToken);
+        $longLivedToken = $this->exchangeForLongLivedToken($accessToken);
+        $storedAccessToken = (string) ($longLivedToken['access_token'] ?? $accessToken);
+        $identity = $this->fetchInstagramIdentity($storedAccessToken);
 
         return $this->storeExchangeResult($connection, [
-            'access_token' => $accessToken,
+            'access_token' => $storedAccessToken,
             'user_id' => $identity['provider_account_id'] ?: $oauthUserId,
             'oauth_user_id' => $oauthUserId,
             'provider_account_id' => $identity['provider_account_id'] ?: $oauthUserId,
             'provider_account_name' => $identity['provider_account_name'] ?: 'Instagram OAuth User',
             'provider_account_type' => $identity['provider_account_type'] ?: 'instagram_account',
             'scopes' => config('services.instagram.scopes'),
-            'mode' => 'staging_or_production',
-            'raw_payload' => $payload,
+            'mode' => 'staging_or_production_long_lived',
+            'raw_payload' => [
+                'short_lived' => $payload,
+                'long_lived' => $longLivedToken,
+            ],
             'identity_payload' => $identity['raw_payload'] ?? [],
+            'expires_at' => isset($longLivedToken['expires_in'])
+                ? now()->addSeconds((int) $longLivedToken['expires_in'])
+                : null,
         ]);
     }
 
@@ -97,38 +105,90 @@ class InstagramTokenExchangeService
         ];
     }
 
+    protected function exchangeForLongLivedToken(string $shortLivedAccessToken): array
+    {
+        $appSecret = $this->resolveAppSecret();
+
+        $response = Http::acceptJson()->get('https://graph.instagram.com/access_token', [
+            'grant_type' => 'ig_exchange_token',
+            'client_secret' => $appSecret,
+            'access_token' => $shortLivedAccessToken,
+        ]);
+
+        if (! $response->successful()) {
+            throw new RuntimeException('Instagram long-lived token exchange failed: ' . $response->body());
+        }
+
+        $payload = $response->json();
+
+        if (blank($payload['access_token'] ?? null)) {
+            throw new RuntimeException('Instagram long-lived token exchange returned an empty access token.');
+        }
+
+        return $payload;
+    }
+
+    protected function resolveRedirectUri(): string
+    {
+        return (string) (config('services.instagram.redirect_uri') ?: route('connections.instagram.callback'));
+    }
+
+    protected function resolveAppSecret(): string
+    {
+        $appSecret = (string) (config('services.instagram.app_secret') ?: config('services.instagram.client_secret'));
+
+        if ($appSecret === '') {
+            throw new RuntimeException('Instagram app secret is not configured.');
+        }
+
+        return $appSecret;
+    }
+
     protected function storeExchangeResult(ProviderConnection $connection, array $result): array
     {
         return DB::transaction(function () use ($connection, $result) {
+            $sourceConnection = ProviderConnection::query()
+                ->whereKey($connection->id)
+                ->lockForUpdate()
+                ->first() ?? $connection;
+
+            $targetConnection = $this->resolveExchangeTargetConnection($sourceConnection, $result);
+
             OauthToken::query()
-                ->where('provider_connection_id', $connection->id)
+                ->where('provider_connection_id', $targetConnection->id)
                 ->where('is_primary', true)
                 ->update(['is_primary' => false]);
 
-            $existingMeta = is_array($connection->meta) ? $connection->meta : [];
+            $existingMeta = is_array($targetConnection->meta) ? $targetConnection->meta : [];
+            $sourceMeta = is_array($sourceConnection->meta) ? $sourceConnection->meta : [];
 
-            $connection->update([
-                'provider_account_type' => (string) ($result['provider_account_type'] ?? $connection->provider_account_type ?: 'instagram_account'),
-                'provider_account_id' => (string) ($result['provider_account_id'] ?? $result['user_id'] ?? $connection->provider_account_id),
+            if ($targetConnection->id !== $sourceConnection->id) {
+                $existingMeta['reconnect_source_connection_id'] = $sourceConnection->id;
+                $existingMeta['reconnect_source_meta'] = $sourceMeta;
+            }
+
+            $targetConnection->update([
+                'provider_account_type' => (string) ($result['provider_account_type'] ?? $targetConnection->provider_account_type ?: 'instagram_account'),
+                'provider_account_id' => (string) ($result['provider_account_id'] ?? $result['user_id'] ?? $targetConnection->provider_account_id),
                 'external_oauth_user_id' => (string) ($result['oauth_user_id'] ?? $result['user_id'] ?? ''),
-                'provider_account_name' => (string) ($result['provider_account_name'] ?? $connection->provider_account_name ?: 'Instagram OAuth User'),
+                'provider_account_name' => (string) ($result['provider_account_name'] ?? $targetConnection->provider_account_name ?: 'Instagram OAuth User'),
                 'status' => 'connected',
                 'connected_at' => now(),
                 'last_synced_at' => now(),
                 'meta' => array_merge($existingMeta, [
                     'exchange_mode' => $result['mode'] ?? null,
                     'exchange_completed_at' => now()->toDateTimeString(),
-                    'exchange_payload' => $result['raw_payload'] ?? [],
-                    'identity_payload' => $result['identity_payload'] ?? [],
+                    'exchange_payload' => $this->sanitizeMetaPayload($result['raw_payload'] ?? []),
+                    'identity_payload' => $this->sanitizeMetaPayload($result['identity_payload'] ?? []),
                 ]),
             ]);
 
             OauthToken::create([
-                'provider_connection_id' => $connection->id,
+                'provider_connection_id' => $targetConnection->id,
                 'token_type' => 'access_token',
                 'access_token' => (string) ($result['access_token'] ?? ''),
                 'refresh_token' => null,
-                'expires_at' => null,
+                'expires_at' => $result['expires_at'] ?? null,
                 'scopes' => (string) ($result['scopes'] ?? ''),
                 'is_primary' => true,
             ]);
@@ -141,7 +201,7 @@ class InstagramTokenExchangeService
             foreach ($scopes as $scope) {
                 ProviderPermission::updateOrCreate(
                     [
-                        'provider_connection_id' => $connection->id,
+                        'provider_connection_id' => $targetConnection->id,
                         'permission' => $scope,
                     ],
                     [
@@ -152,12 +212,102 @@ class InstagramTokenExchangeService
                 );
             }
 
+            if ($targetConnection->id !== $sourceConnection->id) {
+                $this->cleanupSupersededPendingConnection($sourceConnection, $targetConnection);
+            }
+
             return [
-                'connection_id' => $connection->id,
-                'provider_account_id' => $connection->provider_account_id,
+                'connection_id' => $targetConnection->id,
+                'provider_account_id' => $targetConnection->provider_account_id,
                 'status' => 'connected',
                 'mode' => $result['mode'] ?? null,
             ];
         });
+    }
+
+    protected function resolveExchangeTargetConnection(ProviderConnection $connection, array $result): ProviderConnection
+    {
+        $providerAccountId = (string) ($result['provider_account_id'] ?? $result['user_id'] ?? '');
+
+        if ($providerAccountId === '') {
+            return $connection;
+        }
+
+        $existingConnection = ProviderConnection::query()
+            ->where('provider', $connection->provider)
+            ->where('provider_account_id', $providerAccountId)
+            ->whereKeyNot($connection->id)
+            ->lockForUpdate()
+            ->first();
+
+        if (! $existingConnection) {
+            return $connection;
+        }
+
+        if ((int) $existingConnection->workspace_id !== (int) $connection->workspace_id) {
+            throw new RuntimeException('This Instagram account is already connected to another workspace.');
+        }
+
+        return $existingConnection;
+    }
+
+    protected function cleanupSupersededPendingConnection(ProviderConnection $sourceConnection, ProviderConnection $targetConnection): void
+    {
+        if (! $this->connectionHasDependentRecords($sourceConnection)) {
+            $sourceConnection->delete();
+
+            return;
+        }
+
+        $sourceConnection->update([
+            'provider_account_id' => 'superseded-instagram-account-' . $sourceConnection->id,
+            'provider_account_name' => 'Superseded Instagram Connection',
+            'status' => 'superseded',
+            'meta' => array_merge(is_array($sourceConnection->meta) ? $sourceConnection->meta : [], [
+                'superseded_by_connection_id' => $targetConnection->id,
+                'superseded_at' => now()->toDateTimeString(),
+            ]),
+        ]);
+    }
+
+    protected function connectionHasDependentRecords(ProviderConnection $connection): bool
+    {
+        foreach ([
+            'oauth_tokens',
+            'provider_permissions',
+            'conversations',
+            'social_posts',
+            'social_comments',
+            'social_stories',
+            'social_post_media',
+        ] as $table) {
+            if (DB::table($table)->where('provider_connection_id', $connection->id)->exists()) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    protected function sanitizeMetaPayload(mixed $payload): mixed
+    {
+        if (! is_array($payload)) {
+            return $payload;
+        }
+
+        $sanitized = [];
+
+        foreach ($payload as $key => $value) {
+            $normalizedKey = strtolower((string) $key);
+
+            if ($normalizedKey === 'access_token' || $normalizedKey === 'refresh_token') {
+                $sanitized[$key] = '[redacted]';
+                continue;
+            }
+
+            $sanitized[$key] = $this->sanitizeMetaPayload($value);
+        }
+
+        return $sanitized;
     }
 }

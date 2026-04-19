@@ -71,6 +71,26 @@ services:
     networks:
       - leadochat-mini
 
+  queue:
+    build:
+      context: .
+      dockerfile: docker/app/Dockerfile
+    container_name: leadochat-mini-queue
+    working_dir: /var/www/html
+    restart: unless-stopped
+    command: php artisan queue:work database --queue=default --tries=3 --backoff=5 --sleep=1 --timeout=120
+    env_file:
+      - ./src/.env
+    volumes:
+      - ./src:/var/www/html
+    depends_on:
+      postgres:
+        condition: service_healthy
+      app:
+        condition: service_started
+    networks:
+      - leadochat-mini
+
 volumes:
   postgres_data:
 
