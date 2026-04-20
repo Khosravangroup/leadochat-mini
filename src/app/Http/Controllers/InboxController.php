@@ -151,7 +151,7 @@ class InboxController extends Controller
         ]);
     }
 
-    public function storeMessage(Request $request, Conversation $conversation): RedirectResponse
+    public function storeMessage(Request $request, Conversation $conversation): RedirectResponse|JsonResponse
     {
         $user = $request->user();
         $workspace = $user?->currentWorkspace();
@@ -231,6 +231,17 @@ class InboxController extends Controller
                     $this->broadcastInboxUpdate($workspace, $conversation, 'instagram_message_failed', $message);
                 }
 
+                if ($request->expectsJson()) {
+                    return response()->json([
+                        'ok' => $message->status !== 'failed',
+                        'conversation_id' => $conversation->id,
+                        'message_id' => $message->id,
+                        'message_ids' => [$message->id],
+                        'status' => $message->status,
+                        'error' => $message->last_error,
+                    ], $message->status === 'failed' ? 422 : 200);
+                }
+
                 return redirect()->route('inbox.show', [
                     'conversation' => $conversation->id,
                     'reply' => null,
@@ -254,6 +265,17 @@ class InboxController extends Controller
             );
 
             $this->broadcastInboxUpdate($workspace, $conversation, 'message_sent', $message);
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'ok' => true,
+                    'conversation_id' => $conversation->id,
+                    'message_id' => $message->id,
+                    'message_ids' => [$message->id],
+                    'status' => $message->status,
+                    'error' => $message->last_error,
+                ]);
+            }
 
             return redirect()->route('inbox.show', [
                 'conversation' => $conversation->id,
@@ -419,13 +441,22 @@ class InboxController extends Controller
             'message_ids' => $createdMessageIds,
         ]);
 
+        if ($request->expectsJson()) {
+            return response()->json([
+                'ok' => true,
+                'conversation_id' => $conversation->id,
+                'message_ids' => $createdMessageIds,
+                'status' => 'sent',
+            ]);
+        }
+
         return redirect()->route('inbox.show', [
             'conversation' => $conversation->id,
             'reply' => null,
         ]);
     }
 
-    public function storeVoice(Request $request, Conversation $conversation): RedirectResponse
+    public function storeVoice(Request $request, Conversation $conversation): RedirectResponse|JsonResponse
     {
         $user = $request->user();
         $workspace = $user?->currentWorkspace();
@@ -533,6 +564,17 @@ class InboxController extends Controller
         $this->updateConversationSnapshot($conversation, '🎤 Voice message', $message?->sent_at ?? now());
         $this->broadcastInboxUpdate($workspace, $conversation, $conversation->provider === 'instagram' ? 'instagram_message_sent' : 'message_sent', $message);
 
+        if ($request->expectsJson()) {
+            return response()->json([
+                'ok' => $message?->status !== 'failed',
+                'conversation_id' => $conversation->id,
+                'message_id' => $message?->id,
+                'message_ids' => $message?->id ? [$message->id] : [],
+                'status' => $message?->status,
+                'error' => $message?->last_error,
+            ], $message?->status === 'failed' ? 422 : 200);
+        }
+
         return redirect()->route('inbox.show', [
             'conversation' => $conversation->id,
         ]);
@@ -593,6 +635,7 @@ class InboxController extends Controller
             } catch (\Throwable $exception) {
                 $status = 'failed';
                 $error = $exception->getMessage();
+                report($exception);
             }
         }
 
@@ -623,6 +666,10 @@ class InboxController extends Controller
                 'error' => $error,
                 'reaction' => $action === 'unreact' ? null : $reaction,
                 'emoji' => $action === 'unreact' ? null : $emoji,
+                'action' => $action,
+                'message_id' => $message->id,
+                'provider_message_id' => $message->provider_message_id,
+                'actor' => 'agent',
             ], $status === 'failed' ? 422 : 200);
         }
 

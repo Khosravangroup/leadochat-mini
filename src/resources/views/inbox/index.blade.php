@@ -458,6 +458,7 @@
         .lc-message-body {
             min-width: 0;
             max-width: 100%;
+            position: relative;
         }
 
         .lc-message-name {
@@ -961,52 +962,128 @@
 
         .lc-reaction-strip {
             display: flex;
-            gap: .35rem;
+            gap: .18rem;
             flex-wrap: wrap;
-            margin-top: .3rem;
+            margin-top: -.35rem;
+            margin-left: .6rem;
+            min-height: 18px;
+            position: relative;
+            z-index: 2;
         }
 
         .lc-message-row.outbound .lc-reaction-strip {
             justify-content: flex-end;
+            margin-left: 0;
+            margin-right: .6rem;
         }
 
         .lc-reaction-pill {
             display: inline-flex;
             align-items: center;
-            gap: .25rem;
-            min-height: 24px;
+            justify-content: center;
+            min-width: 26px;
+            height: 22px;
             border: 1px solid var(--lc-border);
             border-radius: 999px;
             background: var(--lc-panel);
-            padding: 1px 8px;
-            font-size: .76rem;
-            color: var(--lc-text-soft);
-            box-shadow: 0 1px 2px rgba(0,0,0,.03);
+            padding: 0 6px;
+            font-size: .78rem;
+            line-height: 1;
+            box-shadow: 0 2px 8px rgba(15, 23, 42, .1);
         }
 
         .lc-reaction-pill.agent {
-            background: var(--lc-primary-soft);
-            border-color: rgba(114, 76, 218, .22);
-            color: var(--lc-primary);
+            background: #fff;
+            border-color: rgba(114, 76, 218, .18);
         }
 
         .lc-reaction-form {
             display: inline-flex;
+            position: relative;
             margin: 0;
         }
 
-        .lc-reaction-action {
+        .lc-reaction-trigger {
             border: 0;
             background: transparent;
-            padding: 0;
-            color: var(--lc-primary);
-            font-size: .74rem;
-            font-weight: 600;
+            width: 24px;
+            height: 24px;
+            border-radius: 999px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--lc-text-muted);
+            font-size: .9rem;
             cursor: pointer;
+            transition: background .12s ease, color .12s ease, transform .12s ease;
         }
 
-        .lc-reaction-action.is-active {
+        .lc-reaction-trigger:hover,
+        .lc-reaction-trigger.is-active,
+        .lc-reaction-form.is-open .lc-reaction-trigger {
+            background: #fff;
             color: #d12f69;
+            box-shadow: 0 1px 4px rgba(15, 23, 42, .12);
+        }
+
+        .lc-reaction-picker {
+            position: absolute;
+            left: 50%;
+            bottom: calc(100% + 8px);
+            transform: translateX(-50%) translateY(4px) scale(.96);
+            transform-origin: bottom center;
+            display: flex;
+            align-items: center;
+            gap: .35rem;
+            min-height: 42px;
+            padding: 5px 7px;
+            border: 1px solid rgba(15, 23, 42, .08);
+            border-radius: 999px;
+            background: rgba(255, 255, 255, .98);
+            box-shadow: 0 10px 28px rgba(15, 23, 42, .18);
+            opacity: 0;
+            pointer-events: none;
+            z-index: 20;
+            transition: opacity .12s ease, transform .12s ease;
+        }
+
+        .lc-reaction-form.is-open .lc-reaction-picker {
+            opacity: 1;
+            pointer-events: auto;
+            transform: translateX(-50%) translateY(0) scale(1);
+        }
+
+        .lc-reaction-option {
+            width: 32px;
+            height: 32px;
+            border: 0;
+            border-radius: 999px;
+            background: transparent;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.3rem;
+            line-height: 1;
+            cursor: pointer;
+            transition: transform .12s ease, background .12s ease;
+        }
+
+        .lc-reaction-option:hover,
+        .lc-reaction-option:focus-visible {
+            background: #f4f4f5;
+            transform: translateY(-3px) scale(1.12);
+            outline: none;
+        }
+
+        .lc-reaction-error {
+            display: none;
+            color: var(--lc-danger);
+            font-size: .72rem;
+            font-weight: 600;
+        }
+
+        .lc-reaction-form.has-error + .lc-reaction-error {
+            display: inline;
         }
 
         .lc-status-icon {
@@ -1657,9 +1734,16 @@
                                             : null;
                                         $agentReactionEmoji = is_string($agentReaction['emoji'] ?? null) ? $agentReaction['emoji'] : null;
                                         $customerReactionEmoji = is_string($customerReaction['emoji'] ?? null) ? $customerReaction['emoji'] : null;
+                                        $canReactFromInbox = ! $isOutbound
+                                            && $selectedConversation?->provider === 'instagram'
+                                            && filled($message->provider_message_id);
                                     @endphp
 
-                                    <div class="lc-message-row {{ $isOutbound ? 'outbound' : 'inbound' }}">
+                                    <div
+                                        class="lc-message-row {{ $isOutbound ? 'outbound' : 'inbound' }}"
+                                        data-message-id="{{ $message->id }}"
+                                        data-provider-message-id="{{ $message->provider_message_id }}"
+                                    >
                                         <div class="lc-message-wrap">
                                             <img
                                                 class="lc-message-avatar"
@@ -1825,23 +1909,21 @@
 
                                                 </div>
 
-                                                @if ($agentReactionEmoji || $customerReactionEmoji)
-                                                    <div class="lc-reaction-strip">
-                                                        @if ($customerReactionEmoji)
-                                                            <span class="lc-reaction-pill" title="Customer reaction">
-                                                                {{ $customerReactionEmoji }}
-                                                                <span>Customer</span>
-                                                            </span>
-                                                        @endif
+                                                <div class="lc-reaction-strip" aria-live="polite">
+                                                    <span
+                                                        class="lc-reaction-pill customer"
+                                                        title="Reaction"
+                                                        data-reaction-actor="customer"
+                                                        style="{{ $customerReactionEmoji ? '' : 'display:none;' }}"
+                                                    >{{ $customerReactionEmoji }}</span>
 
-                                                        @if ($agentReactionEmoji)
-                                                            <span class="lc-reaction-pill agent" title="Agent reaction">
-                                                                {{ $agentReactionEmoji }}
-                                                                <span>You</span>
-                                                            </span>
-                                                        @endif
-                                                    </div>
-                                                @endif
+                                                    <span
+                                                        class="lc-reaction-pill agent"
+                                                        title="Reaction"
+                                                        data-reaction-actor="agent"
+                                                        style="{{ $agentReactionEmoji ? '' : 'display:none;' }}"
+                                                    >{{ $agentReactionEmoji }}</span>
+                                                </div>
 
                                                 <div class="lc-message-meta">
                                                     <span>{{ optional($message->created_at)->format('M d, Y H:i') }}</span>
@@ -1865,24 +1947,39 @@
                                                         Reply
                                                     </a>
 
-                                                    @unless ($isOutbound)
+                                                    @if ($canReactFromInbox)
                                                         <form
                                                             method="POST"
                                                             action="{{ route('inbox.messages.reaction', ['conversation' => $selectedConversation->id, 'message' => $message->id]) }}"
                                                             class="lc-reaction-form"
+                                                            data-message-id="{{ $message->id }}"
                                                         >
                                                             @csrf
                                                             <input type="hidden" name="reaction" value="love">
                                                             <input type="hidden" name="action" value="{{ $agentReactionEmoji ? 'unreact' : 'react' }}">
                                                             <button
-                                                                type="submit"
-                                                                class="lc-reaction-action {{ $agentReactionEmoji ? 'is-active' : '' }}"
-                                                                title="{{ $agentReactionEmoji ? 'Remove reaction' : 'React with love' }}"
+                                                                type="button"
+                                                                class="lc-reaction-trigger {{ $agentReactionEmoji ? 'is-active' : '' }}"
+                                                                aria-label="{{ $agentReactionEmoji ? 'Remove reaction' : 'React' }}"
+                                                                aria-expanded="false"
+                                                                title="{{ $agentReactionEmoji ? 'Remove reaction' : 'React' }}"
                                                             >
-                                                                {{ $agentReactionEmoji ? '♥ Reacted' : '♡ React' }}
+                                                                {{ $agentReactionEmoji ? $agentReactionEmoji : '♡' }}
                                                             </button>
+                                                            <div class="lc-reaction-picker" role="menu" aria-label="Message reactions">
+                                                                <button
+                                                                    type="submit"
+                                                                    class="lc-reaction-option"
+                                                                    name="reaction"
+                                                                    value="love"
+                                                                    data-reaction-emoji="❤️"
+                                                                    title="{{ $agentReactionEmoji ? 'Remove heart' : 'Heart' }}"
+                                                                    aria-label="{{ $agentReactionEmoji ? 'Remove heart reaction' : 'React with heart' }}"
+                                                                >❤️</button>
+                                                            </div>
                                                         </form>
-                                                    @endunless
+                                                        <span class="lc-reaction-error"></span>
+                                                    @endif
                                                 </div>
                                             </div>
                                         </div>
@@ -1918,12 +2015,12 @@
                                     </div>
                                 @endif
 
-                                <form method="POST" action="{{ route('inbox.messages.store', $selectedConversation) }}" enctype="multipart/form-data">
+                                <form id="lcMessageForm" class="lc-message-form" method="POST" action="{{ route('inbox.messages.store', $selectedConversation) }}" enctype="multipart/form-data">
                                     @csrf
                                     <input type="hidden" name="reply_to_message_id" value="{{ $replyTarget?->id }}">
 
                                     @if ($replyTarget)
-                                        <div style="margin-bottom: 10px; border-left: 3px solid var(--lc-primary); background: rgba(114, 76, 218, .06); border-radius: 10px; padding: 10px 12px;">
+                                        <div data-reply-preview style="margin-bottom: 10px; border-left: 3px solid var(--lc-primary); background: rgba(114, 76, 218, .06); border-radius: 10px; padding: 10px 12px;">
                                             <div style="font-size: 12px; color: var(--lc-text-soft); margin-bottom: 4px; font-weight: 700;">
                                                 Replying to
                                             </div>
@@ -2048,6 +2145,7 @@
 
                                 <form
                                     id="lcVoiceForm"
+                                    class="lc-voice-form"
                                     method="POST"
                                     action="{{ route('inbox.messages.voice', $selectedConversation) }}"
                                     enctype="multipart/form-data"
@@ -2836,6 +2934,11 @@
                 renderPreviewList();
             });
 
+            document.addEventListener('lc:composer-clear', function () {
+                selectedFiles = [];
+                renderPreviewList();
+            });
+
             window.addEventListener('beforeunload', releaseObjectUrls);
         });
     </script>
@@ -3087,7 +3190,16 @@
                 voiceFormInput.files = transfer.files;
                 voiceDurationInput.value = String(recordingSeconds);
                 recordingSend.disabled = true;
-                voiceForm.submit();
+                if (typeof voiceForm.requestSubmit === 'function') {
+                    voiceForm.requestSubmit();
+                } else {
+                    voiceForm.submit();
+                }
+            });
+
+            document.addEventListener('lc:voice-sent', function () {
+                clearRecordedPreview();
+                resetRecordingUi();
             });
 
             speedButtons.forEach((button) => {
@@ -3589,20 +3701,102 @@
             const selectedConversationId = @json($selectedConversation?->id);
             const snapshotUrl = @json(route('inbox.realtime.snapshot'));
             let lastSnapshotKey = null;
-            let reloadTimer = null;
+            let refreshTimer = null;
             let pollTimer = null;
-            let isReloading = false;
+            let isRefreshingPane = false;
+            let refreshQueued = false;
+            const messageArea = document.getElementById('lcMessageArea');
+            const cssEscape = function (value) {
+                if (window.CSS && typeof window.CSS.escape === 'function') {
+                    return window.CSS.escape(value);
+                }
 
-            const scheduleReload = function () {
-                if (isReloading) {
+                return String(value).replace(/["\\]/g, '\\$&');
+            };
+
+            const isNearBottom = function () {
+                if (!messageArea) {
+                    return true;
+                }
+
+                return messageArea.scrollHeight - messageArea.scrollTop - messageArea.clientHeight < 120;
+            };
+
+            const scrollMessagesToBottom = function () {
+                if (messageArea) {
+                    messageArea.scrollTop = messageArea.scrollHeight;
+                }
+            };
+
+            const buildSnapshotKey = function (snapshot) {
+                if (selectedConversationId) {
+                    return JSON.stringify({
+                        conversation_last_message_at: snapshot.conversation_last_message_at || null,
+                        conversation_message_count: snapshot.conversation_message_count || null,
+                    });
+                }
+
+                return JSON.stringify({
+                    latest_conversation_timestamp: snapshot.latest_conversation_timestamp || null,
+                });
+            };
+
+            const schedulePaneRefresh = function (options = {}) {
+                clearTimeout(refreshTimer);
+                refreshTimer = setTimeout(function () {
+                    refreshConversationPane(options);
+                }, options.delay || 250);
+            };
+
+            const refreshConversationPane = async function (options = {}) {
+                if (isRefreshingPane) {
+                    refreshQueued = true;
                     return;
                 }
 
-                isReloading = true;
-                clearTimeout(reloadTimer);
-                reloadTimer = setTimeout(function () {
-                    window.location.reload();
-                }, 150);
+                isRefreshingPane = true;
+                const shouldStick = options.scrollToBottom || isNearBottom();
+
+                try {
+                    const response = await fetch(window.location.href, {
+                        headers: {
+                            Accept: 'text/html',
+                            'X-Requested-With': 'XMLHttpRequest',
+                        },
+                        credentials: 'same-origin',
+                    });
+
+                    if (!response.ok) {
+                        return;
+                    }
+
+                    const html = await response.text();
+                    const doc = new DOMParser().parseFromString(html, 'text/html');
+
+                    ['.lc-message-stack', '.lc-conversation-list'].forEach((selector) => {
+                        const current = document.querySelector(selector);
+                        const next = doc.querySelector(selector);
+
+                        if (current && next) {
+                            current.innerHTML = next.innerHTML;
+                        }
+                    });
+
+                    if (shouldStick) {
+                        requestAnimationFrame(scrollMessagesToBottom);
+                    }
+
+                    lastSnapshotKey = null;
+                } catch (error) {
+                    // Keep the current view stable; the next realtime tick can try again.
+                } finally {
+                    isRefreshingPane = false;
+
+                    if (refreshQueued) {
+                        refreshQueued = false;
+                        schedulePaneRefresh({ scrollToBottom: true });
+                    }
+                }
             };
 
             const startSnapshotPolling = function () {
@@ -3630,16 +3824,10 @@
                         }
 
                         const snapshot = await response.json();
-                        const snapshotKey = JSON.stringify({
-                            conversation_updated_at: snapshot.conversation_updated_at || null,
-                            conversation_last_message_at: snapshot.conversation_last_message_at || null,
-                            conversation_message_count: snapshot.conversation_message_count || null,
-                            latest_conversation_timestamp: snapshot.latest_conversation_timestamp || null,
-                            latest_message_timestamp: snapshot.latest_message_timestamp || null,
-                        });
+                        const snapshotKey = buildSnapshotKey(snapshot);
 
                         if (lastSnapshotKey && snapshotKey !== lastSnapshotKey) {
-                            scheduleReload();
+                            schedulePaneRefresh({ scrollToBottom: true });
                             return;
                         }
 
@@ -3652,8 +3840,180 @@
 
             startSnapshotPolling();
 
+            const closeReactionPickers = function (except = null) {
+                document.querySelectorAll('.lc-reaction-form.is-open').forEach((form) => {
+                    if (form === except) {
+                        return;
+                    }
+
+                    form.classList.remove('is-open');
+                    form.querySelector('.lc-reaction-trigger')?.setAttribute('aria-expanded', 'false');
+                });
+            };
+
+            const updateReactionTrigger = function (form, emoji) {
+                if (!form) {
+                    return;
+                }
+
+                const trigger = form.querySelector('.lc-reaction-trigger');
+                const actionInput = form.querySelector('input[name="action"]');
+                const hasReaction = Boolean(emoji);
+
+                if (trigger) {
+                    trigger.textContent = hasReaction ? emoji : '♡';
+                    trigger.classList.toggle('is-active', hasReaction);
+                    trigger.title = hasReaction ? 'Remove reaction' : 'React';
+                    trigger.setAttribute('aria-label', hasReaction ? 'Remove reaction' : 'React');
+                }
+
+                if (actionInput) {
+                    actionInput.value = hasReaction ? 'unreact' : 'react';
+                }
+            };
+
+            const setReactionError = function (form, message = '') {
+                if (!form) {
+                    return;
+                }
+
+                const error = form.nextElementSibling && form.nextElementSibling.classList.contains('lc-reaction-error')
+                    ? form.nextElementSibling
+                    : null;
+
+                form.classList.toggle('has-error', Boolean(message));
+
+                if (error) {
+                    error.textContent = message;
+                }
+            };
+
+            const updateMessageReaction = function (payload) {
+                const messageId = payload.message_id ? String(payload.message_id) : null;
+                const providerMessageId = payload.provider_message_id ? String(payload.provider_message_id) : null;
+                const actor = payload.actor || (payload.direction === 'inbound' ? 'customer' : 'agent');
+                const action = payload.action || payload.reaction_action || 'react';
+                const emoji = action === 'unreact' ? null : (payload.emoji || null);
+                const row = messageId
+                    ? document.querySelector(`[data-message-id="${cssEscape(messageId)}"]`)
+                    : (
+                        providerMessageId
+                            ? document.querySelector(`[data-provider-message-id="${cssEscape(providerMessageId)}"]`)
+                            : null
+                    );
+
+                if (!row) {
+                    return false;
+                }
+
+                const pill = row.querySelector(`[data-reaction-actor="${cssEscape(actor)}"]`);
+
+                if (pill) {
+                    if (emoji) {
+                        pill.textContent = emoji;
+                        pill.style.display = '';
+                    } else {
+                        pill.textContent = '';
+                        pill.style.display = 'none';
+                    }
+                }
+
+                if (actor === 'agent') {
+                    updateReactionTrigger(row.querySelector('.lc-reaction-form'), emoji);
+                }
+
+                return true;
+            };
+
+            document.addEventListener('click', function (event) {
+                const trigger = event.target.closest('.lc-reaction-trigger');
+
+                if (trigger) {
+                    const form = trigger.closest('.lc-reaction-form');
+                    const shouldOpen = !form.classList.contains('is-open');
+
+                    closeReactionPickers(form);
+                    form.classList.toggle('is-open', shouldOpen);
+                    trigger.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+                    setReactionError(form, '');
+                    return;
+                }
+
+                if (!event.target.closest('.lc-reaction-form')) {
+                    closeReactionPickers();
+                }
+            });
+
+            document.addEventListener('keydown', function (event) {
+                if (event.key === 'Escape') {
+                    closeReactionPickers();
+                }
+            });
+
             document.addEventListener('submit', async function (event) {
-                const form = event.target.closest('.lc-reaction-form');
+                const reactionForm = event.target.closest('.lc-reaction-form');
+
+                if (reactionForm) {
+                    event.preventDefault();
+
+                    const option = event.submitter?.closest('.lc-reaction-option');
+                    const button = option || reactionForm.querySelector('.lc-reaction-option');
+
+                    if (reactionForm.dataset.saving === '1') {
+                        return;
+                    }
+
+                    if (option && option.value) {
+                        const reactionInput = reactionForm.querySelector('input[name="reaction"]');
+
+                        if (reactionInput) {
+                            reactionInput.value = option.value;
+                        }
+                    }
+
+                    reactionForm.dataset.saving = '1';
+                    setReactionError(reactionForm, '');
+
+                    if (button) {
+                        button.disabled = true;
+                    }
+
+                    try {
+                        const response = await fetch(reactionForm.action, {
+                            method: 'POST',
+                            body: new FormData(reactionForm),
+                            headers: {
+                                Accept: 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest',
+                            },
+                            credentials: 'same-origin',
+                        });
+
+                        const data = await response.json().catch(() => ({}));
+
+                        if (!response.ok || data.ok === false) {
+                            setReactionError(reactionForm, data.error || data.message || 'Reaction failed.');
+                            return;
+                        }
+
+                        updateMessageReaction(data);
+                        closeReactionPickers();
+                    } catch (error) {
+                        setReactionError(reactionForm, 'Reaction failed.');
+                    } finally {
+                        reactionForm.dataset.saving = '0';
+
+                        if (button) {
+                            button.disabled = false;
+                        }
+                    }
+
+                    return;
+                }
+
+                const messageForm = event.target.closest('.lc-message-form');
+                const voiceForm = event.target.closest('.lc-voice-form');
+                const form = messageForm || voiceForm;
 
                 if (!form) {
                     return;
@@ -3661,13 +4021,16 @@
 
                 event.preventDefault();
 
-                const button = form.querySelector('button[type="submit"]');
+                const button = form.querySelector('button[type="submit"]')
+                    || (voiceForm ? document.getElementById('lcRecordingSend') : null);
                 const originalText = button ? button.textContent : null;
 
                 if (button) {
                     button.disabled = true;
-                    button.textContent = 'Saving...';
+                    button.textContent = 'Sending...';
                 }
+
+                let messageSent = false;
 
                 try {
                     const response = await fetch(form.action, {
@@ -3677,22 +4040,61 @@
                             Accept: 'application/json',
                             'X-Requested-With': 'XMLHttpRequest',
                         },
+                        credentials: 'same-origin',
                     });
+
+                    const data = await response.json().catch(() => ({}));
 
                     if (!response.ok) {
                         if (button) {
                             button.disabled = false;
-                            button.textContent = originalText || 'React';
+                            button.textContent = originalText || 'Send';
                         }
 
+                        window.alert(data.error || data.message || 'Message failed.');
                         return;
                     }
 
-                    scheduleReload();
+                    messageSent = true;
+
+                    if (messageForm) {
+                        form.reset();
+                        const replyInput = form.querySelector('input[name="reply_to_message_id"]');
+                        const replyPreview = form.querySelector('[data-reply-preview]');
+
+                        if (replyInput) {
+                            replyInput.value = '';
+                        }
+
+                        if (replyPreview) {
+                            replyPreview.remove();
+                        }
+
+                        if (window.history && window.history.replaceState) {
+                            const cleanUrl = new URL(window.location.href);
+                            cleanUrl.searchParams.delete('reply');
+                            window.history.replaceState({}, '', cleanUrl.toString());
+                        }
+
+                        document.dispatchEvent(new CustomEvent('lc:composer-clear'));
+                    }
+
+                    if (voiceForm) {
+                        document.dispatchEvent(new CustomEvent('lc:voice-sent'));
+                    }
+
+                    schedulePaneRefresh({ scrollToBottom: true, delay: 50 });
                 } catch (error) {
                     if (button) {
                         button.disabled = false;
-                        button.textContent = originalText || 'React';
+                        button.textContent = originalText || 'Send';
+                    }
+
+                    window.alert('Message failed.');
+                } finally {
+                    if (button && !(voiceForm && messageSent)) {
+                        button.disabled = false;
+                        button.textContent = originalText || 'Send';
                     }
                 }
             });
@@ -3721,7 +4123,22 @@
                         return;
                     }
 
-                    scheduleReload();
+                    if (event.action === 'instagram_message_reaction_updated') {
+                        if (updateMessageReaction(event.payload || {})) {
+                            return;
+                        }
+                    }
+
+                    if (
+                        selectedConversationId &&
+                        event.payload &&
+                        Number(event.payload.conversation_id) !== Number(selectedConversationId)
+                    ) {
+                        schedulePaneRefresh({ scrollToBottom: false });
+                        return;
+                    }
+
+                    schedulePaneRefresh({ scrollToBottom: true });
                 });
         })();
     </script>
