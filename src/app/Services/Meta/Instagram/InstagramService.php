@@ -71,6 +71,24 @@ class InstagramService
         return $this->instagramMessagingService->fetchUserProfile($connection, $instagramScopedUserId);
     }
 
+    public function sendReaction(
+        ProviderConnection $connection,
+        string $recipientId,
+        string $providerMessageId,
+        string $reaction = 'love',
+        string $action = 'react'
+    ): array {
+        $this->assertInstagramConnection($connection);
+
+        return $this->instagramMessagingService->sendReaction(
+            $connection,
+            $recipientId,
+            $providerMessageId,
+            $reaction,
+            $action
+        );
+    }
+
     public function fetchMediaFeed(ProviderConnection $connection, array $options = []): array
     {
         $this->assertInstagramConnection($connection);

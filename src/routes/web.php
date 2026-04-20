@@ -72,9 +72,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/settings/departments', [WorkspaceSettingsController::class, 'createDepartment'])->name('settings.departments.create');
     Route::delete('/settings/departments/{department}', [WorkspaceSettingsController::class, 'deleteDepartment'])->name('settings.departments.delete');
     Route::get('/inbox', [InboxController::class, 'index'])->name('inbox.index');
+    Route::get('/inbox/realtime/snapshot', [InboxController::class, 'realtimeSnapshot'])->name('inbox.realtime.snapshot');
     Route::get('/inbox/{conversation}', [InboxController::class, 'index'])->name('inbox.show');
 
     Route::post('/inbox/{conversation}/messages', [InboxController::class, 'storeMessage'])->name('inbox.messages.store');
+    Route::post('/inbox/{conversation}/messages/{message}/reaction', [InboxController::class, 'storeReaction'])->name('inbox.messages.reaction');
     Route::post('/inbox/{conversation}/voice', [InboxController::class, 'storeVoice'])->name('inbox.messages.voice');
 
     Route::post('/inbox/{conversation}/note', [InboxController::class, 'saveNote'])->name('inbox.note.save');

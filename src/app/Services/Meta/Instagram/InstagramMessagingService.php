@@ -105,6 +105,40 @@ class InstagramMessagingService
         return $this->performSend($connection, $payload, 'attachment');
     }
 
+    public function sendReaction(
+        ProviderConnection $connection,
+        string $recipientId,
+        string $providerMessageId,
+        string $reaction = 'love',
+        string $action = 'react'
+    ): array {
+        $recipientId = trim($recipientId);
+        $providerMessageId = trim($providerMessageId);
+        $reaction = trim($reaction) ?: 'love';
+        $action = $action === 'unreact' ? 'unreact' : 'react';
+
+        if ($recipientId === '') {
+            throw new RuntimeException('Instagram recipient id cannot be empty for message reaction.');
+        }
+
+        if ($providerMessageId === '') {
+            throw new RuntimeException('Instagram provider message id cannot be empty for message reaction.');
+        }
+
+        $payload = [
+            'recipient' => [
+                'id' => $recipientId,
+            ],
+            'sender_action' => $action,
+            'payload' => [
+                'message_id' => $providerMessageId,
+                'reaction' => $reaction,
+            ],
+        ];
+
+        return $this->performSend($connection, $payload, 'reaction');
+    }
+
     public function fetchUserProfile(ProviderConnection $connection, string $instagramScopedUserId): array
     {
         $instagramScopedUserId = trim($instagramScopedUserId);

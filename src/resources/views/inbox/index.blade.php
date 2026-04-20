@@ -959,6 +959,56 @@
             justify-content: flex-end;
         }
 
+        .lc-reaction-strip {
+            display: flex;
+            gap: .35rem;
+            flex-wrap: wrap;
+            margin-top: .3rem;
+        }
+
+        .lc-message-row.outbound .lc-reaction-strip {
+            justify-content: flex-end;
+        }
+
+        .lc-reaction-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: .25rem;
+            min-height: 24px;
+            border: 1px solid var(--lc-border);
+            border-radius: 999px;
+            background: var(--lc-panel);
+            padding: 1px 8px;
+            font-size: .76rem;
+            color: var(--lc-text-soft);
+            box-shadow: 0 1px 2px rgba(0,0,0,.03);
+        }
+
+        .lc-reaction-pill.agent {
+            background: var(--lc-primary-soft);
+            border-color: rgba(114, 76, 218, .22);
+            color: var(--lc-primary);
+        }
+
+        .lc-reaction-form {
+            display: inline-flex;
+            margin: 0;
+        }
+
+        .lc-reaction-action {
+            border: 0;
+            background: transparent;
+            padding: 0;
+            color: var(--lc-primary);
+            font-size: .74rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .lc-reaction-action.is-active {
+            color: #d12f69;
+        }
+
         .lc-status-icon {
             display: inline-flex;
             align-items: center;
@@ -1599,6 +1649,14 @@
                                         $commentReplyProviderMediaId = is_string($messageMeta['provider_media_id'] ?? null)
                                             ? $messageMeta['provider_media_id']
                                             : null;
+                                        $agentReaction = is_array($messageMeta['agent_reaction'] ?? null)
+                                            ? $messageMeta['agent_reaction']
+                                            : null;
+                                        $customerReaction = is_array($messageMeta['customer_reaction'] ?? null)
+                                            ? $messageMeta['customer_reaction']
+                                            : null;
+                                        $agentReactionEmoji = is_string($agentReaction['emoji'] ?? null) ? $agentReaction['emoji'] : null;
+                                        $customerReactionEmoji = is_string($customerReaction['emoji'] ?? null) ? $customerReaction['emoji'] : null;
                                     @endphp
 
                                     <div class="lc-message-row {{ $isOutbound ? 'outbound' : 'inbound' }}">
@@ -1767,6 +1825,24 @@
 
                                                 </div>
 
+                                                @if ($agentReactionEmoji || $customerReactionEmoji)
+                                                    <div class="lc-reaction-strip">
+                                                        @if ($customerReactionEmoji)
+                                                            <span class="lc-reaction-pill" title="Customer reaction">
+                                                                {{ $customerReactionEmoji }}
+                                                                <span>Customer</span>
+                                                            </span>
+                                                        @endif
+
+                                                        @if ($agentReactionEmoji)
+                                                            <span class="lc-reaction-pill agent" title="Agent reaction">
+                                                                {{ $agentReactionEmoji }}
+                                                                <span>You</span>
+                                                            </span>
+                                                        @endif
+                                                    </div>
+                                                @endif
+
                                                 <div class="lc-message-meta">
                                                     <span>{{ optional($message->created_at)->format('M d, Y H:i') }}</span>
 
@@ -1788,6 +1864,25 @@
                                                     >
                                                         Reply
                                                     </a>
+
+                                                    @unless ($isOutbound)
+                                                        <form
+                                                            method="POST"
+                                                            action="{{ route('inbox.messages.reaction', ['conversation' => $selectedConversation->id, 'message' => $message->id]) }}"
+                                                            class="lc-reaction-form"
+                                                        >
+                                                            @csrf
+                                                            <input type="hidden" name="reaction" value="love">
+                                                            <input type="hidden" name="action" value="{{ $agentReactionEmoji ? 'unreact' : 'react' }}">
+                                                            <button
+                                                                type="submit"
+                                                                class="lc-reaction-action {{ $agentReactionEmoji ? 'is-active' : '' }}"
+                                                                title="{{ $agentReactionEmoji ? 'Remove reaction' : 'React with love' }}"
+                                                            >
+                                                                {{ $agentReactionEmoji ? '♥ Reacted' : '♡ React' }}
+                                                            </button>
+                                                        </form>
+                                                    @endunless
                                                 </div>
                                             </div>
                                         </div>
@@ -3491,12 +3586,134 @@
     <script>
         (function () {
             const workspaceId = @json($workspace?->id);
+            const selectedConversationId = @json($selectedConversation?->id);
+            const snapshotUrl = @json(route('inbox.realtime.snapshot'));
+            let lastSnapshotKey = null;
+            let reloadTimer = null;
+            let pollTimer = null;
+            let isReloading = false;
+
+            const scheduleReload = function () {
+                if (isReloading) {
+                    return;
+                }
+
+                isReloading = true;
+                clearTimeout(reloadTimer);
+                reloadTimer = setTimeout(function () {
+                    window.location.reload();
+                }, 150);
+            };
+
+            const startSnapshotPolling = function () {
+                if (!snapshotUrl || pollTimer) {
+                    return;
+                }
+
+                pollTimer = setInterval(async function () {
+                    try {
+                        const url = new URL(snapshotUrl, window.location.origin);
+
+                        if (selectedConversationId) {
+                            url.searchParams.set('conversation_id', selectedConversationId);
+                        }
+
+                        const response = await fetch(url.toString(), {
+                            headers: {
+                                Accept: 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest',
+                            },
+                        });
+
+                        if (!response.ok) {
+                            return;
+                        }
+
+                        const snapshot = await response.json();
+                        const snapshotKey = JSON.stringify({
+                            conversation_updated_at: snapshot.conversation_updated_at || null,
+                            conversation_last_message_at: snapshot.conversation_last_message_at || null,
+                            conversation_message_count: snapshot.conversation_message_count || null,
+                            latest_conversation_timestamp: snapshot.latest_conversation_timestamp || null,
+                            latest_message_timestamp: snapshot.latest_message_timestamp || null,
+                        });
+
+                        if (lastSnapshotKey && snapshotKey !== lastSnapshotKey) {
+                            scheduleReload();
+                            return;
+                        }
+
+                        lastSnapshotKey = snapshotKey;
+                    } catch (error) {
+                        // Websocket remains the primary realtime path; polling is only a quiet fallback.
+                    }
+                }, 3000);
+            };
+
+            startSnapshotPolling();
+
+            document.addEventListener('submit', async function (event) {
+                const form = event.target.closest('.lc-reaction-form');
+
+                if (!form) {
+                    return;
+                }
+
+                event.preventDefault();
+
+                const button = form.querySelector('button[type="submit"]');
+                const originalText = button ? button.textContent : null;
+
+                if (button) {
+                    button.disabled = true;
+                    button.textContent = 'Saving...';
+                }
+
+                try {
+                    const response = await fetch(form.action, {
+                        method: 'POST',
+                        body: new FormData(form),
+                        headers: {
+                            Accept: 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest',
+                        },
+                    });
+
+                    if (!response.ok) {
+                        if (button) {
+                            button.disabled = false;
+                            button.textContent = originalText || 'React';
+                        }
+
+                        return;
+                    }
+
+                    scheduleReload();
+                } catch (error) {
+                    if (button) {
+                        button.disabled = false;
+                        button.textContent = originalText || 'React';
+                    }
+                }
+            });
 
             if (!workspaceId || !window.Echo) {
                 return;
             }
 
-            let reloadTimer = null;
+            if (window.Echo.connector && window.Echo.connector.pusher && window.Echo.connector.pusher.connection) {
+                window.Echo.connector.pusher.connection.bind('connected', function () {
+                    document.documentElement.dataset.lcRealtime = 'connected';
+                });
+
+                window.Echo.connector.pusher.connection.bind('disconnected', function () {
+                    document.documentElement.dataset.lcRealtime = 'disconnected';
+                });
+
+                window.Echo.connector.pusher.connection.bind('error', function () {
+                    document.documentElement.dataset.lcRealtime = 'error';
+                });
+            }
 
             window.Echo.private(`workspace.${workspaceId}`)
                 .listen('.workspace.updated', function (event) {
@@ -3504,10 +3721,7 @@
                         return;
                     }
 
-                    clearTimeout(reloadTimer);
-                    reloadTimer = setTimeout(function () {
-                        window.location.reload();
-                    }, 150);
+                    scheduleReload();
                 });
         })();
     </script>

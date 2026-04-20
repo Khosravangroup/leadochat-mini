@@ -538,6 +538,139 @@ class InboxController extends Controller
         ]);
     }
 
+    public function storeReaction(Request $request, Conversation $conversation, Message $message): RedirectResponse|JsonResponse
+    {
+        $user = $request->user();
+        $workspace = $user?->currentWorkspace();
+
+        $this->guardWorkspaceConversationAccess($conversation, $workspace);
+
+        if ($message->conversation_id !== $conversation->id) {
+            abort(404);
+        }
+
+        if ($message->direction !== 'inbound') {
+            abort(422, 'Only inbound Instagram messages can be reacted to from the inbox.');
+        }
+
+        $validated = $request->validate([
+            'reaction' => ['nullable', 'string', 'in:love'],
+            'action' => ['nullable', 'string', 'in:react,unreact'],
+        ]);
+
+        $reaction = $validated['reaction'] ?? 'love';
+        $action = $validated['action'] ?? 'react';
+        $emoji = $this->emojiForReaction($reaction);
+        $sendResult = null;
+        $status = 'local';
+        $error = null;
+
+        if ($conversation->provider === 'instagram') {
+            try {
+                $connection = app(InstagramService::class)->resolveConnectionFromConversation($conversation);
+                $recipientId = $this->resolveInstagramRecipientId($conversation);
+
+                if (! $connection) {
+                    throw new \RuntimeException('Instagram provider connection was not found for this conversation.');
+                }
+
+                if (! $recipientId) {
+                    throw new \RuntimeException('Instagram recipient id was not found for this conversation.');
+                }
+
+                if (blank($message->provider_message_id)) {
+                    throw new \RuntimeException('Instagram provider message id was not found for this message.');
+                }
+
+                $sendResult = app(InstagramService::class)->sendReaction(
+                    $connection,
+                    $recipientId,
+                    (string) $message->provider_message_id,
+                    $reaction,
+                    $action
+                );
+                $status = 'sent';
+            } catch (\Throwable $exception) {
+                $status = 'failed';
+                $error = $exception->getMessage();
+            }
+        }
+
+        $this->applyMessageReaction($message, 'agent_reaction', [
+            'action' => $action,
+            'reaction' => $reaction,
+            'emoji' => $emoji,
+            'actor' => 'agent',
+            'status' => $status,
+            'error' => $error,
+            'send_result' => $sendResult,
+            'updated_at' => now()->toIso8601String(),
+        ]);
+
+        $this->broadcastInboxUpdate($workspace, $conversation, 'instagram_message_reaction_updated', [
+            'message_id' => $message->id,
+            'provider_message_id' => $message->provider_message_id,
+            'reaction' => $action === 'unreact' ? null : $reaction,
+            'emoji' => $action === 'unreact' ? null : $emoji,
+            'actor' => 'agent',
+            'status' => $status,
+        ]);
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'ok' => $status !== 'failed',
+                'status' => $status,
+                'error' => $error,
+                'reaction' => $action === 'unreact' ? null : $reaction,
+                'emoji' => $action === 'unreact' ? null : $emoji,
+            ], $status === 'failed' ? 422 : 200);
+        }
+
+        return redirect()->route('inbox.show', [
+            'conversation' => $conversation->id,
+        ]);
+    }
+
+    public function realtimeSnapshot(Request $request): JsonResponse
+    {
+        $workspace = $request->user()?->currentWorkspace();
+
+        if (! $workspace) {
+            abort(404);
+        }
+
+        $conversationId = $request->integer('conversation_id') ?: null;
+        $conversation = null;
+
+        if ($conversationId) {
+            $conversation = Conversation::query()
+                ->where('workspace_id', $workspace->id)
+                ->whereKey($conversationId)
+                ->first();
+        }
+
+        $latestConversationTimestamp = Conversation::query()
+            ->where('workspace_id', $workspace->id)
+            ->max('updated_at');
+
+        $latestMessageTimestamp = Message::query()
+            ->whereHas('conversation', fn ($query) => $query->where('workspace_id', $workspace->id))
+            ->max('updated_at');
+
+        return response()->json([
+            'ok' => true,
+            'workspace_id' => $workspace->id,
+            'conversation_id' => $conversation?->id,
+            'conversation_updated_at' => optional($conversation?->updated_at)->toIso8601String(),
+            'conversation_last_message_at' => optional($conversation?->last_message_at)->toIso8601String(),
+            'conversation_message_count' => $conversation
+                ? Message::query()->where('conversation_id', $conversation->id)->count()
+                : null,
+            'latest_conversation_timestamp' => $latestConversationTimestamp,
+            'latest_message_timestamp' => $latestMessageTimestamp,
+        ]);
+    }
+
     public function saveNote(Request $request, Conversation $conversation)
     {
         $user = $request->user();
@@ -1074,6 +1207,36 @@ class InboxController extends Controller
     protected function publicStorageUrl(string $storedPath): string
     {
         return url(Storage::url($storedPath));
+    }
+
+    protected function applyMessageReaction(Message $message, string $metaKey, array $reaction): void
+    {
+        $meta = is_array($message->meta) ? $message->meta : [];
+        $history = is_array($meta['reaction_history'] ?? null) ? $meta['reaction_history'] : [];
+        $history[] = $reaction;
+
+        if (($reaction['status'] ?? null) === 'failed') {
+            unset($meta[$metaKey]);
+            $meta[$metaKey . '_error'] = $reaction;
+        } elseif (($reaction['action'] ?? 'react') === 'unreact') {
+            unset($meta[$metaKey]);
+            unset($meta[$metaKey . '_error']);
+        } else {
+            $meta[$metaKey] = $reaction;
+            unset($meta[$metaKey . '_error']);
+        }
+
+        $meta['reaction_history'] = array_slice($history, -25);
+        $message->meta = $meta;
+        $message->save();
+    }
+
+    protected function emojiForReaction(string $reaction): string
+    {
+        return match ($reaction) {
+            'love' => '❤️',
+            default => '❤️',
+        };
     }
 
     protected function broadcastInboxUpdate(?object $workspace, Conversation $conversation, string $action, mixed $messageOrPayload = null): void
