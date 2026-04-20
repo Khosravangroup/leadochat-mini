@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\WorkspaceRealtimeUpdated;
 use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\MessageAttachment;
@@ -204,6 +205,8 @@ class InboxController extends Controller
                         $messageText !== '' ? $messageText : 'New message',
                         $message->sent_at
                     );
+
+                    $this->broadcastInboxUpdate($workspace, $conversation, 'instagram_message_sent', $message);
                 } catch (\Throwable $exception) {
                     $message = $this->createOutboundMessage($conversation, $selfParticipant, [
                         'reply_to_message_id' => $replyToMessageId,
@@ -224,6 +227,8 @@ class InboxController extends Controller
                         'Failed to send Instagram message',
                         $message->sent_at
                     );
+
+                    $this->broadcastInboxUpdate($workspace, $conversation, 'instagram_message_failed', $message);
                 }
 
                 return redirect()->route('inbox.show', [
@@ -248,6 +253,8 @@ class InboxController extends Controller
                 $message->sent_at
             );
 
+            $this->broadcastInboxUpdate($workspace, $conversation, 'message_sent', $message);
+
             return redirect()->route('inbox.show', [
                 'conversation' => $conversation->id,
                 'reply' => null,
@@ -255,13 +262,14 @@ class InboxController extends Controller
         }
 
         $lastPreview = 'Attachment';
+        $createdMessageIds = [];
 
         if ($conversation->provider === 'instagram') {
-            DB::transaction(function () use ($uploadedFiles, $messageText, $replyToMessageId, $conversation, $selfParticipant, &$lastPreview) {
+            DB::transaction(function () use ($uploadedFiles, $messageText, $replyToMessageId, $conversation, $selfParticipant, &$lastPreview, &$createdMessageIds) {
                 foreach ($uploadedFiles as $index => $uploadedFile) {
                     $upload = $this->storeInstagramOutboundUpload($uploadedFile);
-                    $messageType = $upload['is_image'] ? 'image' : ($upload['is_video'] ? 'video' : 'file');
-                    $attachmentType = $upload['is_image'] ? 'image' : ($upload['is_video'] ? 'video' : 'file');
+                    $messageType = $upload['message_type'];
+                    $attachmentType = $upload['instagram_attachment_type'];
                     $caption = $index === 0 && $messageText !== '' ? $messageText : null;
 
                     try {
@@ -310,6 +318,8 @@ class InboxController extends Controller
                                 'source' => 'storeMessage',
                             ],
                         ]);
+
+                        $createdMessageIds[] = $message->id;
                     } catch (\Throwable $exception) {
                         $message = $this->createOutboundMessage($conversation, $selfParticipant, [
                             'reply_to_message_id' => $replyToMessageId,
@@ -345,20 +355,26 @@ class InboxController extends Controller
                                 'send_failed' => true,
                             ],
                         ]);
+
+                        $createdMessageIds[] = $message->id;
                     }
 
-                    $lastPreview = $upload['is_image']
-                        ? '📷 Image'
-                        : ($upload['is_video'] ? '🎬 Video' : '📎 ' . $upload['file_name']);
+                    $lastPreview = match ($messageType) {
+                        'image' => '📷 Image',
+                        'video' => '🎬 Video',
+                        'voice' => '🎤 Voice message',
+                        default => '📎 ' . $upload['file_name'],
+                    };
                 }
             });
         } else {
-            DB::transaction(function () use ($uploadedFiles, $messageText, $replyToMessageId, $conversation, $selfParticipant, &$lastPreview) {
+            DB::transaction(function () use ($uploadedFiles, $messageText, $replyToMessageId, $conversation, $selfParticipant, &$lastPreview, &$createdMessageIds) {
                 foreach ($uploadedFiles as $index => $uploadedFile) {
                     $mimeType = $uploadedFile->getMimeType() ?: 'application/octet-stream';
                     $isImage = str_starts_with($mimeType, 'image/');
                     $isVideo = str_starts_with($mimeType, 'video/');
-                    $messageType = $isImage ? 'image' : ($isVideo ? 'video' : 'file');
+                    $isAudio = str_starts_with($mimeType, 'audio/');
+                    $messageType = $isImage ? 'image' : ($isVideo ? 'video' : ($isAudio ? 'voice' : 'file'));
                     $caption = $index === 0 && $messageText !== '' ? $messageText : null;
 
                     $message = $this->createOutboundMessage($conversation, $selfParticipant, [
@@ -373,15 +389,20 @@ class InboxController extends Controller
                     ]);
 
                     $this->createAttachmentFromUpload($message, $uploadedFile, [
-                        'attachment_type' => $isImage ? 'image' : ($isVideo ? 'video' : 'file'),
+                        'attachment_type' => $isImage ? 'image' : ($isVideo ? 'video' : ($isAudio ? 'audio' : 'file')),
                         'meta' => [
                             'source' => 'storeMessage',
                         ],
                     ]);
 
-                    $lastPreview = $isImage
-                        ? '📷 Image'
-                        : ($isVideo ? '🎬 Video' : '📎 ' . $uploadedFile->getClientOriginalName());
+                    $createdMessageIds[] = $message->id;
+
+                    $lastPreview = match ($messageType) {
+                        'image' => '📷 Image',
+                        'video' => '🎬 Video',
+                        'voice' => '🎤 Voice message',
+                        default => '📎 ' . $uploadedFile->getClientOriginalName(),
+                    };
                 }
             });
         }
@@ -393,6 +414,10 @@ class InboxController extends Controller
                 : $lastPreview,
             now()
         );
+
+        $this->broadcastInboxUpdate($workspace, $conversation, $conversation->provider === 'instagram' ? 'instagram_message_sent' : 'message_sent', [
+            'message_ids' => $createdMessageIds,
+        ]);
 
         return redirect()->route('inbox.show', [
             'conversation' => $conversation->id,
@@ -421,62 +446,92 @@ class InboxController extends Controller
 
         $message = null;
 
-        DB::transaction(function () use ($conversation, $selfParticipant, $voiceFile, $durationSeconds, &$message) {
-            $message = $this->createOutboundMessage($conversation, $selfParticipant, [
-                'message_type' => 'voice',
-                'meta' => [
-                    'is_mock' => true,
-                    'delivery_mode' => 'controller_mock_voice',
-                ],
-            ]);
+        if ($conversation->provider === 'instagram') {
+            $upload = $this->storeInstagramOutboundUpload($voiceFile);
 
-            $this->createAttachmentFromUpload($message, $voiceFile, [
-                'attachment_type' => 'audio',
-                'duration_seconds' => $durationSeconds,
-                'meta' => [
-                    'source' => 'storeVoice',
-                ],
-            ]);
-        });
+            try {
+                $sendResult = $this->sendInstagramAttachmentMessage($conversation, $upload['public_url'], [
+                    'attachment_type' => 'audio',
+                    'messaging_type' => 'RESPONSE',
+                ]);
+                $status = 'sent';
+                $failedAt = null;
+                $lastError = null;
+            } catch (\Throwable $exception) {
+                $sendResult = [
+                    'send_failed' => true,
+                    'error' => $exception->getMessage(),
+                ];
+                $status = 'failed';
+                $failedAt = now();
+                $lastError = $exception->getMessage();
+            }
+
+            $providerMessageId = (string) (
+                $sendResult['message_id']
+                ?? $sendResult['response']['message_id']
+                ?? $sendResult['mock_response']['message_id']
+                ?? ''
+            );
+
+            DB::transaction(function () use ($conversation, $selfParticipant, $durationSeconds, $upload, $sendResult, $status, $failedAt, $lastError, $providerMessageId, &$message) {
+                $message = $this->createOutboundMessage($conversation, $selfParticipant, [
+                    'message_type' => 'voice',
+                    'provider_message_id' => $providerMessageId !== ''
+                        ? $providerMessageId
+                        : ('instagram-outbound-voice-' . now()->timestamp . '-' . random_int(1000, 9999)),
+                    'status' => $status,
+                    'failed_at' => $failedAt,
+                    'last_error' => $lastError,
+                    'meta' => [
+                        'provider' => 'instagram',
+                        'delivery_mode' => 'instagram_service_audio',
+                        'send_result' => $sendResult,
+                    ],
+                ]);
+
+                MessageAttachment::create([
+                    'message_id' => $message->id,
+                    'attachment_type' => 'audio',
+                    'url' => $upload['public_url'],
+                    'thumbnail_url' => null,
+                    'mime_type' => $upload['mime_type'],
+                    'file_name' => $upload['file_name'],
+                    'file_size' => $upload['file_size'],
+                    'width' => null,
+                    'height' => null,
+                    'duration_seconds' => $durationSeconds,
+                    'sort_order' => 0,
+                    'meta' => [
+                        'disk' => 'public',
+                        'path' => $upload['stored_path'],
+                        'provider' => 'instagram',
+                        'source' => 'storeVoice',
+                    ],
+                ]);
+            });
+        } else {
+            DB::transaction(function () use ($conversation, $selfParticipant, $voiceFile, $durationSeconds, &$message) {
+                $message = $this->createOutboundMessage($conversation, $selfParticipant, [
+                    'message_type' => 'voice',
+                    'meta' => [
+                        'is_mock' => true,
+                        'delivery_mode' => 'controller_mock_voice',
+                    ],
+                ]);
+
+                $this->createAttachmentFromUpload($message, $voiceFile, [
+                    'attachment_type' => 'audio',
+                    'duration_seconds' => $durationSeconds,
+                    'meta' => [
+                        'source' => 'storeVoice',
+                    ],
+                ]);
+            });
+        }
 
         $this->updateConversationSnapshot($conversation, '🎤 Voice message', $message?->sent_at ?? now());
-
-        return redirect()->route('inbox.show', [
-            'conversation' => $conversation->id,
-        ]);
-    }
-
-    public function mockIncoming(Request $request, Conversation $conversation): RedirectResponse
-    {
-        $user = $request->user();
-        $workspace = $user?->currentWorkspace();
-
-        $this->guardWorkspaceConversationAccess($conversation, $workspace);
-
-        $validated = $request->validate([
-            'incoming_text' => ['nullable', 'string', 'max:5000'],
-        ]);
-
-        $customerParticipant = $this->resolveCustomerParticipant($conversation);
-
-        $text = trim($validated['incoming_text'] ?: 'Mock incoming message from customer.');
-
-        $message = $this->createInboundMessage($conversation, $customerParticipant, [
-            'message_type' => 'text',
-            'text_body' => $text,
-            'meta' => [
-                'is_mock' => true,
-                'source' => 'mock_incoming',
-            ],
-        ]);
-
-        $unreadCount = Message::query()
-            ->where('conversation_id', $conversation->id)
-            ->where('direction', 'inbound')
-            ->whereNull('read_at')
-            ->count();
-
-        $this->updateConversationSnapshot($conversation, $text, $message->sent_at, $unreadCount);
+        $this->broadcastInboxUpdate($workspace, $conversation, $conversation->provider === 'instagram' ? 'instagram_message_sent' : 'message_sent', $message);
 
         return redirect()->route('inbox.show', [
             'conversation' => $conversation->id,
@@ -853,6 +908,8 @@ class InboxController extends Controller
     {
         $mimeType = $uploadedFile->getMimeType() ?: 'application/octet-stream';
         $isImage = str_starts_with($mimeType, 'image/');
+        $isVideo = str_starts_with($mimeType, 'video/');
+        $isAudio = str_starts_with($mimeType, 'audio/');
         $storedPath = $uploadedFile->store('message-attachments', 'public');
 
         $width = null;
@@ -868,10 +925,13 @@ class InboxController extends Controller
 
         return [
             'stored_path' => $storedPath,
-            'public_url' => Storage::url($storedPath),
+            'public_url' => $this->publicStorageUrl($storedPath),
             'mime_type' => $mimeType,
+            'message_type' => $isImage ? 'image' : ($isVideo ? 'video' : ($isAudio ? 'voice' : 'file')),
+            'instagram_attachment_type' => $isImage ? 'image' : ($isVideo ? 'video' : ($isAudio ? 'audio' : 'file')),
             'is_image' => $isImage,
-            'is_video' => str_starts_with($mimeType, 'video/'),
+            'is_video' => $isVideo,
+            'is_audio' => $isAudio,
             'file_name' => $uploadedFile->getClientOriginalName(),
             'file_size' => $uploadedFile->getSize(),
             'width' => $width,
@@ -976,7 +1036,7 @@ class InboxController extends Controller
         return MessageAttachment::create([
             'message_id' => $message->id,
             'attachment_type' => $meta['attachment_type'] ?? ($isImage ? 'image' : 'file'),
-            'url' => Storage::url($storedPath),
+            'url' => $this->publicStorageUrl($storedPath),
             'thumbnail_url' => $meta['thumbnail_url'] ?? null,
             'mime_type' => $mimeType,
             'file_name' => $uploadedFile->getClientOriginalName(),
@@ -984,6 +1044,7 @@ class InboxController extends Controller
             'width' => $meta['width'] ?? $width,
             'height' => $meta['height'] ?? $height,
             'duration_seconds' => $meta['duration_seconds'] ?? null,
+            'sort_order' => $meta['sort_order'] ?? 0,
             'meta' => array_merge([
                 'disk' => 'public',
                 'path' => $storedPath,
@@ -1008,5 +1069,37 @@ class InboxController extends Controller
         }
 
         $conversation->update($payload);
+    }
+
+    protected function publicStorageUrl(string $storedPath): string
+    {
+        return url(Storage::url($storedPath));
+    }
+
+    protected function broadcastInboxUpdate(?object $workspace, Conversation $conversation, string $action, mixed $messageOrPayload = null): void
+    {
+        if (! $workspace?->id) {
+            return;
+        }
+
+        $payload = [
+            'conversation_id' => $conversation->id,
+            'provider' => $conversation->provider,
+        ];
+
+        if ($messageOrPayload instanceof Message) {
+            $payload['message_id'] = $messageOrPayload->id;
+            $payload['direction'] = $messageOrPayload->direction;
+            $payload['message_type'] = $messageOrPayload->message_type;
+            $payload['status'] = $messageOrPayload->status;
+        } elseif (is_array($messageOrPayload)) {
+            $payload = array_merge($payload, $messageOrPayload);
+        }
+
+        try {
+            event(new WorkspaceRealtimeUpdated((int) $workspace->id, 'inbox', $action, $payload));
+        } catch (\Throwable $exception) {
+            report($exception);
+        }
     }
 }

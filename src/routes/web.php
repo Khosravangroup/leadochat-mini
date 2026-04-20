@@ -76,7 +76,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::post('/inbox/{conversation}/messages', [InboxController::class, 'storeMessage'])->name('inbox.messages.store');
     Route::post('/inbox/{conversation}/voice', [InboxController::class, 'storeVoice'])->name('inbox.messages.voice');
-    Route::post('/inbox/{conversation}/mock-incoming', [InboxController::class, 'mockIncoming'])->name('inbox.messages.mock_incoming');
 
     Route::post('/inbox/{conversation}/note', [InboxController::class, 'saveNote'])->name('inbox.note.save');
 

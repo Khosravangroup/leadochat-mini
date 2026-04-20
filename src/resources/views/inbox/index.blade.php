@@ -1884,6 +1884,7 @@
                                                         name="attachment_files[]"
                                                         id="lcAttachmentInput"
                                                         class="lc-hidden-file-input"
+                                                        accept="image/*,video/*,audio/*,application/pdf"
                                                         multiple
                                                     >
                                                 </label>
@@ -1962,23 +1963,6 @@
                                     <input type="hidden" name="duration_seconds" id="lcVoiceDurationInput">
                                 </form>
 
-                                <form method="POST" action="{{ route('inbox.messages.mock_incoming', $selectedConversation) }}" style="margin-top: 10px;">
-                                    @csrf
-                                    <div style="display:flex; gap:10px; flex-wrap:wrap;">
-                                        <input
-                                            type="text"
-                                            name="incoming_text"
-                                            placeholder="Mock incoming text..."
-                                            style="flex:1; min-width:220px; height:40px; border:1px solid #e2e1db; border-radius:10px; padding:0 12px;"
-                                        >
-                                        <button
-                                            type="submit"
-                                            style="height:40px; border:0; border-radius:10px; background:#e2e1db; color:#37352f; font-weight:700; padding:0 16px;"
-                                        >
-                                            Mock Incoming
-                                        </button>
-                                    </div>
-                                </form>
                             </div>
                         </div>
                     @else
@@ -3523,7 +3507,7 @@
                     clearTimeout(reloadTimer);
                     reloadTimer = setTimeout(function () {
                         window.location.reload();
-                    }, 700);
+                    }, 150);
                 });
         })();
     </script>

@@ -64,6 +64,13 @@ class InstagramService
         );
     }
 
+    public function fetchUserProfile(ProviderConnection $connection, string $instagramScopedUserId): array
+    {
+        $this->assertInstagramConnection($connection);
+
+        return $this->instagramMessagingService->fetchUserProfile($connection, $instagramScopedUserId);
+    }
+
     public function fetchMediaFeed(ProviderConnection $connection, array $options = []): array
     {
         $this->assertInstagramConnection($connection);

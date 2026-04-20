@@ -105,6 +105,39 @@ class InstagramMessagingService
         return $this->performSend($connection, $payload, 'attachment');
     }
 
+    public function fetchUserProfile(ProviderConnection $connection, string $instagramScopedUserId): array
+    {
+        $instagramScopedUserId = trim($instagramScopedUserId);
+
+        if ($instagramScopedUserId === '') {
+            throw new RuntimeException('Instagram scoped user id cannot be empty.');
+        }
+
+        if (app()->environment('local')) {
+            return [
+                'id' => $instagramScopedUserId,
+                'username' => null,
+                'name' => null,
+                'profile_pic' => null,
+                'mode' => 'local_debug',
+            ];
+        }
+
+        $response = Http::withToken($this->resolveAccessToken($connection))
+            ->acceptJson()
+            ->get("https://graph.instagram.com/{$this->resolveGraphVersion()}/{$instagramScopedUserId}", [
+                'fields' => 'id,username,name,profile_pic',
+            ]);
+
+        if (! $response->successful()) {
+            throw new RuntimeException('Instagram user profile fetch failed: ' . $response->body());
+        }
+
+        $profile = $response->json();
+
+        return is_array($profile) ? $profile : [];
+    }
+
     protected function performSend(ProviderConnection $connection, array $payload, string $kind): array
     {
         $accessToken = $this->resolveAccessToken($connection);

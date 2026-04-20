@@ -15,6 +15,7 @@ use App\Models\Conversation;
 use App\Models\ConversationParticipant;
 use App\Models\Message;
 use App\Models\MessageAttachment;
+use App\Services\Meta\Instagram\InstagramService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -182,7 +183,7 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
 
         $attachments = Arr::get($messageNode, 'attachments', []);
         $attachmentItems = collect(is_array($attachments) ? $attachments : [])->map(function ($attachment) {
-            $type = (string) (Arr::get($attachment, 'type') ?? 'unknown');
+            $type = $this->normalizeAttachmentType((string) (Arr::get($attachment, 'type') ?? 'unknown'));
             $payload = Arr::get($attachment, 'payload', []);
 
             return [
@@ -577,6 +578,11 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
             $customerParticipant->role = 'participant';
             $customerParticipant->is_self = false;
             $customerParticipant->save();
+
+            if ($event->providerConnection) {
+                $this->enrichInstagramParticipantProfile($customerParticipant, $event->providerConnection);
+                $customerParticipant->refresh();
+            }
         }
 
         return [
@@ -621,7 +627,7 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
                 : null;
             $attachments = is_array($normalized['attachments'] ?? null) ? $normalized['attachments'] : [];
             $normalizedSentAt = $this->normalizeInstagramTimestamp($normalized['sent_at'] ?? null);
-            $messageType = !empty($attachments) ? 'attachment' : 'text';
+            $messageType = $this->resolveMessageTypeFromAttachments($attachments);
             $messageContextType = is_string($normalized['message_context_type'] ?? null)
                 ? $normalized['message_context_type']
                 : null;
@@ -650,7 +656,7 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
             $message->direction = $direction === 'outbound_or_echo' ? 'outbound' : 'inbound';
             $message->message_type = $messageType;
             $message->text_body = $messageType === 'text' && $textBody !== '' ? $textBody : null;
-            $message->caption = $messageType === 'attachment' && $textBody !== '' ? $textBody : null;
+            $message->caption = $messageType !== 'text' && $textBody !== '' ? $textBody : null;
             $message->status = $direction === 'outbound_or_echo' ? 'sent' : 'delivered';
             $message->sent_at = $normalizedSentAt;
             $message->received_at = $direction === 'inbound' ? ($normalizedSentAt ?? now()) : null;
@@ -687,7 +693,7 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
                     'sort_order' => $index,
                 ]);
 
-                $messageAttachment->attachment_type = (string) ($attachment['type'] ?? 'unknown');
+                $messageAttachment->attachment_type = $this->normalizeAttachmentType((string) ($attachment['type'] ?? 'unknown'));
                 $messageAttachment->url = $attachment['url'] ?? null;
                 $messageAttachment->mime_type = $attachment['mime_type'] ?? null;
                 $messageAttachment->file_name = $attachment['title'] ?? null;
@@ -714,6 +720,106 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
     {
         return ($normalized['kind'] ?? 'unknown') === 'message'
             && $resolvedConversation instanceof Conversation;
+    }
+
+    protected function normalizeAttachmentType(string $type): string
+    {
+        $type = Str::lower(trim($type));
+
+        return match ($type) {
+            'image', 'video', 'audio', 'file' => $type,
+            'voice' => 'audio',
+            default => $type !== '' ? $type : 'file',
+        };
+    }
+
+    protected function resolveMessageTypeFromAttachments(array $attachments): string
+    {
+        if (empty($attachments)) {
+            return 'text';
+        }
+
+        $firstType = $this->normalizeAttachmentType((string) ($attachments[0]['type'] ?? 'file'));
+
+        return match ($firstType) {
+            'image' => 'image',
+            'video' => 'video',
+            'audio' => 'voice',
+            default => 'file',
+        };
+    }
+
+    protected function enrichInstagramParticipantProfile(
+        ConversationParticipant $participant,
+        ProviderConnection $connection
+    ): void {
+        $providerUserId = trim((string) ($participant->provider_user_id ?? ''));
+
+        if ($providerUserId === '' || ! $this->shouldFetchInstagramParticipantProfile($participant)) {
+            return;
+        }
+
+        try {
+            $profile = app(InstagramService::class)->fetchUserProfile($connection, $providerUserId);
+            $username = $this->normalizeNullableString(Arr::get($profile, 'username'));
+            $name = $this->normalizeNullableString(Arr::get($profile, 'name'));
+            $profilePic = $this->normalizeNullableString(Arr::get($profile, 'profile_pic'));
+            $meta = is_array($participant->meta) ? $participant->meta : [];
+
+            $participant->display_name = $name
+                ?: $username
+                ?: ($participant->display_name ?: 'Instagram User');
+            $participant->handle = $username ?: $participant->handle;
+            $participant->avatar_url = $profilePic ?: $participant->avatar_url;
+            $participant->meta = array_merge($meta, [
+                'instagram_profile' => [
+                    'id' => Arr::get($profile, 'id'),
+                    'username' => $username,
+                    'name' => $name,
+                    'profile_pic' => $profilePic,
+                ],
+                'instagram_profile_enriched_at' => now()->toIso8601String(),
+            ]);
+            $participant->save();
+        } catch (\Throwable $exception) {
+            $participant->meta = array_merge(is_array($participant->meta) ? $participant->meta : [], [
+                'instagram_profile_fetch_failed_at' => now()->toIso8601String(),
+                'instagram_profile_fetch_error' => $exception->getMessage(),
+            ]);
+            $participant->save();
+
+            $this->logWebhookProcessing('profile_enrichment_failed', [
+                'conversation_participant_id' => $participant->id,
+                'provider_user_id' => $providerUserId,
+                'provider_connection_id' => $connection->id,
+                'error' => $exception->getMessage(),
+            ], 'warning');
+        }
+    }
+
+    protected function shouldFetchInstagramParticipantProfile(ConversationParticipant $participant): bool
+    {
+        $meta = is_array($participant->meta) ? $participant->meta : [];
+        $hasUsefulProfile = filled($participant->handle)
+            && filled($participant->avatar_url)
+            && filled($participant->display_name)
+            && $participant->display_name !== 'Instagram User';
+
+        if (! $hasUsefulProfile) {
+            return true;
+        }
+
+        $enrichedAt = Arr::get($meta, 'instagram_profile_enriched_at');
+
+        if (! is_string($enrichedAt) || $enrichedAt === '') {
+            return true;
+        }
+
+        try {
+            return Carbon::parse($enrichedAt)->lessThan(now()->subDay());
+        } catch (\Throwable) {
+            return true;
+        }
     }
 
     protected function normalizeNullableString(mixed $value): ?string
