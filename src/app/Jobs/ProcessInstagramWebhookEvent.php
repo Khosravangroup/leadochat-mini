@@ -1116,6 +1116,7 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
 
         if (! empty($result['social_post_id'])) {
             $freshPost = SocialPost::query()->find($result['social_post_id']);
+            $this->syncSocialPostCommentsFromInstagram($event, $freshPost);
             $this->refreshSocialPostCountersFromInstagram($event, $freshPost);
 
             if ($freshPost) {
@@ -1126,6 +1127,33 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
         }
 
         return $result;
+    }
+
+    protected function syncSocialPostCommentsFromInstagram(WebhookEvent $event, ?SocialPost $post): void
+    {
+        if (! $post || blank($post->provider_media_id)) {
+            return;
+        }
+
+        /** @var ProviderConnection|null $connection */
+        $connection = $event->providerConnection;
+
+        if (! $connection) {
+            return;
+        }
+
+        try {
+            app(InstagramService::class)->syncMediaComments($connection, $post, [
+                'limit' => 50,
+            ]);
+        } catch (\Throwable $exception) {
+            Log::info('instagram.social_post_comment_sync_failed', [
+                'webhook_event_id' => $event->id,
+                'social_post_id' => $post->id,
+                'provider_media_id' => $post->provider_media_id,
+                'error' => $exception->getMessage(),
+            ]);
+        }
     }
 
     protected function refreshSocialPostCountersFromInstagram(WebhookEvent $event, ?SocialPost $post): void

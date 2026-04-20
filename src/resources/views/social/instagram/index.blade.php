@@ -607,6 +607,45 @@
                 font-weight: 800;
             }
 
+            .social-comment-thread {
+                display: grid;
+                gap: 6px;
+                padding-left: 42px;
+            }
+
+            .social-comment-child {
+                display: grid;
+                gap: 4px;
+                border-left: 2px solid #e2e8f0;
+                padding: 6px 0 6px 10px;
+            }
+
+            .social-comment-child-top {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                flex-wrap: wrap;
+                min-width: 0;
+            }
+
+            .social-comment-child-author {
+                font-size: 11px;
+                font-weight: 800;
+                color: #0f172a;
+            }
+
+            .social-comment-child-date {
+                font-size: 10px;
+                font-weight: 700;
+                color: #64748b;
+            }
+
+            .social-comment-child-text {
+                font-size: 13px;
+                line-height: 1.5;
+                color: #334155;
+            }
+
             .social-comment-actions {
                 display: flex;
                 align-items: center;
@@ -972,28 +1011,6 @@
                     <div id="social-posts-root">
                         <h3 class="social-section-title">Posts — {{ $socialCounts['posts'] }} stored posts</h3>
 
-                    @if (!empty($syncError))
-                        <div class="social-sync-banner error">
-                            Feed sync failed: {{ $syncError }}
-                        </div>
-                    @elseif (!empty($syncResult))
-                        <div class="social-sync-banner success">
-                            Feed sync completed. {{ $syncResult['count'] ?? 0 }} item(s) synced for the active Instagram connection.
-                        </div>
-                    @endif
-
-                    @if (session('social_success'))
-                        <div class="social-sync-banner success">
-                            {{ session('social_success') }}
-                        </div>
-                    @endif
-
-                    @if (session('social_error'))
-                        <div class="social-sync-banner error">
-                            {{ session('social_error') }}
-                        </div>
-                    @endif
-
 
                     @if (($posts ?? collect())->isEmpty())
                         <div class="social-placeholder-grid">
@@ -1222,6 +1239,7 @@
                                                         $lastDmReplyText = is_string($commentRaw['last_dm_reply_text'] ?? null)
                                                             ? trim($commentRaw['last_dm_reply_text'])
                                                             : null;
+                                                        $childReplies = $comment->childComments ?? collect();
                                                     @endphp
                                                         <div class="social-comment-card">
                                                             <div class="social-comment-top">
@@ -1260,7 +1278,7 @@
                                                                     </span>
                                                                 </div>
 
-                                                                @if ($lastPublicReplyText)
+                                                                @if ($lastPublicReplyText && $childReplies->isEmpty())
                                                                     <div class="social-comment-reply-note" style="padding-left: 0;">
                                                                         <span>“{{ $lastPublicReplyText }}”</span>
                                                                     </div>
@@ -1281,6 +1299,27 @@
                                                                         <span>“{{ $lastDmReplyText }}”</span>
                                                                     </div>
                                                                 @endif
+                                                            @endif
+
+                                                            @if ($childReplies->isNotEmpty())
+                                                                <div class="social-comment-thread">
+                                                                    @foreach ($childReplies as $childReply)
+                                                                        @php
+                                                                            $childReplyAuthor = $childReply->username ?: ($activeInstagramConnection?->provider_account_name ?: 'Reply');
+                                                                        @endphp
+                                                                        <div class="social-comment-child">
+                                                                            <div class="social-comment-child-top">
+                                                                                <span class="social-comment-child-author">{{ $childReplyAuthor }}</span>
+                                                                                <span class="social-comment-child-date">
+                                                                                    {{ $childReply->commented_at ? $childReply->commented_at->format('Y-m-d H:i') : 'No date' }}
+                                                                                </span>
+                                                                            </div>
+                                                                            <div class="social-comment-child-text">
+                                                                                {{ $childReply->text ?: 'No reply text available.' }}
+                                                                            </div>
+                                                                        </div>
+                                                                    @endforeach
+                                                                </div>
                                                             @endif
 
                                                             <div class="social-comment-actions">
@@ -1546,34 +1585,6 @@
                     <div id="social-comments-root">
                         <h3 class="social-section-title">Comments moderation — {{ $socialCounts['comments'] }} stored comments</h3>
 
-                        @if (!empty($syncError))
-                            <div class="social-sync-banner error">
-                                Feed sync failed: {{ $syncError }}
-                            </div>
-                        @elseif (!empty($syncResult))
-                            <div class="social-sync-banner success">
-                                Feed sync completed. {{ $syncResult['count'] ?? 0 }} post item(s) checked before loading comments.
-                            </div>
-                        @endif
-
-                        @if (!empty($commentSyncErrors))
-                            <div class="social-sync-banner error">
-                                Some comments could not be synced from Instagram yet. Open the related post panel to see per-post errors.
-                            </div>
-                        @endif
-
-                        @if (session('social_success'))
-                            <div class="social-sync-banner success">
-                                {{ session('social_success') }}
-                            </div>
-                        @endif
-
-                        @if (session('social_error'))
-                            <div class="social-sync-banner error">
-                                {{ session('social_error') }}
-                            </div>
-                        @endif
-
                         @if (($comments ?? collect())->isEmpty())
                             <div class="social-placeholder-grid">
                                 <div class="social-placeholder-box">
@@ -1612,6 +1623,7 @@
                                         $lastDmReplyText = is_string($commentRaw['last_dm_reply_text'] ?? null)
                                             ? trim($commentRaw['last_dm_reply_text'])
                                             : null;
+                                        $childReplies = $comment->childComments ?? collect();
                                     @endphp
 
                                     <div class="social-comment-card">
@@ -1640,7 +1652,7 @@
                                             </span>
                                         </div>
 
-                                        @if ($lastPublicReplyText)
+                                        @if ($lastPublicReplyText && $childReplies->isEmpty())
                                             <div class="social-comment-reply-note">
                                                 <span class="social-post-badge">Public reply</span>
                                                 <span>{{ $lastPublicReplyText }}</span>
@@ -1651,6 +1663,27 @@
                                             <div class="social-comment-reply-note">
                                                 <span class="social-post-badge">DM sent</span>
                                                 <span>{{ $lastDmReplyText }}</span>
+                                            </div>
+                                        @endif
+
+                                        @if ($childReplies->isNotEmpty())
+                                            <div class="social-comment-thread">
+                                                @foreach ($childReplies as $childReply)
+                                                    @php
+                                                        $childReplyAuthor = $childReply->username ?: ($activeInstagramConnection?->provider_account_name ?: 'Reply');
+                                                    @endphp
+                                                    <div class="social-comment-child">
+                                                        <div class="social-comment-child-top">
+                                                            <span class="social-comment-child-author">{{ $childReplyAuthor }}</span>
+                                                            <span class="social-comment-child-date">
+                                                                {{ $childReply->commented_at ? $childReply->commented_at->format('Y-m-d H:i') : 'No date' }}
+                                                            </span>
+                                                        </div>
+                                                        <div class="social-comment-child-text">
+                                                            {{ $childReply->text ?: 'No reply text available.' }}
+                                                        </div>
+                                                    </div>
+                                                @endforeach
                                             </div>
                                         @endif
 

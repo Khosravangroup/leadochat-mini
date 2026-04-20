@@ -181,7 +181,16 @@ class SocialController extends Controller
                 'mediaItems',
                 'comments' => function ($query) {
                     $query->where('provider', 'instagram')
+                        ->whereNull('parent_provider_comment_id')
                         ->where('status', '!=', 'deleted')
+                        ->with([
+                            'childComments' => function ($childQuery) {
+                                $childQuery->where('provider', 'instagram')
+                                    ->where('status', '!=', 'deleted')
+                                    ->oldest('commented_at')
+                                    ->oldest('id');
+                            },
+                        ])
                         ->latest('commented_at')
                         ->latest('id');
                 },
@@ -255,8 +264,17 @@ class SocialController extends Controller
             ->where('workspace_id', $workspace->id)
             ->where('provider', 'instagram')
             ->when($activeConnection, fn ($query) => $query->where('provider_connection_id', $activeConnection->id))
+            ->whereNull('parent_provider_comment_id')
             ->where('status', '!=', 'deleted')
-            ->with('socialPost')
+            ->with([
+                'socialPost',
+                'childComments' => function ($query) {
+                    $query->where('provider', 'instagram')
+                        ->where('status', '!=', 'deleted')
+                        ->oldest('commented_at')
+                        ->oldest('id');
+                },
+            ])
             ->latest('commented_at')
             ->latest('id')
             ->limit(100)
