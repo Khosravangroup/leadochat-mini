@@ -964,6 +964,15 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
 
         if (! $existingLastMessageAt || $messageTime->greaterThan($existingLastMessageAt)) {
             $conversation->last_message_at = $messageTime;
+            $conversation->last_message_preview = $this->buildConversationMessagePreview($normalized);
+        }
+
+        if (($normalized['direction'] ?? null) === 'inbound') {
+            $conversation->unread_count = Message::query()
+                ->where('conversation_id', $conversation->id)
+                ->where('direction', 'inbound')
+                ->whereNull('read_at')
+                ->count();
         }
 
         $customerParticipantId = $resolvedParticipants['customer_participant_id'] ?? null;
@@ -990,6 +999,27 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
         }
 
         $conversation->save();
+    }
+
+    protected function buildConversationMessagePreview(array $normalized): string
+    {
+        $text = is_string($normalized['text'] ?? null)
+            ? trim((string) $normalized['text'])
+            : '';
+
+        if ($text !== '') {
+            return Str::limit($text, 140);
+        }
+
+        $attachments = is_array($normalized['attachments'] ?? null) ? $normalized['attachments'] : [];
+        $firstType = $this->normalizeAttachmentType((string) ($attachments[0]['type'] ?? 'file'));
+
+        return match ($firstType) {
+            'image' => '📷 Image',
+            'video' => '🎬 Video',
+            'audio' => '🎤 Voice message',
+            default => '📎 Attachment',
+        };
     }
 
     protected function shouldSkipAlreadyFinalizedEvent(WebhookEvent $event): bool
