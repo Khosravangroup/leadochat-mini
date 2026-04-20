@@ -287,7 +287,10 @@ class InstagramWebhookController extends Controller
         $connection = ProviderConnection::query()
             ->where('provider', 'instagram')
             ->where('status', 'connected')
-            ->whereIn('provider_account_id', $candidates)
+            ->where(function ($query) use ($candidates) {
+                $query->whereIn('provider_account_id', $candidates)
+                    ->orWhereIn('external_oauth_user_id', $candidates);
+            })
             ->latest('id')
             ->first();
 

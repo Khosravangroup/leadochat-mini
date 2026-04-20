@@ -151,7 +151,7 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
             'provider_message_id' => $messageId !== '' ? $messageId : null,
             'sender_id' => $senderId !== '' ? $senderId : null,
             'recipient_id' => $recipientId !== '' ? $recipientId : null,
-            'text' => Arr::get($messageNode, 'text'),
+            'text' => Arr::get($messageNode, 'text') ?? Arr::get($messageNode, 'message'),
             'has_attachments' => !empty($attachmentItems),
             'attachments' => $attachmentItems,
             'sent_at' => $timestamp,
@@ -261,19 +261,41 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
     {
         $senderId = (string) ($normalized['sender_id'] ?? '');
         $recipientId = (string) ($normalized['recipient_id'] ?? '');
-        $accountId = (string) ($event->providerConnection?->provider_account_id ?? '');
+        $accountIds = $this->resolveProviderAccountIdAliases($event);
 
-        if ($accountId !== '') {
-            if ($senderId !== '' && $senderId === $accountId) {
+        if (! empty($accountIds)) {
+            if ($senderId !== '' && in_array($senderId, $accountIds, true)) {
                 return 'outbound_or_echo';
             }
 
-            if ($recipientId !== '' && $recipientId === $accountId) {
+            if ($recipientId !== '' && in_array($recipientId, $accountIds, true)) {
                 return 'inbound';
             }
         }
 
         return 'unknown';
+    }
+
+    protected function resolveProviderAccountIdAliases(WebhookEvent $event): array
+    {
+        $connection = $event->providerConnection;
+
+        if (! $connection) {
+            return [];
+        }
+
+        return collect([
+            $connection->provider_account_id,
+            $connection->external_oauth_user_id,
+            Arr::get($connection->meta, 'identity_payload.id'),
+            Arr::get($connection->meta, 'identity_payload.user_id'),
+            Arr::get($connection->meta, 'exchange_payload.short_lived.user_id'),
+        ])
+            ->filter(fn ($value) => filled($value))
+            ->map(fn ($value) => (string) $value)
+            ->unique()
+            ->values()
+            ->all();
     }
 
     protected function normalizeInstagramTimestamp(mixed $value): ?Carbon
@@ -346,7 +368,8 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
         $direction = (string) ($normalized['direction'] ?? 'unknown');
         $senderId = (string) ($normalized['sender_id'] ?? '');
         $recipientId = (string) ($normalized['recipient_id'] ?? '');
-        $accountId = (string) ($event->providerConnection?->provider_account_id ?? '');
+        $accountIds = $this->resolveProviderAccountIdAliases($event);
+        $accountId = (string) ($accountIds[0] ?? '');
 
         $selfId = $accountId !== '' ? $accountId : null;
         $customerId = null;
