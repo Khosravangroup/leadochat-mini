@@ -169,6 +169,7 @@ class InstagramWebhookController extends Controller
                     'candidate_ids' => $candidateIds,
                     'message_mid' => Arr::get($change, 'value.message.mid')
                         ?? Arr::get($change, 'value.messaging.0.message.mid')
+                        ?? Arr::get($change, 'value.messaging.0.read.mid')
                         ?? Arr::get($change, 'value.messages.0.mid'),
                     'sender_id' => Arr::get($change, 'value.sender.id')
                         ?? Arr::get($change, 'value.messaging.0.sender.id'),
@@ -340,6 +341,7 @@ class InstagramWebhookController extends Controller
                 ?? Arr::get($change, 'value.message.id')
                 ?? Arr::get($change, 'value.messaging.0.message.mid')
                 ?? Arr::get($change, 'value.messaging.0.message.id')
+                ?? Arr::get($change, 'value.messaging.0.read.mid')
                 ?? Arr::get($change, 'value.messages.0.mid')
                 ?? Arr::get($change, 'value.messages.0.id')
                 ?? Arr::get($change, 'value.comment_id')
