@@ -25,25 +25,61 @@ class SocialController extends Controller
         $instagramConnections = ProviderConnection::query()
             ->where('workspace_id', $workspace->id)
             ->where('provider', 'instagram')
+            ->where('status', 'connected')
             ->latest('id')
             ->get();
 
-        $activeConnection = $instagramConnections->firstWhere('status', 'connected')
-            ?? $instagramConnections->first();
+        $requestedConnectionId = $request->integer('instagram_account') ?: null;
+        $activeConnection = $requestedConnectionId
+            ? $instagramConnections->firstWhere('id', $requestedConnectionId)
+            : null;
+        $activeConnection ??= $instagramConnections->first();
 
-        $postCount = SocialPost::query()
+        $postCountQuery = SocialPost::query()
             ->where('workspace_id', $workspace->id)
             ->where('provider', 'instagram')
-            ->count();
+            ->where('status', '!=', 'deleted');
 
-        $commentCount = SocialComment::query()
+        $commentCountQuery = SocialComment::query()
+            ->where('workspace_id', $workspace->id)
+            ->where('provider', 'instagram');
+
+        $storyCountQuery = SocialStory::query()
+            ->where('workspace_id', $workspace->id)
+            ->where('provider', 'instagram');
+
+        if ($activeConnection) {
+            $postCountQuery->where('provider_connection_id', $activeConnection->id);
+            $commentCountQuery->where('provider_connection_id', $activeConnection->id);
+            $storyCountQuery->where('provider_connection_id', $activeConnection->id);
+        }
+
+        $instagramAccountTabs = $instagramConnections->map(function (ProviderConnection $connection) use ($workspace) {
+            return [
+                'id' => $connection->id,
+                'name' => $connection->provider_account_name ?: ('Instagram account #' . $connection->id),
+                'handle' => $connection->provider_account_name,
+                'provider_account_id' => $connection->provider_account_id,
+                'post_count' => SocialPost::query()
+                    ->where('workspace_id', $workspace->id)
+                    ->where('provider', 'instagram')
+                    ->where('provider_connection_id', $connection->id)
+                    ->where('status', '!=', 'deleted')
+                    ->count(),
+                'comment_count' => SocialComment::query()
+                    ->where('workspace_id', $workspace->id)
+                    ->where('provider', 'instagram')
+                    ->where('provider_connection_id', $connection->id)
+                    ->where('status', '!=', 'deleted')
+                    ->count(),
+            ];
+        })->values();
+
+        $totalConnectedPosts = SocialPost::query()
             ->where('workspace_id', $workspace->id)
             ->where('provider', 'instagram')
-            ->count();
-
-        $storyCount = SocialStory::query()
-            ->where('workspace_id', $workspace->id)
-            ->where('provider', 'instagram')
+            ->whereIn('provider_connection_id', $instagramConnections->pluck('id'))
+            ->where('status', '!=', 'deleted')
             ->count();
 
         return [
@@ -52,11 +88,14 @@ class SocialController extends Controller
             'tab' => $tab,
             'pageTitle' => $pageTitle,
             'instagramConnections' => $instagramConnections,
+            'instagramAccountTabs' => $instagramAccountTabs,
             'activeInstagramConnection' => $activeConnection,
+            'selectedInstagramAccountId' => $activeConnection?->id,
+            'totalConnectedInstagramPosts' => $totalConnectedPosts,
             'socialCounts' => [
-                'posts' => $postCount,
-                'comments' => $commentCount,
-                'stories' => $storyCount,
+                'posts' => $postCountQuery->count(),
+                'comments' => $commentCountQuery->where('status', '!=', 'deleted')->count(),
+                'stories' => $storyCountQuery->count(),
             ],
         ];
     }
@@ -114,6 +153,8 @@ class SocialController extends Controller
         $posts = SocialPost::query()
             ->where('workspace_id', $workspace->id)
             ->where('provider', 'instagram')
+            ->when($activeConnection, fn ($query) => $query->where('provider_connection_id', $activeConnection->id))
+            ->where('status', '!=', 'deleted')
             ->latest('posted_at')
             ->latest('id')
             ->get();
@@ -133,6 +174,8 @@ class SocialController extends Controller
         $posts = SocialPost::query()
             ->where('workspace_id', $workspace->id)
             ->where('provider', 'instagram')
+            ->when($activeConnection, fn ($query) => $query->where('provider_connection_id', $activeConnection->id))
+            ->where('status', '!=', 'deleted')
             ->with([
                 'mediaItems',
                 'comments' => function ($query) {
@@ -190,6 +233,8 @@ class SocialController extends Controller
             $posts = SocialPost::query()
                 ->where('workspace_id', $workspace->id)
                 ->where('provider', 'instagram')
+                ->where('provider_connection_id', $activeConnection->id)
+                ->where('status', '!=', 'deleted')
                 ->latest('posted_at')
                 ->latest('id')
                 ->get();
@@ -208,6 +253,7 @@ class SocialController extends Controller
         $comments = SocialComment::query()
             ->where('workspace_id', $workspace->id)
             ->where('provider', 'instagram')
+            ->when($activeConnection, fn ($query) => $query->where('provider_connection_id', $activeConnection->id))
             ->where('status', '!=', 'deleted')
             ->with('socialPost')
             ->latest('commented_at')
@@ -222,6 +268,8 @@ class SocialController extends Controller
         $pageData['socialCounts']['comments'] = SocialComment::query()
             ->where('workspace_id', $workspace->id)
             ->where('provider', 'instagram')
+            ->when($activeConnection, fn ($query) => $query->where('provider_connection_id', $activeConnection->id))
+            ->where('status', '!=', 'deleted')
             ->count();
 
         return $pageData;
@@ -233,14 +281,49 @@ class SocialController extends Controller
 
         abort_unless($workspace, 404);
 
-        $connection = ProviderConnection::query()
+        $connections = ProviderConnection::query()
             ->where('workspace_id', $workspace->id)
             ->where('provider', 'instagram')
             ->where('status', 'connected')
             ->latest('id')
-            ->first();
+            ->get();
+
+        $requestedConnectionId = $request->integer('instagram_account') ?: null;
+        $connection = $requestedConnectionId
+            ? $connections->firstWhere('id', $requestedConnectionId)
+            : null;
+        $connection ??= $connections->first();
 
         abort_unless($connection, 404, 'Connected Instagram account not found for the current workspace.');
+
+        return $connection;
+    }
+
+    protected function resolveWorkspacePost(Request $request, SocialPost $post): SocialPost
+    {
+        $workspace = $request->user()?->currentWorkspace();
+
+        abort_unless($workspace, 404);
+        abort_unless(
+            $post->workspace_id === $workspace->id && $post->provider === 'instagram',
+            404
+        );
+
+        return $post;
+    }
+
+    protected function resolveInstagramConnectionForPost(Request $request, SocialPost $post): ProviderConnection
+    {
+        $post = $this->resolveWorkspacePost($request, $post);
+
+        $connection = ProviderConnection::query()
+            ->where('workspace_id', $post->workspace_id)
+            ->where('provider', 'instagram')
+            ->where('status', 'connected')
+            ->whereKey($post->provider_connection_id)
+            ->first();
+
+        abort_unless($connection, 404, 'Connected Instagram account not found for this post.');
 
         return $connection;
     }
@@ -258,14 +341,41 @@ class SocialController extends Controller
         return $comment;
     }
 
-    protected function redirectToInstagramPosts(): RedirectResponse
+    protected function resolveInstagramConnectionForComment(Request $request, SocialComment $comment): ProviderConnection
     {
-        return redirect()->route('social.instagram.posts');
+        $comment = $this->resolveWorkspaceComment($request, $comment);
+
+        $connection = ProviderConnection::query()
+            ->where('workspace_id', $comment->workspace_id)
+            ->where('provider', 'instagram')
+            ->where('status', 'connected')
+            ->whereKey($comment->provider_connection_id)
+            ->first();
+
+        abort_unless($connection, 404, 'Connected Instagram account not found for this comment.');
+
+        return $connection;
     }
 
-    protected function redirectToInstagramStories(): RedirectResponse
+    protected function instagramAccountRouteParams(Request $request, array $extra = []): array
     {
-        return redirect()->route('social.instagram.stories');
+        $accountId = $request->input('instagram_account', $request->query('instagram_account'));
+
+        if ($accountId !== null && $accountId !== '') {
+            $extra['instagram_account'] = (int) $accountId;
+        }
+
+        return $extra;
+    }
+
+    protected function redirectToInstagramPosts(Request $request): RedirectResponse
+    {
+        return redirect()->route('social.instagram.posts', $this->instagramAccountRouteParams($request));
+    }
+
+    protected function redirectToInstagramStories(Request $request): RedirectResponse
+    {
+        return redirect()->route('social.instagram.stories', $this->instagramAccountRouteParams($request));
     }
     protected function buildCommentReplyActorMeta(Request $request): array
     {
@@ -308,7 +418,7 @@ class SocialController extends Controller
     protected function respondWithInstagramPosts(Request $request, ?string $successMessage = null, ?string $errorMessage = null): View|RedirectResponse
     {
         if (! $request->ajax()) {
-            $response = $this->redirectToInstagramPosts();
+            $response = $this->redirectToInstagramPosts($request);
 
             if ($successMessage !== null) {
                 $response = $response->with('social_success', $successMessage);
@@ -341,7 +451,7 @@ class SocialController extends Controller
     protected function respondWithInstagramComments(Request $request, ?string $successMessage = null, ?string $errorMessage = null): View|RedirectResponse
     {
         if (! $request->ajax()) {
-            $response = redirect()->route('social.instagram.comments');
+            $response = redirect()->route('social.instagram.comments', $this->instagramAccountRouteParams($request));
 
             if ($successMessage !== null) {
                 $response = $response->with('social_success', $successMessage);
@@ -434,6 +544,7 @@ class SocialController extends Controller
         $stories = SocialStory::query()
             ->where('workspace_id', $workspace->id)
             ->where('provider', 'instagram')
+            ->when($activeConnection, fn ($query) => $query->where('provider_connection_id', $activeConnection->id))
             ->latest('posted_at')
             ->latest('id')
             ->get();
@@ -601,16 +712,46 @@ class SocialController extends Controller
             $story->status = 'deleted';
             $story->save();
 
-            return $this->redirectToInstagramStories()->with('social_success', 'Story record deleted successfully.');
+            return $this->redirectToInstagramStories($request)->with('social_success', 'Story record deleted successfully.');
         } catch (\Throwable $exception) {
-            return $this->redirectToInstagramStories()->with('social_error', 'Delete story failed: ' . $exception->getMessage());
+            return $this->redirectToInstagramStories($request)->with('social_error', 'Delete story failed: ' . $exception->getMessage());
+        }
+    }
+
+    public function deleteInstagramPost(Request $request, SocialPost $post): View|RedirectResponse
+    {
+        $post = $this->resolveWorkspacePost($request, $post);
+        $connection = $this->resolveInstagramConnectionForPost($request, $post);
+
+        try {
+            $deleteResult = app(InstagramService::class)->deleteMedia($connection, $post->provider_media_id);
+
+            $post->status = 'deleted';
+            $post->raw = array_merge(
+                is_array($post->raw) ? $post->raw : [],
+                [
+                    'deleted_from_social_at' => now()->toIso8601String(),
+                    'delete_result' => $deleteResult,
+                ]
+            );
+            $post->save();
+
+            $this->broadcastSocialUpdate($request, 'instagram_post_deleted', [
+                'social_post_id' => $post->id,
+                'provider_media_id' => $post->provider_media_id,
+                'provider_connection_id' => $post->provider_connection_id,
+            ]);
+
+            return $this->respondWithInstagramPosts($request, 'Post deleted successfully.');
+        } catch (\Throwable $exception) {
+            return $this->respondWithInstagramPosts($request, null, 'Delete post failed: ' . $exception->getMessage());
         }
     }
 
     public function replyInstagramComment(Request $request, SocialComment $comment): View|RedirectResponse
     {
         $comment = $this->resolveWorkspaceComment($request, $comment);
-        $connection = $this->resolveWorkspaceInstagramConnection($request);
+        $connection = $this->resolveInstagramConnectionForComment($request, $comment);
         $replyText = trim((string) $request->input('reply_text', ''));
 
         if ($replyText === '') {
@@ -644,7 +785,7 @@ class SocialController extends Controller
     public function replyInstagramCommentViaDm(Request $request, SocialComment $comment): View|RedirectResponse
     {
         $comment = $this->resolveWorkspaceComment($request, $comment);
-        $connection = $this->resolveWorkspaceInstagramConnection($request);
+        $connection = $this->resolveInstagramConnectionForComment($request, $comment);
         $replyText = trim((string) $request->input('reply_text', ''));
 
         if ($replyText === '') {
@@ -685,7 +826,7 @@ class SocialController extends Controller
     public function hideInstagramComment(Request $request, SocialComment $comment): View|RedirectResponse
     {
         $comment = $this->resolveWorkspaceComment($request, $comment);
-        $connection = $this->resolveWorkspaceInstagramConnection($request);
+        $connection = $this->resolveInstagramConnectionForComment($request, $comment);
 
         try {
             app(InstagramService::class)->hideComment($connection, $comment->provider_comment_id);
@@ -706,7 +847,7 @@ class SocialController extends Controller
     public function unhideInstagramComment(Request $request, SocialComment $comment): View|RedirectResponse
     {
         $comment = $this->resolveWorkspaceComment($request, $comment);
-        $connection = $this->resolveWorkspaceInstagramConnection($request);
+        $connection = $this->resolveInstagramConnectionForComment($request, $comment);
 
         try {
             app(InstagramService::class)->unhideComment($connection, $comment->provider_comment_id);
@@ -727,7 +868,7 @@ class SocialController extends Controller
     public function deleteInstagramComment(Request $request, SocialComment $comment): View|RedirectResponse
     {
         $comment = $this->resolveWorkspaceComment($request, $comment);
-        $connection = $this->resolveWorkspaceInstagramConnection($request);
+        $connection = $this->resolveInstagramConnectionForComment($request, $comment);
 
         try {
             app(InstagramService::class)->deleteComment($connection, $comment->provider_comment_id);

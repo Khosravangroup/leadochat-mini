@@ -35,6 +35,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/social/instagram/posts', [SocialController::class, 'instagramPosts'])
         ->name('social.instagram.posts');
 
+    Route::delete('/social/instagram/posts/{post}', [SocialController::class, 'deleteInstagramPost'])
+        ->name('social.instagram.posts.delete');
+
     Route::get('/social/instagram/comments', [SocialController::class, 'instagramComments'])
         ->name('social.instagram.comments');
 

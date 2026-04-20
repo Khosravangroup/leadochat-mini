@@ -136,6 +136,36 @@ class InstagramContentService
         return $response->json();
     }
 
+    public function deleteMedia(ProviderConnection $connection, string $mediaId): array
+    {
+        $accessToken = $this->resolveAccessToken($connection);
+        $mediaId = trim($mediaId);
+
+        if ($mediaId === '') {
+            throw new RuntimeException('Instagram media id cannot be empty for deleteMedia.');
+        }
+
+        $endpoint = "https://graph.instagram.com/{$this->resolveGraphVersion()}/{$mediaId}";
+
+        if (app()->environment('local')) {
+            return [
+                'mode' => 'local_debug',
+                'endpoint' => $endpoint,
+                'success' => true,
+            ];
+        }
+
+        $response = Http::withToken($accessToken)
+            ->acceptJson()
+            ->delete($endpoint);
+
+        if (! $response->successful()) {
+            throw new RuntimeException('Instagram deleteMedia failed: ' . $response->body());
+        }
+
+        return $response->json();
+    }
+
     public function syncMediaFeed(ProviderConnection $connection, array $options = []): array
     {
         $feed = $this->fetchMediaFeed($connection, $options);

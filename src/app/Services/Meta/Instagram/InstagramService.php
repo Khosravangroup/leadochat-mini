@@ -159,6 +159,13 @@ class InstagramService
         return $this->instagramCommentService->deleteComment($connection, $commentId);
     }
 
+    public function deleteMedia(ProviderConnection $connection, string $mediaId): array
+    {
+        $this->assertInstagramConnection($connection);
+
+        return $this->instagramContentService->deleteMedia($connection, $mediaId);
+    }
+
     public function replyToCommentViaDm(
         ProviderConnection $connection,
         SocialComment $comment,

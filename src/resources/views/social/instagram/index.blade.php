@@ -63,6 +63,47 @@
                 flex-wrap: wrap;
             }
 
+            .social-account-grid {
+                margin-top: 14px;
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+                gap: 10px;
+            }
+
+            .social-account-card {
+                display: grid;
+                gap: 6px;
+                border: 1px solid #e2e8f0;
+                border-radius: 8px;
+                background: #f8fafc;
+                padding: 12px;
+                text-decoration: none;
+                color: inherit;
+            }
+
+            .social-account-card.is-active {
+                background: #eef2ff;
+                border-color: #c7d2fe;
+            }
+
+            .social-account-name {
+                font-size: 14px;
+                font-weight: 800;
+                color: #0f172a;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
+            .social-account-meta {
+                display: flex;
+                gap: 6px;
+                flex-wrap: wrap;
+                font-size: 11px;
+                font-weight: 800;
+                color: #64748b;
+            }
+
             .social-connection-badge {
                 display: inline-flex;
                 align-items: center;
@@ -174,13 +215,13 @@
 
             .social-post-grid {
                 display: grid;
-                grid-template-columns: repeat(2, minmax(0, 1fr));
-                gap: 14px;
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+                gap: 12px;
             }
 
             .social-post-card {
                 border: 1px solid #e2e8f0;
-                border-radius: 16px;
+                border-radius: 8px;
                 background: #fff;
                 overflow: hidden;
             }
@@ -189,7 +230,7 @@
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                min-height: 180px;
+                min-height: 150px;
                 background: #f8fafc;
                 border-bottom: 1px solid #e2e8f0;
                 font-size: 13px;
@@ -201,7 +242,7 @@
             .social-post-image {
                 display: block;
                 width: 100%;
-                max-height: 260px;
+                height: 165px;
                 object-fit: cover;
                 background: #f8fafc;
             }
@@ -213,15 +254,15 @@
 
             .social-post-media-type-badge {
                 position: absolute;
-                top: 12px;
-                left: 12px;
+                top: 8px;
+                left: 8px;
                 z-index: 2;
                 display: inline-flex;
                 align-items: center;
-                min-height: 28px;
+                min-height: 24px;
                 border-radius: 999px;
-                padding: 0 10px;
-                font-size: 11px;
+                padding: 0 8px;
+                font-size: 10px;
                 font-weight: 800;
                 letter-spacing: 0.02em;
                 border: 1px solid rgba(15, 23, 42, 0.12);
@@ -258,8 +299,8 @@
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                min-height: 220px;
-                padding: 24px;
+                min-height: 150px;
+                padding: 18px;
                 text-align: center;
                 font-size: 13px;
                 font-weight: 800;
@@ -269,8 +310,8 @@
 
             .social-post-video-indicator {
                 position: absolute;
-                right: 12px;
-                bottom: 12px;
+                right: 8px;
+                bottom: 8px;
                 z-index: 2;
                 display: inline-flex;
                 align-items: center;
@@ -285,8 +326,8 @@
 
             .social-post-carousel-count {
                 position: absolute;
-                right: 12px;
-                bottom: 12px;
+                right: 8px;
+                bottom: 8px;
                 z-index: 2;
                 display: inline-flex;
                 align-items: center;
@@ -338,9 +379,9 @@
             }
 
             .social-post-body {
-                padding: 14px;
+                padding: 10px;
                 display: grid;
-                gap: 10px;
+                gap: 8px;
             }
 
             .social-post-meta {
@@ -365,9 +406,13 @@
             }
 
             .social-post-caption {
-                font-size: 13px;
-                line-height: 1.7;
+                font-size: 12px;
+                line-height: 1.45;
                 color: #334155;
+                display: -webkit-box;
+                -webkit-line-clamp: 3;
+                -webkit-box-orient: vertical;
+                overflow: hidden;
             }
 
             .social-post-stats {
@@ -420,6 +465,16 @@
                 background: #f8fafc;
             }
 
+            .social-post-action-button.danger {
+                color: #991b1b;
+                border-color: #fecaca;
+                background: #fff;
+            }
+
+            .social-post-action-button.danger:hover {
+                background: #fef2f2;
+            }
+
             .social-comments-panel {
                 margin-top: 12px;
                 border-top: 1px solid #e2e8f0;
@@ -453,7 +508,7 @@
 
             .social-comment-top {
                 display: flex;
-                align-items: center;
+                align-items: flex-start;
                 gap: 8px;
                 flex-wrap: nowrap;
                 min-width: 0;
@@ -461,15 +516,16 @@
 
             .social-comment-main {
                 display: flex;
-                align-items: center;
+                align-items: flex-start;
                 gap: 8px;
                 min-width: 0;
                 flex: 1 1 auto;
+                flex-wrap: wrap;
             }
 
             .social-comment-avatar {
-                width: 26px;
-                height: 26px;
+                width: 34px;
+                height: 34px;
                 border-radius: 999px;
                 background: #e2e8f0;
                 color: #334155;
@@ -480,10 +536,18 @@
                 font-weight: 800;
                 flex: 0 0 auto;
                 text-transform: uppercase;
+                overflow: hidden;
+            }
+
+            .social-comment-avatar img {
+                display: block;
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
             }
 
             .social-comment-author {
-                font-size: 11px;
+                font-size: 12px;
                 font-weight: 800;
                 color: #0f172a;
                 flex: 0 0 auto;
@@ -498,14 +562,15 @@
             }
 
             .social-comment-text {
-                font-size: 11px;
-                line-height: 1.4;
-                color: #334155;
-                white-space: nowrap;
-                overflow: hidden;
-                text-overflow: ellipsis;
+                font-size: 14px;
+                line-height: 1.55;
+                font-weight: 650;
+                color: #0f172a;
+                white-space: normal;
+                overflow: visible;
+                text-overflow: clip;
                 min-width: 0;
-                flex: 1 1 auto;
+                flex: 1 1 100%;
             }
 
             .social-comment-stats {
@@ -783,79 +848,91 @@
                     grid-template-columns: 1fr;
                 }
             }
+
+            @media (min-width: 961px) and (max-width: 1280px) {
+                .social-post-grid {
+                    grid-template-columns: repeat(3, minmax(0, 1fr));
+                }
+            }
         </style>
 
         <div class="social-shell">
+            @php
+                $accountQuery = $selectedInstagramAccountId ? ['instagram_account' => $selectedInstagramAccountId] : [];
+                $connectedAccountCount = $instagramConnections?->count() ?? 0;
+            @endphp
+
             <div class="social-top-card">
                 <div style="font-size:16px; font-weight:800; color:#0f172a;">
                     Instagram Social Console
                 </div>
                 <div style="margin-top:6px; font-size:13px; line-height:1.7; color:#64748b;">
-                    This module is dedicated to social content management and stays separate from Inbox. Posts, comments, stories, moderation, and reply-via-DM will live here.
-                </div>
-
-                <div class="social-stats">
-                    <div class="social-stat">
-                        <div class="social-stat-label">Workspace</div>
-                        <div class="social-stat-value">{{ $workspace->name }}</div>
-                    </div>
-
-                    <div class="social-stat">
-                        <div class="social-stat-label">Platform</div>
-                        <div class="social-stat-value">Instagram</div>
-                    </div>
-
-                    <div class="social-stat">
-                        <div class="social-stat-label">Current tab</div>
-                        <div class="social-stat-value" style="text-transform:capitalize;">{{ $tab }}</div>
-                    </div>
-
-                    <div class="social-stat">
-                        <div class="social-stat-label">Connected accounts</div>
-                        <div class="social-stat-value">{{ $instagramConnections->count() }}</div>
-                    </div>
-
-                    <div class="social-stat">
-                        <div class="social-stat-label">Status</div>
-                        <div class="social-stat-value">{{ $activeInstagramConnection ? 'Ready' : 'Needs connection' }}</div>
-                    </div>
+                    Connected Instagram channels.
                 </div>
 
                 <div class="social-connection-summary">
                     <span class="social-connection-badge {{ $activeInstagramConnection ? 'connected' : 'missing' }}">
-                        {{ $activeInstagramConnection ? 'Instagram connected' : 'Instagram connection missing' }}
+                        {{ $activeInstagramConnection ? 'Connected' : 'No connected Instagram account' }}
                     </span>
 
                     @if ($activeInstagramConnection)
                         <span class="social-connection-badge">
-                            Account: {{ $activeInstagramConnection->provider_account_name ?: 'Connected account' }}
+                            {{ $activeInstagramConnection->provider_account_name ?: 'Instagram account' }}
                         </span>
 
                         <span class="social-connection-badge">
-                            Status: {{ $activeInstagramConnection->status }}
+                            {{ $socialCounts['posts'] }} posts
+                        </span>
+
+                        <span class="social-connection-badge">
+                            {{ $socialCounts['comments'] }} comments
+                        </span>
+                    @else
+                        <span class="social-connection-badge missing">
+                            Connect Instagram to load social content
                         </span>
                     @endif
                 </div>
+
+                @if ($connectedAccountCount > 0)
+                    <div class="social-account-grid">
+                        @foreach ($instagramAccountTabs as $accountTab)
+                            <a
+                                href="{{ route('social.instagram.' . $tab, ['instagram_account' => $accountTab['id']]) }}"
+                                class="social-account-card {{ (int) $selectedInstagramAccountId === (int) $accountTab['id'] ? 'is-active' : '' }}"
+                            >
+                                <div class="social-account-name">
+                                    {{ $accountTab['name'] }}
+                                </div>
+                                <div class="social-account-meta">
+                                    <span>{{ $accountTab['post_count'] }} posts</span>
+                                    <span>{{ $accountTab['comment_count'] }} comments</span>
+                                    <span>Connected</span>
+                                </div>
+                            </a>
+                        @endforeach
+                    </div>
+                @endif
             </div>
 
             <div class="social-tab-card">
                 <div class="social-tabs">
                     <a
-                        href="{{ route('social.instagram.posts') }}"
+                        href="{{ route('social.instagram.posts', $accountQuery) }}"
                         class="social-tab-link {{ $tab === 'posts' ? 'is-active' : '' }}"
                     >
                         Posts
                     </a>
 
                     <a
-                        href="{{ route('social.instagram.comments') }}"
+                        href="{{ route('social.instagram.comments', $accountQuery) }}"
                         class="social-tab-link {{ $tab === 'comments' ? 'is-active' : '' }}"
                     >
                         Comments
                     </a>
 
                     <a
-                        href="{{ route('social.instagram.stories') }}"
+                        href="{{ route('social.instagram.stories', $accountQuery) }}"
                         class="social-tab-link {{ $tab === 'stories' ? 'is-active' : '' }}"
                     >
                         Stories
@@ -866,7 +943,7 @@
             <div class="social-content-card">
                 @if ($tab === 'posts')
                     <div id="social-posts-root">
-                        <h3 class="social-section-title">Posts feed shell — {{ $socialCounts['posts'] }} stored posts</h3>
+                        <h3 class="social-section-title">Posts — {{ $socialCounts['posts'] }} stored posts</h3>
 
                     @if (!empty($syncError))
                         <div class="social-sync-banner error">
@@ -896,14 +973,14 @@
                             <div class="social-placeholder-box">
                                 <div class="social-placeholder-label">No posts stored yet</div>
                                 <div class="social-placeholder-text">
-                                    As soon as an Instagram connection is active, the posts tab will sync the media feed and store post cards here for the current workspace.
+                                    No posts are stored for this Instagram account yet.
                                 </div>
                             </div>
 
                             <div class="social-placeholder-box">
-                                <div class="social-placeholder-label">Next phase</div>
+                                <div class="social-placeholder-label">Sync source</div>
                                 <div class="social-placeholder-text">
-                                    The next step is rendering real post details, comment entry points, filters, and actions for publishing and moderation.
+                                    Posts are loaded separately for each connected Instagram account.
                                 </div>
                             </div>
                         </div>
@@ -1050,6 +1127,21 @@
                                                     Open on Instagram
                                                 </a>
                                             @endif
+
+                                            <form
+                                                method="POST"
+                                                action="{{ route('social.instagram.posts.delete', $post) }}"
+                                                class="social-inline-post-form"
+                                                style="display:inline;"
+                                                data-confirm-message="Delete this post from Instagram and remove it from Social?"
+                                            >
+                                                @csrf
+                                                @method('DELETE')
+                                                <input type="hidden" name="instagram_account" value="{{ $selectedInstagramAccountId }}">
+                                                <button type="submit" class="social-post-action-button danger">
+                                                    Delete
+                                                </button>
+                                            </form>
                                         </div>
 
                                         <div id="{{ $commentsCollapseId }}" class="social-comments-panel" hidden>
@@ -1073,8 +1165,15 @@
                                                     @php
                                                         $replyFormId = 'reply-form-' . $comment->id;
                                                         $commentAuthor = $comment->username ?: 'Instagram user';
-                                                        $commentAvatarLetter = mb_strtoupper(mb_substr(trim($commentAuthor), 0, 1));
                                                         $commentRaw = is_array($comment->raw) ? $comment->raw : [];
+                                                        $commentAvatarUrl = $commentRaw['profile_pic']
+                                                            ?? $commentRaw['profile_picture_url']
+                                                            ?? $commentRaw['from']['profile_pic']
+                                                            ?? $commentRaw['from']['profile_picture_url']
+                                                            ?? null;
+                                                        $commentAvatarUrl = is_string($commentAvatarUrl) && trim($commentAvatarUrl) !== ''
+                                                            ? trim($commentAvatarUrl)
+                                                            : 'https://ui-avatars.com/api/?name=' . urlencode($commentAuthor) . '&background=e2e8f0&color=334155';
                                                         $commentReplyBy = null;
 
                                                         foreach ([
@@ -1102,7 +1201,9 @@
                                                         <div class="social-comment-card">
                                                             <div class="social-comment-top">
                                                                 <div class="social-comment-main">
-                                                                    <div class="social-comment-avatar">{{ $commentAvatarLetter ?: 'U' }}</div>
+                                                                    <div class="social-comment-avatar">
+                                                                        <img src="{{ $commentAvatarUrl }}" alt="{{ $commentAuthor }}">
+                                                                    </div>
                                                                     <div class="social-comment-author">
                                                                         {{ $commentAuthor }}
                                                                     </div>
@@ -1182,6 +1283,7 @@
                                                                     data-panel-id="{{ $commentsCollapseId }}"
                                                                 >
                                                                     @csrf
+                                                                    <input type="hidden" name="instagram_account" value="{{ $selectedInstagramAccountId }}">
                                                                     <button type="submit" class="social-comment-action-button">
                                                                         {{ $comment->is_hidden ? 'Unhide' : 'Hide' }}
                                                                     </button>
@@ -1190,6 +1292,7 @@
                                                                 <form method="POST" action="{{ route('social.instagram.comments.delete', $comment) }}" style="display:inline;" class="social-inline-comment-form" data-panel-id="{{ $commentsCollapseId }}">
                                                                     @csrf
                                                                     @method('DELETE')
+                                                                    <input type="hidden" name="instagram_account" value="{{ $selectedInstagramAccountId }}">
                                                                     <button type="submit" class="social-comment-action-button">
                                                                         Delete
                                                                     </button>
@@ -1205,6 +1308,7 @@
                                                                 hidden
                                                             >
                                                                 @csrf
+                                                                <input type="hidden" name="instagram_account" value="{{ $selectedInstagramAccountId }}">
                                                                 <span class="social-post-badge" data-reply-mode-label>Public reply</span>
                                                                 <input type="hidden" name="_reply_action" value="{{ route('social.instagram.comments.reply', $comment) }}" data-reply-action-input>
                                                                 <input
@@ -1352,7 +1456,7 @@
                             };
 
                             window.socialBindInlineCommentActions = function () {
-                                document.querySelectorAll('.social-inline-comment-form').forEach(function (form) {
+                                document.querySelectorAll('.social-inline-comment-form, .social-inline-post-form').forEach(function (form) {
                                     if (form.dataset.boundSocialForm === '1') {
                                         return;
                                     }
@@ -1360,6 +1464,12 @@
                                     form.dataset.boundSocialForm = '1';
                                     form.addEventListener('submit', function (event) {
                                         event.preventDefault();
+
+                                        const confirmMessage = form.getAttribute('data-confirm-message');
+                                        if (confirmMessage && !window.confirm(confirmMessage)) {
+                                            return;
+                                        }
+
                                         window.socialSubmitInlineForm(form);
                                     });
                                 });
@@ -1457,9 +1567,16 @@
                                     @php
                                         $replyFormId = 'comments-tab-reply-form-' . $comment->id;
                                         $commentAuthor = $comment->username ?: 'Instagram user';
-                                        $commentAvatarLetter = mb_strtoupper(mb_substr(trim($commentAuthor), 0, 1));
                                         $commentPost = $comment->socialPost;
                                         $commentRaw = is_array($comment->raw) ? $comment->raw : [];
+                                        $commentAvatarUrl = $commentRaw['profile_pic']
+                                            ?? $commentRaw['profile_picture_url']
+                                            ?? $commentRaw['from']['profile_pic']
+                                            ?? $commentRaw['from']['profile_picture_url']
+                                            ?? null;
+                                        $commentAvatarUrl = is_string($commentAvatarUrl) && trim($commentAvatarUrl) !== ''
+                                            ? trim($commentAvatarUrl)
+                                            : 'https://ui-avatars.com/api/?name=' . urlencode($commentAuthor) . '&background=e2e8f0&color=334155';
                                         $lastPublicReplyText = is_string($commentRaw['last_public_reply_text'] ?? null)
                                             ? trim($commentRaw['last_public_reply_text'])
                                             : null;
@@ -1471,7 +1588,9 @@
                                     <div class="social-comment-card">
                                         <div class="social-comment-top">
                                             <div class="social-comment-main">
-                                                <div class="social-comment-avatar">{{ $commentAvatarLetter ?: 'U' }}</div>
+                                                <div class="social-comment-avatar">
+                                                    <img src="{{ $commentAvatarUrl }}" alt="{{ $commentAuthor }}">
+                                                </div>
                                                 <div class="social-comment-author">{{ $commentAuthor }}</div>
                                                 <div class="social-comment-text">
                                                     {{ $comment->text ?: 'No comment text available.' }}
@@ -1526,6 +1645,7 @@
                                             <form method="POST" action="{{ $comment->is_hidden ? route('social.instagram.comments.unhide', $comment) : route('social.instagram.comments.hide', $comment) }}" style="display:inline;">
                                                 @csrf
                                                 <input type="hidden" name="return_tab" value="comments">
+                                                <input type="hidden" name="instagram_account" value="{{ $selectedInstagramAccountId }}">
                                                 <button type="submit" class="social-comment-action-button">
                                                     {{ $comment->is_hidden ? 'Unhide' : 'Hide' }}
                                                 </button>
@@ -1535,6 +1655,7 @@
                                                 @csrf
                                                 @method('DELETE')
                                                 <input type="hidden" name="return_tab" value="comments">
+                                                <input type="hidden" name="instagram_account" value="{{ $selectedInstagramAccountId }}">
                                                 <button type="submit" class="social-comment-action-button">
                                                     Delete
                                                 </button>
@@ -1550,6 +1671,7 @@
                                         >
                                             @csrf
                                             <input type="hidden" name="return_tab" value="comments">
+                                            <input type="hidden" name="instagram_account" value="{{ $selectedInstagramAccountId }}">
                                             <span class="social-post-badge" data-reply-mode-label>Public reply</span>
                                             <input
                                                 type="text"
@@ -1600,6 +1722,7 @@
                                 enctype="multipart/form-data"
                             >
                                 @csrf
+                                <input type="hidden" name="instagram_account" value="{{ $selectedInstagramAccountId }}">
 
                                 <div class="social-story-form-grid">
                                     <div class="social-story-field">
@@ -1868,6 +1991,7 @@ const showVideo = (src) => {
                                             <form method="POST" action="{{ route('social.instagram.stories.delete', $story) }}">
                                                 @csrf
                                                 @method('DELETE')
+                                                <input type="hidden" name="instagram_account" value="{{ $selectedInstagramAccountId }}">
                                                 <button type="submit" class="social-post-action-button">
                                                     Delete story
                                                 </button>
