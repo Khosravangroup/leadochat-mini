@@ -38,6 +38,10 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
                 return 'message_read';
             }
 
+            if (filled(Arr::get($value, 'message_edit.mid')) || filled(Arr::get($value, 'messaging.0.message_edit.mid'))) {
+                return 'message_edit';
+            }
+
             if (is_array(Arr::get($value, 'messages')) && !empty(Arr::get($value, 'messages'))) {
                 return 'message';
             }
@@ -112,6 +116,55 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
                 'change' => $change,
                 'value' => is_array($value) ? $value : [],
                 'read' => is_array($readNode) ? $readNode : [],
+            ],
+        ];
+    }
+
+    protected function normalizeMessageEditPayload(array $change, array $entry): array
+    {
+        $value = Arr::get($change, 'value', []);
+        $messagingItems = Arr::get($value, 'messaging', []);
+        $editNode = Arr::get($value, 'message_edit', []);
+
+        if ((! is_array($editNode) || empty($editNode)) && is_array($messagingItems)) {
+            $editNode = Arr::get($messagingItems, '0.message_edit', []);
+        }
+
+        $senderId = (string) (Arr::get($value, 'from.id')
+            ?? Arr::get($value, 'sender.id')
+            ?? Arr::get($messagingItems, '0.sender.id')
+            ?? '');
+
+        $recipientId = (string) (Arr::get($value, 'recipient.id')
+            ?? Arr::get($messagingItems, '0.recipient.id')
+            ?? Arr::get($entry, 'id')
+            ?? '');
+
+        $timestamp = Arr::get($messagingItems, '0.timestamp')
+            ?? Arr::get($value, 'timestamp')
+            ?? Arr::get($entry, 'time');
+
+        return [
+            'kind' => 'message_edit',
+            'provider_message_id' => $this->normalizeNullableString(Arr::get($editNode, 'mid')),
+            'sender_id' => $senderId !== '' ? $senderId : null,
+            'recipient_id' => $recipientId !== '' ? $recipientId : null,
+            'text' => null,
+            'has_attachments' => false,
+            'attachments' => [],
+            'sent_at' => $timestamp,
+            'message_context_type' => 'message_edit',
+            'is_story_reply' => false,
+            'story_id' => null,
+            'reply_to' => [],
+            'referral' => [],
+            'reaction' => [],
+            'story_context' => [],
+            'raw' => [
+                'entry' => $entry,
+                'change' => $change,
+                'value' => is_array($value) ? $value : [],
+                'message_edit' => is_array($editNode) ? $editNode : [],
             ],
         ];
     }
@@ -235,6 +288,10 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
 
         if ($normalizedType === 'message_read') {
             return $this->normalizeReadReceiptPayload($change, $entry);
+        }
+
+        if ($normalizedType === 'message_edit') {
+            return $this->normalizeMessageEditPayload($change, $entry);
         }
 
         if ($normalizedType === 'comment') {
