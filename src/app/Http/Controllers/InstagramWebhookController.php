@@ -72,6 +72,7 @@ class InstagramWebhookController extends Controller
                 'change_count' => $changes->count(),
                 'raw_change_count' => is_array(Arr::get($entry, 'changes')) ? count(Arr::get($entry, 'changes')) : 0,
                 'messaging_count' => is_array(Arr::get($entry, 'messaging')) ? count(Arr::get($entry, 'messaging')) : 0,
+                'standby_count' => is_array(Arr::get($entry, 'standby')) ? count(Arr::get($entry, 'standby')) : 0,
             ], 'debug');
 
             if ($changes->isEmpty()) {
@@ -305,26 +306,27 @@ class InstagramWebhookController extends Controller
 
     protected function buildEntryMessagingChanges(array $entry): array
     {
-        $messagingItems = Arr::get($entry, 'messaging', []);
+        return collect([
+            'messages' => Arr::get($entry, 'messaging', []),
+            'standby' => Arr::get($entry, 'standby', []),
+        ])->flatMap(function ($items, string $field) use ($entry) {
+            if (! is_array($items) || empty($items)) {
+                return [];
+            }
 
-        if (!is_array($messagingItems) || empty($messagingItems)) {
-            return [];
-        }
-
-        return collect($messagingItems)
-            ->filter(fn ($messagingItem) => is_array($messagingItem))
-            ->map(fn (array $messagingItem) => [
-                'field' => 'messages',
-                'value' => [
-                    'messaging' => [$messagingItem],
-                    'sender' => Arr::get($messagingItem, 'sender', []),
-                    'recipient' => Arr::get($messagingItem, 'recipient', []),
-                    'message' => Arr::get($messagingItem, 'message', []),
-                    'timestamp' => Arr::get($messagingItem, 'timestamp') ?? Arr::get($entry, 'time'),
-                ],
-            ])
-            ->values()
-            ->all();
+            return collect($items)
+                ->filter(fn ($messagingItem) => is_array($messagingItem))
+                ->map(fn (array $messagingItem) => [
+                    'field' => $field,
+                    'value' => [
+                        'messaging' => [$messagingItem],
+                        'sender' => Arr::get($messagingItem, 'sender', []),
+                        'recipient' => Arr::get($messagingItem, 'recipient', []),
+                        'message' => Arr::get($messagingItem, 'message', []),
+                        'timestamp' => Arr::get($messagingItem, 'timestamp') ?? Arr::get($entry, 'time'),
+                    ],
+                ]);
+        })->values()->all();
     }
 
     protected function logWebhook(string $event, array $context = [], string $level = 'info'): void

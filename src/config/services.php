@@ -34,7 +34,7 @@ return [
         'scopes' => env('INSTAGRAM_SCOPES', 'instagram_business_basic,instagram_business_manage_messages,instagram_business_manage_comments,instagram_business_content_publish,instagram_business_manage_insights'),
         'webhook_subscribed_fields' => array_values(array_filter(array_map(
             'trim',
-            explode(',', env('INSTAGRAM_WEBHOOK_SUBSCRIBED_FIELDS', 'messages,comments'))
+            explode(',', env('INSTAGRAM_WEBHOOK_SUBSCRIBED_FIELDS', 'messages,comments,standby,messaging_postbacks,message_reactions,messaging_seen,messaging_referral,messaging_handover,message_edit'))
         ))),
         'webhook_verify_token' => env('INSTAGRAM_WEBHOOK_VERIFY_TOKEN', 'leadochat-mini-instagram-verify-token'),
     ],

@@ -33,7 +33,7 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
         $field = (string) (Arr::get($change, 'field') ?? '');
         $value = Arr::get($change, 'value', []);
 
-        if ($field === 'messages') {
+        if (in_array($field, ['messages', 'standby'], true)) {
             if (is_array(Arr::get($value, 'messages')) && !empty(Arr::get($value, 'messages'))) {
                 return 'message';
             }
