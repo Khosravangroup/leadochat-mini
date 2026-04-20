@@ -418,7 +418,7 @@
             .social-post-stats {
                 display: flex;
                 align-items: center;
-                gap: 8px;
+                gap: 6px;
                 flex-wrap: wrap;
             }
 
@@ -426,13 +426,13 @@
                 display: inline-flex;
                 align-items: center;
                 justify-content: center;
-                min-height: 36px;
+                min-height: 30px;
                 border-radius: 10px;
-                padding: 0 12px;
+                padding: 0 9px;
                 border: 1px solid #cbd5e1;
                 background: #fff;
                 color: #334155;
-                font-size: 12px;
+                font-size: 11px;
                 font-weight: 800;
                 text-decoration: none;
                 width: fit-content;
@@ -441,21 +441,35 @@
             .social-post-actions {
                 display: flex;
                 align-items: center;
-                gap: 10px;
+                justify-content: space-between;
+                gap: 6px;
                 flex-wrap: wrap;
+            }
+
+            .social-post-compact-row {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 8px;
+                flex-wrap: wrap;
+            }
+
+            .social-post-compact-row .social-post-stats,
+            .social-post-compact-row .social-post-actions {
+                min-width: 0;
             }
 
             .social-post-action-button {
                 display: inline-flex;
                 align-items: center;
                 justify-content: center;
-                min-height: 36px;
+                min-height: 30px;
                 border-radius: 10px;
-                padding: 0 12px;
+                padding: 0 9px;
                 border: 1px solid #cbd5e1;
                 background: #fff;
                 color: #334155;
-                font-size: 12px;
+                font-size: 11px;
                 font-weight: 800;
                 text-decoration: none;
                 cursor: pointer;
@@ -476,11 +490,11 @@
             }
 
             .social-comments-panel {
-                margin-top: 12px;
+                margin-top: 8px;
                 border-top: 1px solid #e2e8f0;
-                padding-top: 12px;
+                padding-top: 8px;
                 display: grid;
-                gap: 10px;
+                gap: 8px;
             }
 
             .social-comments-summary {
@@ -491,7 +505,7 @@
 
             .social-comment-list {
                 display: grid;
-                gap: 10px;
+                gap: 8px;
                 max-height: 255px;
                 overflow-y: auto;
                 padding-right: 4px;
@@ -501,9 +515,9 @@
                 border: 1px solid #e2e8f0;
                 border-radius: 10px;
                 background: #f8fafc;
-                padding: 10px;
+                padding: 8px;
                 display: grid;
-                gap: 6px;
+                gap: 5px;
             }
 
             .social-comment-top {
@@ -596,27 +610,26 @@
             .social-comment-actions {
                 display: flex;
                 align-items: center;
-                gap: 6px;
+                gap: 4px;
                 flex-wrap: wrap;
             }
 
             .social-comment-reply-form {
-                display: flex;
-                align-items: center;
-                gap: 6px;
-                margin-top: 2px;
+                display: grid;
+                gap: 5px;
+                margin-top: 4px;
                 flex-wrap: wrap;
+                padding-left: 42px;
             }
 
             .social-comment-reply-textarea {
-                flex: 1 1 220px;
                 width: 100%;
-                min-height: 36px;
-                height: 36px;
-                max-height: 36px;
+                min-height: 32px;
+                height: 32px;
+                max-height: 32px;
                 border: 1px solid #cbd5e1;
-                border-radius: 9px;
-                padding: 7px 10px;
+                border-radius: 999px;
+                padding: 6px 10px;
                 font-size: 12px;
                 line-height: 20px;
                 color: #334155;
@@ -629,23 +642,37 @@
             .social-comment-reply-actions {
                 display: flex;
                 align-items: center;
-                gap: 6px;
-                flex-wrap: wrap;
+                gap: 5px;
+                flex-wrap: nowrap;
+                width: 100%;
+            }
+
+            .social-comment-reply-actions .social-comment-reply-textarea {
+                flex: 1 1 auto;
             }
 
             .social-comment-action-button {
                 display: inline-flex;
                 align-items: center;
                 justify-content: center;
-                min-height: 30px;
+                min-height: 26px;
                 border-radius: 8px;
-                padding: 0 9px;
+                padding: 0 7px;
                 border: 1px solid #cbd5e1;
                 background: #fff;
                 color: #334155;
-                font-size: 11px;
+                font-size: 10px;
                 font-weight: 800;
                 cursor: pointer;
+            }
+
+            .social-comment-icon-button {
+                width: 28px;
+                min-width: 28px;
+                padding: 0;
+                border-radius: 999px;
+                font-size: 13px;
+                line-height: 1;
             }
             .social-inline-loading {
                 opacity: 0.6;
@@ -881,11 +908,11 @@
                         </span>
 
                         <span class="social-connection-badge">
-                            {{ $socialCounts['posts'] }} posts
+                            <span data-social-post-total>{{ $socialCounts['posts'] }}</span> posts
                         </span>
 
                         <span class="social-connection-badge">
-                            {{ $socialCounts['comments'] }} comments
+                            <span data-social-comment-total>{{ $socialCounts['comments'] }}</span> comments
                         </span>
                     @else
                         <span class="social-connection-badge missing">
@@ -1102,46 +1129,48 @@
                                             {{ $post->caption ?: 'No caption available for this post yet.' }}
                                         </div>
 
-                                        <div class="social-post-stats">
-                                            <span class="social-post-badge">Likes: {{ $post->like_count }}</span>
-                                            <span class="social-post-badge">Status: {{ $post->status }}</span>
+                                        <div class="social-post-compact-row">
+                                            <div class="social-post-stats">
+                                                <span class="social-post-badge" data-post-like-count="{{ $post->id }}">♥ {{ $post->like_count }}</span>
+                                                <span class="social-post-badge" data-post-comment-count="{{ $post->id }}">💬 {{ $totalCommentsCount }}</span>
 
-                                            @if ($isCarousel)
-                                                <span class="social-post-badge">Slides: {{ $mediaItems->count() }}</span>
-                                            @elseif ($isVideoLike)
-                                                <span class="social-post-badge">Playback: {{ $isReel ? 'Reel' : 'Video' }}</span>
-                                            @endif
-                                        </div>
+                                                @if ($isCarousel)
+                                                    <span class="social-post-badge">Slides: {{ $mediaItems->count() }}</span>
+                                                @elseif ($isVideoLike)
+                                                    <span class="social-post-badge">{{ $isReel ? 'Reel' : 'Video' }}</span>
+                                                @endif
+                                            </div>
 
-                                        <div class="social-post-actions">
-                                            <button
-                                                type="button"
-                                                class="social-post-action-button"
-                                                onclick="window.socialToggleComments && window.socialToggleComments('{{ $commentsCollapseId }}')"
-                                            >
-                                                Comments ({{ $totalCommentsCount }})
-                                            </button>
-
-                                            @if ($post->permalink)
-                                                <a href="{{ $post->permalink }}" target="_blank" rel="noreferrer" class="social-post-link">
-                                                    Open on Instagram
-                                                </a>
-                                            @endif
-
-                                            <form
-                                                method="POST"
-                                                action="{{ route('social.instagram.posts.delete', $post) }}"
-                                                class="social-inline-post-form"
-                                                style="display:inline;"
-                                                data-confirm-message="Delete this post from Instagram and remove it from Social?"
-                                            >
-                                                @csrf
-                                                @method('DELETE')
-                                                <input type="hidden" name="instagram_account" value="{{ $selectedInstagramAccountId }}">
-                                                <button type="submit" class="social-post-action-button danger">
-                                                    Delete
+                                            <div class="social-post-actions">
+                                                <button
+                                                    type="button"
+                                                    class="social-post-action-button"
+                                                    onclick="window.socialToggleComments && window.socialToggleComments('{{ $commentsCollapseId }}')"
+                                                >
+                                                    Comments
                                                 </button>
-                                            </form>
+
+                                                @if ($post->permalink)
+                                                    <a href="{{ $post->permalink }}" target="_blank" rel="noreferrer" class="social-post-link">
+                                                        Instagram
+                                                    </a>
+                                                @endif
+
+                                                <form
+                                                    method="POST"
+                                                    action="{{ route('social.instagram.posts.delete', $post) }}"
+                                                    class="social-inline-post-form"
+                                                    style="display:inline;"
+                                                    data-confirm-message="Delete this post from Instagram and remove it from Social?"
+                                                >
+                                                    @csrf
+                                                    @method('DELETE')
+                                                    <input type="hidden" name="instagram_account" value="{{ $selectedInstagramAccountId }}">
+                                                    <button type="submit" class="social-post-action-button danger">
+                                                        Delete
+                                                    </button>
+                                                </form>
+                                            </div>
                                         </div>
 
                                         <div id="{{ $commentsCollapseId }}" class="social-comments-panel" hidden>
@@ -1150,10 +1179,6 @@
                                                     Comment sync failed for this post: {{ $postCommentSyncError }}
                                                 </div>
                                             @endif
-
-                                            <div class="social-comments-summary">
-                                                Showing up to {{ $postCommentsPageSize ?? 10 }} most recent stored comments for this post. Load more, inline reply, hide/unhide, delete, and reply-via-DM actions will be connected in the next phase.
-                                            </div>
 
                                             @if ($visibleComments->isEmpty())
                                                 <div class="social-comments-empty">
@@ -1261,18 +1286,22 @@
                                                             <div class="social-comment-actions">
                                                                 <button
                                                                     type="button"
-                                                                    class="social-comment-action-button"
-                                                                    onclick="const form = document.getElementById('{{ $replyFormId }}'); const mode = form ? form.querySelector('[data-reply-mode-label]') : null; const action = form ? form.querySelector('[data-reply-action-input]') : null; const button = form ? form.querySelector('[data-reply-submit-button]') : null; const input = form ? form.querySelector('input[name=reply_text]') : null; if (form) { form.hidden = false; form.action = '{{ route('social.instagram.comments.reply', $comment) }}'; if (mode) mode.textContent = 'Public reply'; if (action) action.value = '{{ route('social.instagram.comments.reply', $comment) }}'; if (button) button.textContent = 'Send reply'; if (input) { input.placeholder = 'Write your public reply here...'; input.focus(); } }"
+                                                                    class="social-comment-action-button social-comment-icon-button"
+                                                                    title="Reply"
+                                                                    aria-label="Reply"
+                                                                    onclick="const form = document.getElementById('{{ $replyFormId }}'); const mode = form ? form.querySelector('[data-reply-mode-label]') : null; const action = form ? form.querySelector('[data-reply-action-input]') : null; const button = form ? form.querySelector('[data-reply-submit-button]') : null; const input = form ? form.querySelector('input[name=reply_text]') : null; if (form) { form.hidden = false; form.action = '{{ route('social.instagram.comments.reply', $comment) }}'; if (mode) mode.textContent = 'Public reply'; if (action) action.value = '{{ route('social.instagram.comments.reply', $comment) }}'; if (button) button.textContent = 'Send'; if (input) { input.placeholder = 'Write your public reply here...'; input.focus(); } }"
                                                                 >
-                                                                    Reply
+                                                                    ↩
                                                                 </button>
 
                                                                 <button
                                                                     type="button"
-                                                                    class="social-comment-action-button"
-                                                                    onclick="const form = document.getElementById('{{ $replyFormId }}'); const mode = form ? form.querySelector('[data-reply-mode-label]') : null; const action = form ? form.querySelector('[data-reply-action-input]') : null; const button = form ? form.querySelector('[data-reply-submit-button]') : null; const input = form ? form.querySelector('input[name=reply_text]') : null; if (form) { form.hidden = false; form.action = '{{ route('social.instagram.comments.reply_dm', $comment) }}'; if (mode) mode.textContent = 'DM reply'; if (action) action.value = '{{ route('social.instagram.comments.reply_dm', $comment) }}'; if (button) button.textContent = 'Send DM reply'; if (input) { input.placeholder = 'Write your private DM reply here...'; input.focus(); } }"
+                                                                    class="social-comment-action-button social-comment-icon-button"
+                                                                    title="Reply via DM"
+                                                                    aria-label="Reply via DM"
+                                                                    onclick="const form = document.getElementById('{{ $replyFormId }}'); const mode = form ? form.querySelector('[data-reply-mode-label]') : null; const action = form ? form.querySelector('[data-reply-action-input]') : null; const button = form ? form.querySelector('[data-reply-submit-button]') : null; const input = form ? form.querySelector('input[name=reply_text]') : null; if (form) { form.hidden = false; form.action = '{{ route('social.instagram.comments.reply_dm', $comment) }}'; if (mode) mode.textContent = 'DM reply'; if (action) action.value = '{{ route('social.instagram.comments.reply_dm', $comment) }}'; if (button) button.textContent = 'Send'; if (input) { input.placeholder = 'Write your private DM reply here...'; input.focus(); } }"
                                                                 >
-                                                                    Reply via DM
+                                                                    ✉
                                                                 </button>
 
                                                                 <form
@@ -1284,8 +1313,13 @@
                                                                 >
                                                                     @csrf
                                                                     <input type="hidden" name="instagram_account" value="{{ $selectedInstagramAccountId }}">
-                                                                    <button type="submit" class="social-comment-action-button">
-                                                                        {{ $comment->is_hidden ? 'Unhide' : 'Hide' }}
+                                                                    <button
+                                                                        type="submit"
+                                                                        class="social-comment-action-button social-comment-icon-button"
+                                                                        title="{{ $comment->is_hidden ? 'Unhide' : 'Hide' }}"
+                                                                        aria-label="{{ $comment->is_hidden ? 'Unhide' : 'Hide' }}"
+                                                                    >
+                                                                        {{ $comment->is_hidden ? '◉' : '◎' }}
                                                                     </button>
                                                                 </form>
 
@@ -1293,8 +1327,13 @@
                                                                     @csrf
                                                                     @method('DELETE')
                                                                     <input type="hidden" name="instagram_account" value="{{ $selectedInstagramAccountId }}">
-                                                                    <button type="submit" class="social-comment-action-button">
-                                                                        Delete
+                                                                    <button
+                                                                        type="submit"
+                                                                        class="social-comment-action-button social-comment-icon-button"
+                                                                        title="Delete"
+                                                                        aria-label="Delete"
+                                                                    >
+                                                                        ×
                                                                     </button>
                                                                 </form>
                                                             </div>
@@ -1309,27 +1348,18 @@
                                                             >
                                                                 @csrf
                                                                 <input type="hidden" name="instagram_account" value="{{ $selectedInstagramAccountId }}">
-                                                                <span class="social-post-badge" data-reply-mode-label>Public reply</span>
+                                                                <span class="social-post-badge" data-reply-mode-label hidden>Public reply</span>
                                                                 <input type="hidden" name="_reply_action" value="{{ route('social.instagram.comments.reply', $comment) }}" data-reply-action-input>
-                                                                <input
-                                                                    type="text"
-                                                                    name="reply_text"
-                                                                    class="social-comment-reply-textarea"
-                                                                    placeholder="Write your public reply here..."
-                                                                    required
-                                                                >
-
                                                                 <div class="social-comment-reply-actions">
-                                                                    <button type="submit" class="social-comment-action-button" data-reply-submit-button>
-                                                                        Send reply
-                                                                    </button>
-
-                                                                    <button
-                                                                        type="button"
-                                                                        class="social-comment-action-button"
-                                                                        onclick="const form = document.getElementById('{{ $replyFormId }}'); const action = form ? form.querySelector('[data-reply-action-input]') : null; const button = form ? form.querySelector('[data-reply-submit-button]') : null; const mode = form ? form.querySelector('[data-reply-mode-label]') : null; const input = form ? form.querySelector('input[name=reply_text]') : null; if (form) { form.hidden = true; form.action = '{{ route('social.instagram.comments.reply', $comment) }}'; if (action) action.value = '{{ route('social.instagram.comments.reply', $comment) }}'; if (button) button.textContent = 'Send reply'; if (mode) mode.textContent = 'Public reply'; if (input) { input.value = ''; input.placeholder = 'Write your public reply here...'; } }"
+                                                                    <input
+                                                                        type="text"
+                                                                        name="reply_text"
+                                                                        class="social-comment-reply-textarea"
+                                                                        placeholder="Write your public reply here..."
+                                                                        required
                                                                     >
-                                                                        Cancel
+                                                                    <button type="submit" class="social-comment-action-button" data-reply-submit-button>
+                                                                        Send
                                                                     </button>
                                                                 </div>
                                                             </form>
@@ -1387,7 +1417,6 @@
                                 const currentRoot = document.getElementById('social-posts-root');
 
                                 if (!nextRoot || !currentRoot) {
-                                    window.location.reload();
                                     return;
                                 }
 
@@ -1421,8 +1450,8 @@
                                     .then(function (html) {
                                         window.socialReplacePostsRoot(html, panelId);
                                     })
-                                    .catch(function () {
-                                        window.location.reload();
+                                    .catch(function (error) {
+                                        console.error('social inline form submit failed', error);
                                     })
                                     .finally(function () {
                                         form.classList.remove('social-inline-loading');
@@ -1628,26 +1657,35 @@
                                         <div class="social-comment-actions">
                                             <button
                                                 type="button"
-                                                class="social-comment-action-button"
-                                                onclick="const form = document.getElementById('{{ $replyFormId }}'); const mode = form ? form.querySelector('[data-reply-mode-label]') : null; const button = form ? form.querySelector('[data-reply-submit-button]') : null; const input = form ? form.querySelector('input[name=reply_text]') : null; if (form) { form.hidden = false; form.action = '{{ route('social.instagram.comments.reply', $comment) }}'; if (mode) mode.textContent = 'Public reply'; if (button) button.textContent = 'Send reply'; if (input) { input.placeholder = 'Write your public reply here...'; input.focus(); } }"
+                                                class="social-comment-action-button social-comment-icon-button"
+                                                title="Reply"
+                                                aria-label="Reply"
+                                                onclick="const form = document.getElementById('{{ $replyFormId }}'); const mode = form ? form.querySelector('[data-reply-mode-label]') : null; const button = form ? form.querySelector('[data-reply-submit-button]') : null; const input = form ? form.querySelector('input[name=reply_text]') : null; if (form) { form.hidden = false; form.action = '{{ route('social.instagram.comments.reply', $comment) }}'; if (mode) mode.textContent = 'Public reply'; if (button) button.textContent = 'Send'; if (input) { input.placeholder = 'Write your public reply here...'; input.focus(); } }"
                                             >
-                                                Reply
+                                                ↩
                                             </button>
 
                                             <button
                                                 type="button"
-                                                class="social-comment-action-button"
-                                                onclick="const form = document.getElementById('{{ $replyFormId }}'); const mode = form ? form.querySelector('[data-reply-mode-label]') : null; const button = form ? form.querySelector('[data-reply-submit-button]') : null; const input = form ? form.querySelector('input[name=reply_text]') : null; if (form) { form.hidden = false; form.action = '{{ route('social.instagram.comments.reply_dm', $comment) }}'; if (mode) mode.textContent = 'DM reply'; if (button) button.textContent = 'Send DM reply'; if (input) { input.placeholder = 'Write your private DM reply here...'; input.focus(); } }"
+                                                class="social-comment-action-button social-comment-icon-button"
+                                                title="Reply via DM"
+                                                aria-label="Reply via DM"
+                                                onclick="const form = document.getElementById('{{ $replyFormId }}'); const mode = form ? form.querySelector('[data-reply-mode-label]') : null; const button = form ? form.querySelector('[data-reply-submit-button]') : null; const input = form ? form.querySelector('input[name=reply_text]') : null; if (form) { form.hidden = false; form.action = '{{ route('social.instagram.comments.reply_dm', $comment) }}'; if (mode) mode.textContent = 'DM reply'; if (button) button.textContent = 'Send'; if (input) { input.placeholder = 'Write your private DM reply here...'; input.focus(); } }"
                                             >
-                                                Reply via DM
+                                                ✉
                                             </button>
 
                                             <form method="POST" action="{{ $comment->is_hidden ? route('social.instagram.comments.unhide', $comment) : route('social.instagram.comments.hide', $comment) }}" style="display:inline;">
                                                 @csrf
                                                 <input type="hidden" name="return_tab" value="comments">
                                                 <input type="hidden" name="instagram_account" value="{{ $selectedInstagramAccountId }}">
-                                                <button type="submit" class="social-comment-action-button">
-                                                    {{ $comment->is_hidden ? 'Unhide' : 'Hide' }}
+                                                <button
+                                                    type="submit"
+                                                    class="social-comment-action-button social-comment-icon-button"
+                                                    title="{{ $comment->is_hidden ? 'Unhide' : 'Hide' }}"
+                                                    aria-label="{{ $comment->is_hidden ? 'Unhide' : 'Hide' }}"
+                                                >
+                                                    {{ $comment->is_hidden ? '◉' : '◎' }}
                                                 </button>
                                             </form>
 
@@ -1656,8 +1694,13 @@
                                                 @method('DELETE')
                                                 <input type="hidden" name="return_tab" value="comments">
                                                 <input type="hidden" name="instagram_account" value="{{ $selectedInstagramAccountId }}">
-                                                <button type="submit" class="social-comment-action-button">
-                                                    Delete
+                                                <button
+                                                    type="submit"
+                                                    class="social-comment-action-button social-comment-icon-button"
+                                                    title="Delete"
+                                                    aria-label="Delete"
+                                                >
+                                                    ×
                                                 </button>
                                             </form>
                                         </div>
@@ -1672,26 +1715,17 @@
                                             @csrf
                                             <input type="hidden" name="return_tab" value="comments">
                                             <input type="hidden" name="instagram_account" value="{{ $selectedInstagramAccountId }}">
-                                            <span class="social-post-badge" data-reply-mode-label>Public reply</span>
-                                            <input
-                                                type="text"
-                                                name="reply_text"
-                                                class="social-comment-reply-textarea"
-                                                placeholder="Write your public reply here..."
-                                                required
-                                            >
-
+                                            <span class="social-post-badge" data-reply-mode-label hidden>Public reply</span>
                                             <div class="social-comment-reply-actions">
-                                                <button type="submit" class="social-comment-action-button" data-reply-submit-button>
-                                                    Send reply
-                                                </button>
-
-                                                <button
-                                                    type="button"
-                                                    class="social-comment-action-button"
-                                                    onclick="const form = document.getElementById('{{ $replyFormId }}'); const button = form ? form.querySelector('[data-reply-submit-button]') : null; const mode = form ? form.querySelector('[data-reply-mode-label]') : null; const input = form ? form.querySelector('input[name=reply_text]') : null; if (form) { form.hidden = true; form.action = '{{ route('social.instagram.comments.reply', $comment) }}'; if (button) button.textContent = 'Send reply'; if (mode) mode.textContent = 'Public reply'; if (input) { input.value = ''; input.placeholder = 'Write your public reply here...'; } }"
+                                                <input
+                                                    type="text"
+                                                    name="reply_text"
+                                                    class="social-comment-reply-textarea"
+                                                    placeholder="Write your public reply here..."
+                                                    required
                                                 >
-                                                    Cancel
+                                                <button type="submit" class="social-comment-action-button" data-reply-submit-button>
+                                                    Send
                                                 </button>
                                             </div>
                                         </form>
@@ -2007,12 +2041,168 @@ const showVideo = (src) => {
                 <script>
                     (function () {
                         const workspaceId = @json($workspace->id ?? null);
+                        const activeTab = @json($tab);
+                        const realtimePostsUrl = @json(route('social.instagram.realtime.posts', $accountQuery));
+
+                        let refreshTimer = null;
+                        let countersTimer = null;
+                        let isRefreshing = false;
+                        let refreshQueued = false;
+
+                        const rememberSocialState = function () {
+                            sessionStorage.setItem('social_posts_scroll_y', String(window.scrollY || window.pageYOffset || 0));
+                        };
+
+                        const restoreSocialState = function () {
+                            if (typeof window.socialRestorePostsState === 'function') {
+                                window.socialRestorePostsState(sessionStorage.getItem('social_posts_open_panel'));
+                                return;
+                            }
+
+                            const savedScrollY = Number(sessionStorage.getItem('social_posts_scroll_y') || 0);
+                            window.scrollTo({ top: savedScrollY, left: 0, behavior: 'auto' });
+                        };
+
+                        const replaceSocialRootFromHtml = function (html) {
+                            const parser = new DOMParser();
+                            const doc = parser.parseFromString(html, 'text/html');
+                            const selectors = ['.social-top-card', '#social-posts-root', '#social-comments-root'];
+                            let replaced = false;
+
+                            selectors.forEach(function (selector) {
+                                const current = document.querySelector(selector);
+                                const next = doc.querySelector(selector);
+
+                                if (current && next) {
+                                    current.replaceWith(next);
+                                    replaced = true;
+                                }
+                            });
+
+                            if (!replaced) {
+                                return false;
+                            }
+
+                            if (typeof window.socialBindInlineCommentActions === 'function') {
+                                window.socialBindInlineCommentActions();
+                            }
+
+                            restoreSocialState();
+                            return true;
+                        };
+
+                        const refreshSocialRoot = async function (options = {}) {
+                            if (isRefreshing) {
+                                refreshQueued = true;
+                                return;
+                            }
+
+                            isRefreshing = true;
+                            rememberSocialState();
+
+                            try {
+                                const response = await fetch(window.location.href, {
+                                    method: 'GET',
+                                    credentials: 'same-origin',
+                                    headers: {
+                                        'X-Requested-With': 'XMLHttpRequest',
+                                        'Accept': 'text/html, application/xhtml+xml',
+                                    },
+                                });
+
+                                if (!response.ok) {
+                                    return;
+                                }
+
+                                const html = await response.text();
+                                replaceSocialRootFromHtml(html);
+                            } catch (error) {
+                                // Keep the current UI stable; the next websocket or counter tick can retry.
+                            } finally {
+                                isRefreshing = false;
+
+                                if (refreshQueued) {
+                                    refreshQueued = false;
+                                    scheduleSocialRefresh(options);
+                                }
+                            }
+                        };
+
+                        const scheduleSocialRefresh = function (options = {}) {
+                            clearTimeout(refreshTimer);
+                            refreshTimer = setTimeout(function () {
+                                refreshSocialRoot(options);
+                            }, options.delay || 300);
+                        };
+
+                        const updatePostCounters = function (posts) {
+                            if (!Array.isArray(posts)) {
+                                return;
+                            }
+
+                            let missingPost = false;
+
+                            posts.forEach(function (post) {
+                                if (!post || !post.id) {
+                                    return;
+                                }
+
+                                const likeBadge = document.querySelector(`[data-post-like-count="${post.id}"]`);
+                                const commentBadge = document.querySelector(`[data-post-comment-count="${post.id}"]`);
+
+                                if (!likeBadge || !commentBadge) {
+                                    missingPost = true;
+                                    return;
+                                }
+
+                                if (typeof post.like_count !== 'undefined') {
+                                    likeBadge.textContent = `♥ ${post.like_count}`;
+                                }
+
+                                if (typeof post.comments_count !== 'undefined') {
+                                    commentBadge.textContent = `💬 ${post.comments_count}`;
+                                }
+                            });
+
+                            if (missingPost) {
+                                scheduleSocialRefresh({ delay: 500 });
+                            }
+                        };
+
+                        const refreshPostCounters = async function () {
+                            if (activeTab !== 'posts' || !realtimePostsUrl) {
+                                return;
+                            }
+
+                            try {
+                                const response = await fetch(realtimePostsUrl, {
+                                    method: 'GET',
+                                    credentials: 'same-origin',
+                                    headers: {
+                                        'X-Requested-With': 'XMLHttpRequest',
+                                        'Accept': 'application/json',
+                                    },
+                                });
+
+                                if (!response.ok && response.status !== 207) {
+                                    return;
+                                }
+
+                                const data = await response.json();
+                                updatePostCounters(data.posts || []);
+                            } catch (error) {
+                                // Counter refresh is a quiet fallback for likes.
+                            }
+                        };
+
+                        if (activeTab === 'posts') {
+                            countersTimer = setInterval(refreshPostCounters, 15000);
+                            setTimeout(refreshPostCounters, 2500);
+                        }
 
                         if (!workspaceId || !window.Echo) {
                             return;
                         }
-
-                        let reloadTimer = null;
 
                         window.Echo.private(`workspace.${workspaceId}`)
                             .listen('.workspace.updated', function (event) {
@@ -2020,10 +2210,15 @@ const showVideo = (src) => {
                                     return;
                                 }
 
-                                clearTimeout(reloadTimer);
-                                reloadTimer = setTimeout(function () {
-                                    window.location.reload();
-                                }, 700);
+                                if (event.payload) {
+                                    updatePostCounters([{
+                                        id: event.payload.social_post_id,
+                                        like_count: event.payload.like_count,
+                                        comments_count: event.payload.comments_count,
+                                    }]);
+                                }
+
+                                scheduleSocialRefresh({ delay: 350 });
                             });
                     })();
                 </script>

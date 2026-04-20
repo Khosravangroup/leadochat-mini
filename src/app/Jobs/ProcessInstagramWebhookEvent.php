@@ -1046,7 +1046,7 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
             ];
         }
 
-        return DB::transaction(function () use ($event, $normalized, $providerCommentId) {
+        $result = DB::transaction(function () use ($event, $normalized, $providerCommentId) {
             $comment = SocialComment::query()->firstOrNew([
                 'provider' => 'instagram',
                 'provider_comment_id' => $providerCommentId,
@@ -1113,6 +1113,62 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
                 'skipped_reason' => null,
             ];
         });
+
+        if (! empty($result['social_post_id'])) {
+            $freshPost = SocialPost::query()->find($result['social_post_id']);
+            $this->refreshSocialPostCountersFromInstagram($event, $freshPost);
+
+            if ($freshPost) {
+                $freshPost->refresh();
+                $result['like_count'] = (int) $freshPost->like_count;
+                $result['comments_count'] = (int) $freshPost->comments_count;
+            }
+        }
+
+        return $result;
+    }
+
+    protected function refreshSocialPostCountersFromInstagram(WebhookEvent $event, ?SocialPost $post): void
+    {
+        if (! $post || blank($post->provider_media_id)) {
+            return;
+        }
+
+        /** @var ProviderConnection|null $connection */
+        $connection = $event->providerConnection;
+
+        if (! $connection) {
+            return;
+        }
+
+        try {
+            $media = app(InstagramService::class)->fetchMediaDetails($connection, (string) $post->provider_media_id, [
+                'fields' => 'id,like_count,comments_count',
+            ]);
+
+            $dirty = false;
+
+            if (array_key_exists('like_count', $media)) {
+                $post->like_count = (int) $media['like_count'];
+                $dirty = true;
+            }
+
+            if (array_key_exists('comments_count', $media)) {
+                $post->comments_count = max((int) $post->comments_count, (int) $media['comments_count']);
+                $dirty = true;
+            }
+
+            if ($dirty) {
+                $post->save();
+            }
+        } catch (\Throwable $exception) {
+            Log::info('instagram.social_post_counter_refresh_failed', [
+                'webhook_event_id' => $event->id,
+                'social_post_id' => $post->id,
+                'provider_media_id' => $post->provider_media_id,
+                'error' => $exception->getMessage(),
+            ]);
+        }
     }
 
     protected function updateConversationSnapshot(Conversation $conversation, array $normalized, array $resolvedParticipants): void
@@ -1400,6 +1456,9 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
                     'comment_id' => $persistedComment['comment_id'],
                     'provider_media_id' => $normalized['provider_media_id'] ?? null,
                     'provider_comment_id' => $normalized['provider_comment_id'] ?? null,
+                    'like_count' => $persistedComment['like_count'] ?? null,
+                    'comments_count' => $persistedComment['comments_count'] ?? null,
+                    'provider_connection_id' => $event->provider_connection_id,
                 ]);
             }
 

@@ -9,6 +9,7 @@ use App\Models\SocialPost;
 use App\Models\SocialStory;
 use App\Services\Meta\Instagram\InstagramService;
 use Illuminate\Contracts\View\View;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -512,6 +513,54 @@ class SocialController extends Controller
         );
 
         return view('social.instagram.index', $this->loadInstagramPostsData($request, $pageData));
+    }
+
+    public function instagramRealtimePosts(Request $request): JsonResponse
+    {
+        $pageData = $this->buildInstagramPageData($request, 'posts', 'Social — Instagram Posts');
+        $activeConnection = $pageData['activeInstagramConnection'] ?? null;
+        $workspace = $pageData['workspace'];
+        $syncError = null;
+
+        if ($activeConnection && $activeConnection->status === 'connected') {
+            try {
+                app(InstagramService::class)->syncMediaFeed($activeConnection, [
+                    'limit' => 24,
+                ]);
+            } catch (\Throwable $exception) {
+                $syncError = $exception->getMessage();
+            }
+        }
+
+        $posts = SocialPost::query()
+            ->where('workspace_id', $workspace->id)
+            ->where('provider', 'instagram')
+            ->when($activeConnection, fn ($query) => $query->where('provider_connection_id', $activeConnection->id))
+            ->where('status', '!=', 'deleted')
+            ->withCount([
+                'comments as visible_comments_count' => function ($query) {
+                    $query->where('provider', 'instagram')
+                        ->where('status', '!=', 'deleted');
+                },
+            ])
+            ->latest('posted_at')
+            ->latest('id')
+            ->limit(24)
+            ->get();
+
+        return response()->json([
+            'ok' => $syncError === null,
+            'sync_error' => $syncError,
+            'instagram_account' => $activeConnection?->id,
+            'posts' => $posts->map(fn (SocialPost $post) => [
+                'id' => $post->id,
+                'provider_media_id' => $post->provider_media_id,
+                'like_count' => (int) $post->like_count,
+                'comments_count' => (int) ($post->visible_comments_count ?? $post->comments_count),
+                'status' => $post->status,
+                'updated_at' => optional($post->updated_at)->toIso8601String(),
+            ])->values(),
+        ], $syncError === null ? 200 : 207);
     }
 
     public function instagramComments(Request $request): View
