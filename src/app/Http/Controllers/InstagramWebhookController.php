@@ -193,11 +193,11 @@ class InstagramWebhookController extends Controller
 
     protected function validateSignature(Request $request): void
     {
-        $secret = (string) config('services.instagram.webhook_app_secret');
+        $secretCandidates = $this->resolveSignatureSecretCandidates();
 
-        if ($secret === '' || app()->environment('local')) {
+        if ($secretCandidates === [] || app()->environment('local')) {
             $this->logWebhook('signature_skipped', [
-                'reason' => $secret === '' ? 'missing_secret' : 'local_environment',
+                'reason' => $secretCandidates === [] ? 'missing_secret' : 'local_environment',
             ], 'warning');
 
             return;
@@ -214,20 +214,66 @@ class InstagramWebhookController extends Controller
         }
 
         $rawBody = $request->getContent();
-        $expected = 'sha256=' . hash_hmac('sha256', $rawBody, $secret);
+        $bodyHash = hash('sha256', $rawBody);
 
-        if (! hash_equals($expected, $signature)) {
-            $this->logWebhook('signature_failed', [
-                'reason' => 'mismatch',
-                'body_sha256' => hash('sha256', $rawBody),
-            ], 'warning');
+        foreach ($secretCandidates as $label => $secret) {
+            $expected = 'sha256=' . hash_hmac('sha256', $rawBody, $secret);
 
-            abort(403, 'Webhook signature validation failed.');
+            if (hash_equals($expected, $signature)) {
+                $this->logWebhook('signature_valid', [
+                    'body_sha256' => $bodyHash,
+                    'secret_label' => $label,
+                ], 'debug');
+
+                return;
+            }
         }
 
-        $this->logWebhook('signature_valid', [
-            'body_sha256' => hash('sha256', $rawBody),
-        ], 'debug');
+        $this->logWebhook('signature_failed', [
+            'reason' => 'mismatch',
+            'body_sha256' => $bodyHash,
+            'candidate_secret_labels' => array_keys($secretCandidates),
+        ], 'warning');
+
+        abort(403, 'Webhook signature validation failed.');
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    protected function resolveSignatureSecretCandidates(): array
+    {
+        $rawCandidates = [
+            'webhook_app_secret' => config('services.instagram.webhook_app_secret'),
+            'app_secret' => config('services.instagram.app_secret'),
+            'client_secret' => config('services.instagram.client_secret'),
+        ];
+
+        $candidates = [];
+        $seen = [];
+
+        foreach ($rawCandidates as $label => $secret) {
+            if (! is_string($secret)) {
+                continue;
+            }
+
+            $secret = trim($secret);
+
+            if ($secret === '') {
+                continue;
+            }
+
+            $fingerprint = hash('sha256', $secret);
+
+            if (isset($seen[$fingerprint])) {
+                continue;
+            }
+
+            $candidates[$label] = $secret;
+            $seen[$fingerprint] = true;
+        }
+
+        return $candidates;
     }
 
     protected function resolveProviderConnectionFromChange(array $payload, array $entry, array $change): ?ProviderConnection
