@@ -946,6 +946,12 @@
                 padding: 8px 12px;
             }
 
+            textarea.social-story-input {
+                padding: 10px 12px;
+                line-height: 1.6;
+                resize: vertical;
+            }
+
             .social-story-preview-box {
                 border: 1px solid #cbd5e1;
                 border-radius: 8px;
@@ -958,6 +964,28 @@
                 overflow: hidden;
                 position: relative;
                 margin: 0 auto;
+            }
+
+            .social-post-preview-box {
+                width: min(100%, 360px);
+                background: #f8fafc;
+            }
+
+            .social-post-preview-box.is-post-square {
+                aspect-ratio: 1 / 1;
+            }
+
+            .social-post-preview-box.is-post-portrait {
+                aspect-ratio: 4 / 5;
+            }
+
+            .social-post-preview-box.is-post-landscape {
+                aspect-ratio: 1.91 / 1;
+            }
+
+            .social-post-preview-box.is-post-video {
+                aspect-ratio: 9 / 16;
+                background: #0f172a;
             }
 
             .social-story-preview-empty {
@@ -1332,6 +1360,179 @@
                     <div id="social-posts-root">
                         <h3 class="social-section-title">Posts — {{ $socialCounts['posts'] }} stored posts</h3>
 
+                        @php
+                            $postPublishEnabled = $postPublishEnabled ?? (bool) ($activeInstagramConnection && $activeInstagramConnection->status === 'connected');
+                        @endphp
+
+                        <div class="social-placeholder-box" style="margin-bottom:14px;">
+                            <div class="social-story-composer-grid">
+                                <div>
+                                    <label class="social-story-label">Post preview</label>
+                                    <div class="social-story-preview-box social-post-preview-box is-post-square" id="post-preview-box">
+                                        <div class="social-story-preview-empty" id="post-preview-empty">
+                                            Instagram feed preview
+                                        </div>
+                                        <img id="post-preview-image" class="social-story-preview-image" alt="Post preview" hidden>
+                                        <video id="post-preview-video" class="social-story-preview-video" controls playsinline hidden></video>
+                                    </div>
+                                </div>
+
+                                <form
+                                    id="social-post-publish-form"
+                                    method="POST"
+                                    action="{{ route('social.instagram.posts.publish') }}"
+                                    class="social-story-form"
+                                    enctype="multipart/form-data"
+                                >
+                                    @csrf
+                                    <input type="hidden" name="instagram_account" value="{{ $selectedInstagramAccountId }}">
+                                    <input type="hidden" name="post_fit" value="cover">
+                                    <input type="hidden" name="post_zoom" value="1">
+                                    <input type="hidden" name="post_offset_x" value="0">
+                                    <input type="hidden" name="post_offset_y" value="0">
+
+                                    <div class="social-placeholder-label">Publish Post</div>
+
+                                    <div class="social-story-form-grid">
+                                        <div class="social-story-field">
+                                            <label class="social-story-label">Post type</label>
+                                            <select
+                                                name="post_media_type"
+                                                class="social-story-select"
+                                                {{ $postPublishEnabled ? '' : 'disabled' }}
+                                            >
+                                                <option value="IMAGE" {{ old('post_media_type') === 'IMAGE' ? 'selected' : '' }}>Feed image</option>
+                                                <option value="VIDEO" {{ old('post_media_type') === 'VIDEO' ? 'selected' : '' }}>Video Reel in feed</option>
+                                            </select>
+                                            @error('post_media_type')
+                                                <div class="social-story-help" style="color:#b91c1c;">{{ $message }}</div>
+                                            @enderror
+                                        </div>
+
+                                        <div class="social-story-field">
+                                            <label class="social-story-label">Post file</label>
+                                            <input
+                                                type="file"
+                                                name="post_file"
+                                                class="social-story-file"
+                                                accept="image/*,video/*"
+                                                {{ $postPublishEnabled ? '' : 'disabled' }}
+                                            >
+                                            @error('post_file')
+                                                <div class="social-story-help" style="color:#b91c1c;">{{ $message }}</div>
+                                            @enderror
+                                        </div>
+                                    </div>
+
+                                    <div class="social-story-field">
+                                        <label class="social-story-label">Caption</label>
+                                        <textarea
+                                            name="post_caption"
+                                            class="social-story-input"
+                                            rows="4"
+                                            maxlength="2200"
+                                            placeholder="Write a caption. Up to 2,200 characters, 30 hashtags, and 20 mentions."
+                                            {{ $postPublishEnabled ? '' : 'disabled' }}
+                                        >{{ old('post_caption') }}</textarea>
+                                        @error('post_caption')
+                                            <div class="social-story-help" style="color:#b91c1c;">{{ $message }}</div>
+                                        @enderror
+                                    </div>
+
+                                    <div class="social-story-field">
+                                        <label class="social-story-label">Media URL fallback</label>
+                                        <input
+                                            type="text"
+                                            name="post_media_url"
+                                            class="social-story-input"
+                                            placeholder="https://example.com/feed-media.jpg"
+                                            value="{{ old('post_media_url') }}"
+                                            {{ $postPublishEnabled ? '' : 'disabled' }}
+                                        >
+                                        @error('post_media_url')
+                                            <div class="social-story-help" style="color:#b91c1c;">{{ $message }}</div>
+                                        @enderror
+                                    </div>
+
+                                    <div class="social-story-preview-controls">
+                                        <div class="social-story-field">
+                                            <label class="social-story-label">Feed frame</label>
+                                            <select name="post_aspect" id="post-aspect-control" class="social-story-select" {{ $postPublishEnabled ? '' : 'disabled' }}>
+                                                <option value="square">Square 1:1</option>
+                                                <option value="portrait">Portrait 4:5</option>
+                                                <option value="landscape">Landscape 1.91:1</option>
+                                            </select>
+                                        </div>
+
+                                        <div class="social-story-field">
+                                            <label class="social-story-label">Preview fit</label>
+                                            <select id="post-fit-control" class="social-story-select" {{ $postPublishEnabled ? '' : 'disabled' }}>
+                                                <option value="cover">Fill frame</option>
+                                                <option value="contain">Fit whole media</option>
+                                            </select>
+                                        </div>
+
+                                        <div class="social-story-field">
+                                            <label class="social-story-label">Size</label>
+                                            <input id="post-zoom-control" type="range" min="0.5" max="2.5" step="0.05" value="1" {{ $postPublishEnabled ? '' : 'disabled' }}>
+                                        </div>
+
+                                        <div class="social-story-field">
+                                            <label class="social-story-label">Horizontal position</label>
+                                            <input id="post-offset-x-control" type="range" min="-100" max="100" step="1" value="0" {{ $postPublishEnabled ? '' : 'disabled' }}>
+                                        </div>
+
+                                        <div class="social-story-field">
+                                            <label class="social-story-label">Vertical position</label>
+                                            <input id="post-offset-y-control" type="range" min="-100" max="100" step="1" value="0" {{ $postPublishEnabled ? '' : 'disabled' }}>
+                                        </div>
+                                    </div>
+
+                                    <div class="social-story-field" id="post-alt-text-field">
+                                        <label class="social-story-label">Alt text for image posts</label>
+                                        <input
+                                            type="text"
+                                            name="post_alt_text"
+                                            class="social-story-input"
+                                            maxlength="1000"
+                                            placeholder="Optional accessibility description"
+                                            value="{{ old('post_alt_text') }}"
+                                            {{ $postPublishEnabled ? '' : 'disabled' }}
+                                        >
+                                    </div>
+
+                                    <label class="social-story-confirm">
+                                        <input type="checkbox" name="post_confirmed" value="1" {{ $postPublishEnabled ? '' : 'disabled' }}>
+                                        <span>I confirm the preview framing and caption are ready to publish.</span>
+                                    </label>
+
+                                    <div class="social-story-limits">
+                                        <div>Feed images are converted to JPEG and kept inside Instagram’s 4:5 to 1.91:1 aspect range.</div>
+                                        <div>Video posts are published as Reels with feed sharing enabled. Videos must be 3 seconds to 15 minutes.</div>
+                                        <div>Captions support up to 2,200 characters, 30 hashtags, and 20 @mentions.</div>
+                                    </div>
+
+                                    <div class="social-story-progress" id="social-post-progress">
+                                        <div class="social-story-progress-track">
+                                            <div class="social-story-progress-bar" id="social-post-progress-bar"></div>
+                                        </div>
+                                        <div class="social-story-progress-text" id="social-post-progress-text">
+                                            Waiting for media
+                                        </div>
+                                    </div>
+
+                                    <div class="social-story-help" id="social-post-message">
+                                        Current status: {{ $postPublishEnabled ? 'ready to publish' : 'Instagram connection required' }}.
+                                    </div>
+
+                                    <div class="social-story-actions">
+                                        <button type="submit" class="social-post-action-button" {{ $postPublishEnabled ? '' : 'disabled' }}>
+                                            Publish post
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
 
                     @if (($posts ?? collect())->isEmpty())
                         <div class="social-placeholder-grid">
@@ -1397,7 +1598,15 @@
                                                     {{ $typeLabel }}
                                                 </span>
 
-                                                @if ($coverMediaUrl)
+                                                @if ($coverMediaUrl && $isVideoLike)
+                                                    <video
+                                                        src="{{ $coverMediaUrl }}"
+                                                        class="social-post-image"
+                                                        muted
+                                                        playsinline
+                                                        preload="metadata"
+                                                    ></video>
+                                                @elseif ($coverMediaUrl)
                                                     <img
                                                         src="{{ $coverMediaUrl }}"
                                                         alt="Instagram media {{ $post->provider_media_id }}"
@@ -2524,6 +2733,9 @@
                         let storyPreviewObjectUrl = null;
                         let storyProgressTimers = [];
                         let storyProcessingInterval = null;
+                        let postPreviewObjectUrl = null;
+                        let postProgressTimers = [];
+                        let postProcessingInterval = null;
 
                         const rememberSocialState = function () {
                             sessionStorage.setItem('social_posts_scroll_y', String(window.scrollY || window.pageYOffset || 0));
@@ -2564,6 +2776,7 @@
                             }
 
                             bindStoryPublisher();
+                            bindPostPublisher();
                             bindStoryViewerAndDeletes();
 
                             restoreSocialState();
@@ -2678,6 +2891,395 @@
                             countersTimer = setInterval(refreshPostCounters, 15000);
                             setTimeout(refreshPostCounters, 2500);
                         }
+
+                        const setPostProgress = function (percent, text) {
+                            const progress = document.getElementById('social-post-progress');
+                            const bar = document.getElementById('social-post-progress-bar');
+                            const label = document.getElementById('social-post-progress-text');
+
+                            if (!progress || !bar || !label) {
+                                return;
+                            }
+
+                            progress.classList.add('is-visible');
+                            bar.style.width = `${Math.max(0, Math.min(percent, 100))}%`;
+                            label.textContent = text;
+                        };
+
+                        const clearPostProgressTimers = function () {
+                            postProgressTimers.forEach(function (timer) {
+                                clearTimeout(timer);
+                            });
+                            postProgressTimers = [];
+
+                            if (postProcessingInterval) {
+                                clearInterval(postProcessingInterval);
+                                postProcessingInterval = null;
+                            }
+                        };
+
+                        const setPostMessage = function (message, isError = false) {
+                            const messageBox = document.getElementById('social-post-message');
+
+                            if (!messageBox) {
+                                return;
+                            }
+
+                            messageBox.textContent = message;
+                            messageBox.style.color = isError ? '#b91c1c' : '#64748b';
+                            messageBox.style.fontWeight = isError ? '800' : '400';
+                        };
+
+                        const resetPostPreview = function () {
+                            const form = document.getElementById('social-post-publish-form');
+                            const emptyBox = document.getElementById('post-preview-empty');
+                            const imagePreview = document.getElementById('post-preview-image');
+                            const videoPreview = document.getElementById('post-preview-video');
+
+                            if (form) {
+                                form.dataset.postVideoInvalid = '0';
+                            }
+
+                            if (postPreviewObjectUrl) {
+                                URL.revokeObjectURL(postPreviewObjectUrl);
+                                postPreviewObjectUrl = null;
+                            }
+
+                            if (imagePreview) {
+                                imagePreview.hidden = true;
+                                imagePreview.removeAttribute('src');
+                            }
+
+                            if (videoPreview) {
+                                videoPreview.hidden = true;
+                                videoPreview.pause();
+                                videoPreview.removeAttribute('src');
+                                videoPreview.load();
+                            }
+
+                            if (emptyBox) {
+                                emptyBox.hidden = false;
+                            }
+                        };
+
+                        const showPostImage = function (src) {
+                            const form = document.getElementById('social-post-publish-form');
+                            const emptyBox = document.getElementById('post-preview-empty');
+                            const imagePreview = document.getElementById('post-preview-image');
+                            const videoPreview = document.getElementById('post-preview-video');
+
+                            if (!src || !imagePreview || !videoPreview || !emptyBox) {
+                                resetPostPreview();
+                                return;
+                            }
+
+                            videoPreview.hidden = true;
+                            videoPreview.pause();
+                            videoPreview.removeAttribute('src');
+                            videoPreview.load();
+                            videoPreview.onloadedmetadata = null;
+                            imagePreview.src = src;
+                            imagePreview.hidden = false;
+                            emptyBox.hidden = true;
+
+                            if (form) {
+                                form.dataset.postVideoInvalid = '0';
+                            }
+                        };
+
+                        const showPostVideo = function (src) {
+                            const form = document.getElementById('social-post-publish-form');
+                            const emptyBox = document.getElementById('post-preview-empty');
+                            const imagePreview = document.getElementById('post-preview-image');
+                            const videoPreview = document.getElementById('post-preview-video');
+
+                            if (!src || !imagePreview || !videoPreview || !emptyBox) {
+                                resetPostPreview();
+                                return;
+                            }
+
+                            imagePreview.hidden = true;
+                            imagePreview.removeAttribute('src');
+                            videoPreview.src = src;
+                            videoPreview.hidden = false;
+                            videoPreview.onloadedmetadata = function () {
+                                if (!form || !Number.isFinite(videoPreview.duration)) {
+                                    return;
+                                }
+
+                                const invalidDuration = videoPreview.duration < 3 || videoPreview.duration > 900;
+                                form.dataset.postVideoInvalid = invalidDuration ? '1' : '0';
+
+                                if (invalidDuration) {
+                                    setPostMessage('Feed videos must be between 3 seconds and 15 minutes.', true);
+                                }
+                            };
+                            emptyBox.hidden = true;
+                        };
+
+                        const detectPostUrlKind = function (url) {
+                            const cleanUrl = String(url || '').split('?')[0].toLowerCase();
+
+                            if (/\.(jpg|jpeg)$/i.test(cleanUrl)) {
+                                return 'IMAGE';
+                            }
+
+                            if (/\.(mp4|mov)$/i.test(cleanUrl)) {
+                                return 'VIDEO';
+                            }
+
+                            return null;
+                        };
+
+                        const updatePostPreview = function () {
+                            const form = document.getElementById('social-post-publish-form');
+                            const fileInput = form?.querySelector('input[name="post_file"]');
+                            const mediaUrlInput = form?.querySelector('input[name="post_media_url"]');
+                            const mediaTypeInput = form?.querySelector('select[name="post_media_type"]');
+                            const previewBox = document.getElementById('post-preview-box');
+                            const aspectControl = document.getElementById('post-aspect-control');
+                            const fitControl = document.getElementById('post-fit-control');
+                            const zoomControl = document.getElementById('post-zoom-control');
+                            const offsetXControl = document.getElementById('post-offset-x-control');
+                            const offsetYControl = document.getElementById('post-offset-y-control');
+                            const altTextField = document.getElementById('post-alt-text-field');
+                            const selectedFile = fileInput?.files && fileInput.files[0] ? fileInput.files[0] : null;
+                            const mediaUrl = mediaUrlInput ? mediaUrlInput.value.trim() : '';
+                            const selectedMediaType = mediaTypeInput ? mediaTypeInput.value : 'IMAGE';
+                            const aspect = selectedMediaType === 'VIDEO' ? 'video' : (aspectControl?.value || 'square');
+                            const fit = fitControl?.value || 'cover';
+                            const zoom = zoomControl?.value || '1';
+                            const offsetX = offsetXControl?.value || '0';
+                            const offsetY = offsetYControl?.value || '0';
+
+                            const fitInput = form?.querySelector('input[name="post_fit"]');
+                            const zoomInput = form?.querySelector('input[name="post_zoom"]');
+                            const offsetXInput = form?.querySelector('input[name="post_offset_x"]');
+                            const offsetYInput = form?.querySelector('input[name="post_offset_y"]');
+
+                            if (fitInput) fitInput.value = fit;
+                            if (zoomInput) zoomInput.value = zoom;
+                            if (offsetXInput) offsetXInput.value = offsetX;
+                            if (offsetYInput) offsetYInput.value = offsetY;
+                            previewBox?.classList.toggle('is-contain', fit === 'contain');
+                            previewBox?.classList.toggle('is-post-square', aspect === 'square');
+                            previewBox?.classList.toggle('is-post-portrait', aspect === 'portrait');
+                            previewBox?.classList.toggle('is-post-landscape', aspect === 'landscape');
+                            previewBox?.classList.toggle('is-post-video', aspect === 'video');
+                            previewBox?.style.setProperty('--story-zoom', zoom);
+                            previewBox?.style.setProperty('--story-offset-x', `${offsetX}%`);
+                            previewBox?.style.setProperty('--story-offset-y', `${offsetY}%`);
+
+                            if (aspectControl) {
+                                aspectControl.disabled = selectedMediaType === 'VIDEO' || aspectControl.dataset.forceDisabled === '1';
+                            }
+
+                            if (altTextField) {
+                                altTextField.hidden = selectedMediaType === 'VIDEO';
+                            }
+
+                            if (postPreviewObjectUrl) {
+                                URL.revokeObjectURL(postPreviewObjectUrl);
+                                postPreviewObjectUrl = null;
+                            }
+
+                            if (selectedFile) {
+                                postPreviewObjectUrl = URL.createObjectURL(selectedFile);
+
+                                if (String(selectedFile.type || '').startsWith('video/')) {
+                                    showPostVideo(postPreviewObjectUrl);
+                                } else {
+                                    showPostImage(postPreviewObjectUrl);
+                                }
+
+                                return;
+                            }
+
+                            if (mediaUrl !== '') {
+                                const urlKind = detectPostUrlKind(mediaUrl) || selectedMediaType;
+
+                                if (urlKind === 'VIDEO') {
+                                    showPostVideo(mediaUrl);
+                                } else {
+                                    showPostImage(mediaUrl);
+                                }
+
+                                return;
+                            }
+
+                            resetPostPreview();
+                        };
+
+                        const countMatches = function (value, pattern) {
+                            return (String(value || '').match(pattern) || []).length;
+                        };
+
+                        const bindPostPublisher = function () {
+                            const form = document.getElementById('social-post-publish-form');
+
+                            if (!form || form.dataset.bound === '1') {
+                                return;
+                            }
+
+                            form.dataset.bound = '1';
+                            const fileInput = form.querySelector('input[name="post_file"]');
+                            const mediaUrlInput = form.querySelector('input[name="post_media_url"]');
+                            const mediaTypeInput = form.querySelector('select[name="post_media_type"]');
+                            const captionInput = form.querySelector('textarea[name="post_caption"]');
+                            const aspectControl = document.getElementById('post-aspect-control');
+                            const fitControl = document.getElementById('post-fit-control');
+                            const zoomControl = document.getElementById('post-zoom-control');
+                            const offsetXControl = document.getElementById('post-offset-x-control');
+                            const offsetYControl = document.getElementById('post-offset-y-control');
+                            const submitButton = form.querySelector('button[type="submit"]');
+
+                            if (aspectControl && aspectControl.disabled) {
+                                aspectControl.dataset.forceDisabled = '1';
+                            }
+
+                            fileInput?.addEventListener('change', function () {
+                                const file = fileInput.files && fileInput.files[0] ? fileInput.files[0] : null;
+
+                                if (file && String(file.type || '').startsWith('image/')) {
+                                    mediaTypeInput.value = 'IMAGE';
+                                }
+
+                                if (file && String(file.type || '').startsWith('video/')) {
+                                    mediaTypeInput.value = 'VIDEO';
+                                }
+
+                                updatePostPreview();
+                            });
+
+                            mediaUrlInput?.addEventListener('input', updatePostPreview);
+                            mediaTypeInput?.addEventListener('change', updatePostPreview);
+                            aspectControl?.addEventListener('change', updatePostPreview);
+                            fitControl?.addEventListener('change', updatePostPreview);
+                            zoomControl?.addEventListener('input', updatePostPreview);
+                            offsetXControl?.addEventListener('input', updatePostPreview);
+                            offsetYControl?.addEventListener('input', updatePostPreview);
+                            updatePostPreview();
+
+                            form.addEventListener('submit', function (event) {
+                                event.preventDefault();
+                                clearPostProgressTimers();
+
+                                const selectedFile = fileInput?.files && fileInput.files[0] ? fileInput.files[0] : null;
+                                const confirmed = form.querySelector('input[name="post_confirmed"]')?.checked;
+                                const caption = captionInput?.value || '';
+
+                                if (!confirmed) {
+                                    setPostMessage('Please confirm the post preview before publishing.', true);
+                                    return;
+                                }
+
+                                if (caption.length > 2200) {
+                                    setPostMessage('Instagram captions must be 2,200 characters or shorter.', true);
+                                    return;
+                                }
+
+                                if (countMatches(caption, /#[\p{L}\p{N}_]+/gu) > 30) {
+                                    setPostMessage('Instagram captions can include up to 30 hashtags.', true);
+                                    return;
+                                }
+
+                                if (countMatches(caption, /(^|[^\p{L}\p{N}_.])@[\p{L}\p{N}._]+/gu) > 20) {
+                                    setPostMessage('Instagram captions can include up to 20 @mentions.', true);
+                                    return;
+                                }
+
+                                if (selectedFile && mediaTypeInput?.value === 'IMAGE' && selectedFile.size > 20 * 1024 * 1024) {
+                                    setPostMessage('Image source files must be 20 MB or smaller before conversion.', true);
+                                    return;
+                                }
+
+                                if (selectedFile && mediaTypeInput?.value === 'VIDEO' && selectedFile.size > 120 * 1024 * 1024) {
+                                    setPostMessage('Video source files must be 120 MB or smaller. Use a public MP4/MOV URL for larger Reels.', true);
+                                    return;
+                                }
+
+                                if (form.dataset.postVideoInvalid === '1') {
+                                    setPostMessage('Feed videos must be between 3 seconds and 15 minutes.', true);
+                                    return;
+                                }
+
+                                const xhr = new XMLHttpRequest();
+                                const formData = new FormData(form);
+
+                                if (submitButton) {
+                                    submitButton.disabled = true;
+                                }
+
+                                setPostMessage('Uploading post media...');
+                                setPostProgress(5, 'Preparing upload');
+
+                                xhr.upload.addEventListener('progress', function (progressEvent) {
+                                    if (!progressEvent.lengthComputable) {
+                                        setPostProgress(35, 'Uploading media');
+                                        return;
+                                    }
+
+                                    const uploadPercent = Math.round((progressEvent.loaded / progressEvent.total) * 60) + 5;
+                                    setPostProgress(uploadPercent, `Uploading media ${Math.round((progressEvent.loaded / progressEvent.total) * 100)}%`);
+                                });
+
+                                xhr.addEventListener('load', function () {
+                                    let data = {};
+
+                                    try {
+                                        data = JSON.parse(xhr.responseText || '{}');
+                                    } catch (error) {
+                                        data = {};
+                                    }
+
+                                    if (xhr.status >= 200 && xhr.status < 300 && data.ok !== false) {
+                                        clearPostProgressTimers();
+                                        setPostProgress(100, 'Post published');
+                                        setPostMessage(data.message || 'Post published successfully.');
+                                        form.reset();
+                                        resetPostPreview();
+                                        scheduleSocialRefresh({ delay: 500 });
+                                        return;
+                                    }
+
+                                    clearPostProgressTimers();
+                                    setPostProgress(100, 'Publish failed');
+                                    setPostMessage(data.message || 'Post publish failed.', true);
+                                });
+
+                                xhr.addEventListener('error', function () {
+                                    clearPostProgressTimers();
+                                    setPostProgress(100, 'Publish failed');
+                                    setPostMessage('Post publish failed. Please try again.', true);
+                                });
+
+                                xhr.addEventListener('loadend', function () {
+                                    if (submitButton) {
+                                        submitButton.disabled = false;
+                                    }
+                                });
+
+                                xhr.open('POST', form.getAttribute('action'));
+                                xhr.setRequestHeader('Accept', 'application/json');
+                                xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+                                xhr.send(formData);
+                                postProgressTimers.push(setTimeout(function () {
+                                    setPostProgress(68, 'Converting media for Instagram');
+                                }, 800));
+                                postProgressTimers.push(setTimeout(function () {
+                                    setPostProgress(78, 'Creating Instagram post container');
+                                }, 2500));
+                                postProgressTimers.push(setTimeout(function () {
+                                    setPostProgress(88, 'Waiting for Instagram processing');
+                                }, 7000));
+
+                                let waitingPercent = 88;
+                                postProcessingInterval = setInterval(function () {
+                                    waitingPercent = Math.min(waitingPercent + 1, 96);
+                                    setPostProgress(waitingPercent, 'Still waiting for Instagram to finish publishing');
+                                }, 6000);
+                            });
+                        };
 
                         const setStoryProgress = function (percent, text) {
                             const progress = document.getElementById('social-story-progress');
@@ -3198,6 +3800,7 @@
                         };
 
                         bindStoryPublisher();
+                        bindPostPublisher();
                         bindStoryViewerAndDeletes();
 
                         if (!workspaceId || !window.Echo) {

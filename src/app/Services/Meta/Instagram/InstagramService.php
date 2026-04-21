@@ -557,7 +557,7 @@ class InstagramService
     ): array {
         $this->assertInstagramConnection($connection);
 
-        return $this->dispatchPublishingAction('publish_post', $connection, $payload);
+        return $this->instagramContentService->publishPost($connection, $payload);
     }
 
     public function publishStory(

@@ -38,6 +38,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/social/instagram/realtime/posts', [SocialController::class, 'instagramRealtimePosts'])
         ->name('social.instagram.realtime.posts');
 
+    Route::post('/social/instagram/posts/publish', [SocialController::class, 'publishInstagramPost'])
+        ->name('social.instagram.posts.publish');
+
     Route::delete('/social/instagram/posts/{post}', [SocialController::class, 'deleteInstagramPost'])
         ->name('social.instagram.posts.delete');
 

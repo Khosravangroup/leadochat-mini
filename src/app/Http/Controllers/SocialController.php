@@ -18,7 +18,6 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Symfony\Component\Process\Process;
 
-
 class SocialController extends Controller
 {
     protected function buildInstagramPageData(Request $request, string $tab, string $pageTitle): array
@@ -228,6 +227,7 @@ class SocialController extends Controller
         $pageData['syncResult'] = $syncResult;
         $pageData['syncError'] = $syncError;
         $pageData['commentSyncErrors'] = $commentSyncErrors;
+        $pageData['postPublishEnabled'] = (bool) ($activeConnection && $activeConnection->status === 'connected');
         $pageData['socialCounts']['posts'] = $posts->count();
 
         return $pageData;
@@ -875,6 +875,274 @@ class SocialController extends Controller
         return null;
     }
 
+    protected function detectPostFileKind(?\Illuminate\Http\UploadedFile $file): ?string
+    {
+        if (! $file) {
+            return null;
+        }
+
+        $mime = strtolower((string) ($file->getMimeType() ?? ''));
+
+        if (str_starts_with($mime, 'image/')) {
+            return 'IMAGE';
+        }
+
+        if (str_starts_with($mime, 'video/')) {
+            return 'VIDEO';
+        }
+
+        return null;
+    }
+
+    protected function detectPostUrlKind(?string $url): ?string
+    {
+        $url = trim((string) $url);
+
+        if ($url === '') {
+            return null;
+        }
+
+        $path = (string) parse_url($url, PHP_URL_PATH);
+        $extension = strtolower((string) pathinfo($path, PATHINFO_EXTENSION));
+
+        if (in_array($extension, ['jpg', 'jpeg'], true)) {
+            return 'IMAGE';
+        }
+
+        if (in_array($extension, ['mp4', 'mov'], true)) {
+            return 'VIDEO';
+        }
+
+        return null;
+    }
+
+    protected function validatePostUploadForInstagram(?\Illuminate\Http\UploadedFile $file, string $mediaType): ?string
+    {
+        if (! $file) {
+            return null;
+        }
+
+        $size = (int) $file->getSize();
+
+        if ($mediaType === 'IMAGE') {
+            if ($size > 20 * 1024 * 1024) {
+                return 'Instagram feed image source uploads must be 20 MB or smaller before conversion.';
+            }
+
+            return null;
+        }
+
+        if ($size > 120 * 1024 * 1024) {
+            return 'Instagram feed video source uploads must be 120 MB or smaller. Use a public MP4/MOV URL for larger Reels.';
+        }
+
+        $duration = $this->probeVideoDurationSeconds($file->getRealPath());
+
+        if ($duration !== null && ($duration < 3 || $duration > 900)) {
+            return 'Instagram feed video posts must be between 3 seconds and 15 minutes.';
+        }
+
+        return null;
+    }
+
+    protected function validateInstagramCaptionRules(string $caption): ?string
+    {
+        if (mb_strlen($caption) > 2200) {
+            return 'Instagram captions must be 2,200 characters or shorter.';
+        }
+
+        preg_match_all('/#[\pL\pN_]+/u', $caption, $hashtags);
+        if (count($hashtags[0] ?? []) > 30) {
+            return 'Instagram captions can include up to 30 hashtags.';
+        }
+
+        preg_match_all('/(?<![\pL\pN_.])@[\pL\pN._]+/u', $caption, $mentions);
+        if (count($mentions[0] ?? []) > 20) {
+            return 'Instagram captions can include up to 20 @mentions.';
+        }
+
+        return null;
+    }
+
+    protected function preparePostUploadForInstagram(
+        \Illuminate\Http\UploadedFile $file,
+        string $mediaType,
+        string $aspect,
+        string $fit,
+        float $zoom,
+        float $offsetX,
+        float $offsetY
+    ): array {
+        return $mediaType === 'VIDEO'
+            ? $this->preparePostVideoUploadForInstagram($file, $fit)
+            : $this->preparePostImageUploadForInstagram($file, $aspect, $fit, $zoom, $offsetX, $offsetY);
+    }
+
+    protected function preparePostImageUploadForInstagram(
+        \Illuminate\Http\UploadedFile $file,
+        string $aspect,
+        string $fit,
+        float $zoom,
+        float $offsetX,
+        float $offsetY
+    ): array {
+        $source = @imagecreatefromstring((string) file_get_contents($file->getRealPath()));
+
+        if (! $source) {
+            throw new \RuntimeException('Unsupported image file. Please upload a standard image file.');
+        }
+
+        [$targetWidth, $targetHeight] = match ($aspect) {
+            'portrait' => [1080, 1350],
+            'landscape' => [1080, 566],
+            default => [1080, 1080],
+        };
+
+        $sourceWidth = imagesx($source);
+        $sourceHeight = imagesy($source);
+        $canvas = imagecreatetruecolor($targetWidth, $targetHeight);
+        $background = imagecolorallocate($canvas, 255, 255, 255);
+        imagefill($canvas, 0, 0, $background);
+
+        $baseScale = $fit === 'contain'
+            ? min($targetWidth / $sourceWidth, $targetHeight / $sourceHeight)
+            : max($targetWidth / $sourceWidth, $targetHeight / $sourceHeight);
+        $scale = max(0.5, min($zoom, 2.5)) * $baseScale;
+        $drawWidth = (int) round($sourceWidth * $scale);
+        $drawHeight = (int) round($sourceHeight * $scale);
+        $drawX = (int) round(($targetWidth - $drawWidth) / 2 + (($offsetX / 100) * ($targetWidth / 2)));
+        $drawY = (int) round(($targetHeight - $drawHeight) / 2 + (($offsetY / 100) * ($targetHeight / 2)));
+
+        imagecopyresampled($canvas, $source, $drawX, $drawY, 0, 0, $drawWidth, $drawHeight, $sourceWidth, $sourceHeight);
+
+        $storedPath = 'social/posts/' . Str::uuid() . '.jpg';
+        $absolutePath = Storage::disk('public')->path($storedPath);
+
+        if (! is_dir(dirname($absolutePath))) {
+            mkdir(dirname($absolutePath), 0775, true);
+        }
+
+        foreach ([90, 85, 80, 75, 70] as $quality) {
+            imagejpeg($canvas, $absolutePath, $quality);
+
+            if (is_file($absolutePath) && filesize($absolutePath) <= 8 * 1024 * 1024) {
+                break;
+            }
+        }
+
+        imagedestroy($source);
+        imagedestroy($canvas);
+
+        if (! is_file($absolutePath) || filesize($absolutePath) > 8 * 1024 * 1024) {
+            throw new \RuntimeException('Converted image is still larger than Instagram’s 8 MB feed image limit.');
+        }
+
+        return [
+            'stored_path' => $storedPath,
+            'media_url' => url(Storage::url($storedPath)),
+            'media_type' => 'IMAGE',
+            'mime_type' => 'image/jpeg',
+            'normalized' => true,
+        ];
+    }
+
+    protected function preparePostVideoUploadForInstagram(\Illuminate\Http\UploadedFile $file, string $fit): array
+    {
+        $storedPath = 'social/posts/' . Str::uuid() . '.mp4';
+        $absolutePath = Storage::disk('public')->path($storedPath);
+
+        if (! is_dir(dirname($absolutePath))) {
+            mkdir(dirname($absolutePath), 0775, true);
+        }
+
+        $filter = $fit === 'contain'
+            ? 'scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black,setsar=1,format=yuv420p'
+            : 'scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,format=yuv420p';
+
+        $process = new Process([
+            'ffmpeg',
+            '-y',
+            '-i',
+            $file->getRealPath(),
+            '-map',
+            '0:v:0',
+            '-map',
+            '0:a?',
+            '-t',
+            '900',
+            '-vf',
+            $filter,
+            '-r',
+            '30',
+            '-c:v',
+            'libx264',
+            '-profile:v',
+            'main',
+            '-level',
+            '4.1',
+            '-preset',
+            'veryfast',
+            '-crf',
+            '23',
+            '-pix_fmt',
+            'yuv420p',
+            '-c:a',
+            'aac',
+            '-ar',
+            '48000',
+            '-ac',
+            '2',
+            '-b:a',
+            '128k',
+            '-shortest',
+            '-movflags',
+            '+faststart',
+            $absolutePath,
+        ]);
+        $process->setTimeout(900);
+        $process->run();
+
+        if (! $process->isSuccessful()) {
+            throw new \RuntimeException('Video conversion failed. Please try an MP4 or MOV file.');
+        }
+
+        return [
+            'stored_path' => $storedPath,
+            'media_url' => url(Storage::url($storedPath)),
+            'media_type' => 'VIDEO',
+            'mime_type' => 'video/mp4',
+            'normalized' => true,
+        ];
+    }
+
+    protected function probeVideoDurationSeconds(?string $path): ?float
+    {
+        if (! $path || ! is_file($path)) {
+            return null;
+        }
+
+        $process = new Process([
+            'ffprobe',
+            '-v',
+            'error',
+            '-show_entries',
+            'format=duration',
+            '-of',
+            'default=noprint_wrappers=1:nokey=1',
+            $path,
+        ]);
+        $process->setTimeout(30);
+        $process->run();
+
+        if (! $process->isSuccessful()) {
+            return null;
+        }
+
+        $duration = (float) trim($process->getOutput());
+
+        return $duration > 0 ? $duration : null;
+    }
+
     protected function prepareStoryUploadForInstagram(
         \Illuminate\Http\UploadedFile $file,
         string $mediaType,
@@ -1022,6 +1290,207 @@ class SocialController extends Controller
             'expires_at' => optional($story->expires_at)->toIso8601String(),
             'permalink' => $raw['permalink'] ?? $raw['remote_story']['permalink'] ?? null,
         ];
+    }
+
+    public function publishInstagramPost(Request $request): RedirectResponse|JsonResponse
+    {
+        $connection = $this->resolveWorkspaceInstagramConnection($request);
+        $workspace = $request->user()?->currentWorkspace();
+
+        abort_unless($workspace, 404);
+
+        $validated = $request->validate([
+            'post_media_type' => ['required', 'in:IMAGE,VIDEO'],
+            'post_file' => ['nullable', 'file', 'mimetypes:image/jpeg,image/png,image/webp,image/gif,image/bmp,video/mp4,video/quicktime,video/webm,video/x-msvideo,video/x-matroska', 'max:122880'],
+            'post_media_url' => ['nullable', 'url', 'max:2048'],
+            'post_caption' => ['nullable', 'string', 'max:2200'],
+            'post_alt_text' => ['nullable', 'string', 'max:1000'],
+            'post_aspect' => ['nullable', 'string', 'in:square,portrait,landscape'],
+            'post_fit' => ['nullable', 'string', 'in:cover,contain'],
+            'post_zoom' => ['nullable', 'numeric', 'min:0.5', 'max:2.5'],
+            'post_offset_x' => ['nullable', 'numeric', 'min:-100', 'max:100'],
+            'post_offset_y' => ['nullable', 'numeric', 'min:-100', 'max:100'],
+            'post_confirmed' => ['accepted'],
+        ]);
+
+        $requestedMediaType = (string) $validated['post_media_type'];
+        $uploadedFile = $request->file('post_file');
+        $uploadedFileKind = $this->detectPostFileKind($uploadedFile);
+        $mediaUrlKind = $this->detectPostUrlKind($validated['post_media_url'] ?? null);
+        $uploadValidationError = $this->validatePostUploadForInstagram($uploadedFile, $requestedMediaType);
+        $caption = trim((string) ($validated['post_caption'] ?? ''));
+        $altText = trim((string) ($validated['post_alt_text'] ?? ''));
+        $captionValidationError = $this->validateInstagramCaptionRules($caption);
+        $postAspect = (string) ($validated['post_aspect'] ?? 'square');
+        $postFit = (string) ($validated['post_fit'] ?? 'cover');
+        $postZoom = (float) ($validated['post_zoom'] ?? 1);
+        $postOffsetX = (float) ($validated['post_offset_x'] ?? 0);
+        $postOffsetY = (float) ($validated['post_offset_y'] ?? 0);
+
+        if (! $uploadedFile && empty($validated['post_media_url'])) {
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => 'Post file or media URL is required.'], 422);
+            }
+
+            return redirect()->route('social.instagram.posts', ['instagram_account' => $connection->id])
+                ->with('social_error', 'Post file or media URL is required.')
+                ->withInput();
+        }
+
+        foreach ([
+            $uploadValidationError,
+            $captionValidationError,
+        ] as $validationError) {
+            if ($validationError === null) {
+                continue;
+            }
+
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => $validationError], 422);
+            }
+
+            return redirect()->route('social.instagram.posts', ['instagram_account' => $connection->id])
+                ->with('social_error', $validationError)
+                ->withInput();
+        }
+
+        if ($uploadedFile && $uploadedFileKind !== null && $uploadedFileKind !== $requestedMediaType) {
+            $message = 'Selected post file type does not match the selected media type.';
+
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => $message], 422);
+            }
+
+            return redirect()->route('social.instagram.posts', ['instagram_account' => $connection->id])
+                ->with('social_error', $message)
+                ->withInput();
+        }
+
+        if (! $uploadedFile && ! empty($validated['post_media_url']) && $mediaUrlKind !== null && $mediaUrlKind !== $requestedMediaType) {
+            $message = 'Media URL type does not match the selected post media type.';
+
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => $message], 422);
+            }
+
+            return redirect()->route('social.instagram.posts', ['instagram_account' => $connection->id])
+                ->with('social_error', $message)
+                ->withInput();
+        }
+
+        $resolvedMediaUrl = null;
+        $storedPath = null;
+
+        if ($request->hasFile('post_file')) {
+            $preparedUpload = $this->preparePostUploadForInstagram(
+                $request->file('post_file'),
+                $requestedMediaType,
+                $postAspect,
+                $postFit,
+                $postZoom,
+                $postOffsetX,
+                $postOffsetY
+            );
+            $storedPath = $preparedUpload['stored_path'];
+            $resolvedMediaUrl = $preparedUpload['media_url'];
+        } elseif (! empty($validated['post_media_url'])) {
+            $resolvedMediaUrl = $validated['post_media_url'];
+        }
+
+        if (! $resolvedMediaUrl) {
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => 'Post file or media URL is required.'], 422);
+            }
+
+            return redirect()->route('social.instagram.posts', ['instagram_account' => $connection->id])
+                ->with('social_error', 'Post file or media URL is required.')
+                ->withInput();
+        }
+
+        if (! $uploadedFile && ! empty($validated['post_media_url']) && $mediaUrlKind === null) {
+            $message = $requestedMediaType === 'IMAGE'
+                ? 'Feed image URLs must end with .jpg or .jpeg for Instagram publishing.'
+                : 'Feed video URLs must end with .mp4 or .mov for Instagram publishing.';
+
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => $message], 422);
+            }
+
+            return redirect()->route('social.instagram.posts', ['instagram_account' => $connection->id])
+                ->with('social_error', $message)
+                ->withInput();
+        }
+
+        try {
+            Log::info('Instagram post publish started.', [
+                'workspace_id' => $workspace->id,
+                'provider_connection_id' => $connection->id,
+                'media_type' => $requestedMediaType,
+                'has_uploaded_file' => $uploadedFile !== null,
+                'uploaded_file_size' => $uploadedFile?->getSize(),
+                'uploaded_file_mime' => $uploadedFile?->getMimeType(),
+                'stored_path' => $storedPath,
+            ]);
+
+            $result = app(InstagramService::class)->publishPost($connection, [
+                'media_type' => $requestedMediaType,
+                'media_url' => $resolvedMediaUrl,
+                'caption' => $caption,
+                'alt_text' => $requestedMediaType === 'IMAGE' ? $altText : '',
+            ]);
+
+            Log::info('Instagram post publish finished.', [
+                'workspace_id' => $workspace->id,
+                'provider_connection_id' => $connection->id,
+                'media_type' => $requestedMediaType,
+                'creation_id' => $result['creation_id'] ?? null,
+                'provider_media_id' => $result['id'] ?? null,
+                'container_status' => $result['container_status'] ?? null,
+                'container_status_attempts' => $result['container_status_attempts'] ?? null,
+            ]);
+
+            $this->broadcastSocialUpdate($request, 'instagram_post_published', [
+                'provider_media_id' => $result['id'] ?? null,
+                'provider_connection_id' => $connection->id,
+            ]);
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'ok' => true,
+                    'message' => 'Post published successfully.',
+                    'post' => $result['post'] ?? null,
+                    'publish_steps' => [
+                        'container_id' => $result['creation_id'] ?? null,
+                        'container_status' => $result['container_status'] ?? null,
+                        'provider_media_id' => $result['id'] ?? null,
+                    ],
+                ]);
+            }
+
+            return redirect()->route('social.instagram.posts', ['instagram_account' => $connection->id])
+                ->with('social_success', 'Post published successfully.');
+        } catch (\Throwable $exception) {
+            Log::warning('Instagram post publish failed.', [
+                'workspace_id' => $workspace->id,
+                'provider_connection_id' => $connection->id,
+                'media_type' => $requestedMediaType,
+                'has_uploaded_file' => $uploadedFile !== null,
+                'uploaded_file_size' => $uploadedFile?->getSize(),
+                'uploaded_file_mime' => $uploadedFile?->getMimeType(),
+                'stored_path' => $storedPath,
+                'error' => $exception->getMessage(),
+            ]);
+
+            $message = 'Publish post failed: ' . $exception->getMessage();
+
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => $message], 422);
+            }
+
+            return redirect()->route('social.instagram.posts', ['instagram_account' => $connection->id])
+                ->with('social_error', $message)
+                ->withInput();
+        }
     }
 
     public function publishInstagramStory(Request $request): RedirectResponse|JsonResponse

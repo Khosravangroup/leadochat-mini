@@ -166,6 +166,144 @@ class InstagramContentService
         return $response->json();
     }
 
+    public function publishPost(ProviderConnection $connection, array $payload): array
+    {
+        $accessToken = $this->resolveAccessToken($connection);
+        $accountId = $this->resolveAccountId($connection);
+        $graphVersion = $this->resolveGraphVersion();
+        $mediaType = strtoupper((string) ($payload['media_type'] ?? 'IMAGE'));
+        $mediaUrl = trim((string) ($payload['media_url'] ?? ''));
+        $caption = trim((string) ($payload['caption'] ?? ''));
+        $altText = trim((string) ($payload['alt_text'] ?? ''));
+
+        if (! in_array($mediaType, ['IMAGE', 'VIDEO'], true)) {
+            throw new RuntimeException('Instagram post media_type must be IMAGE or VIDEO.');
+        }
+
+        if ($mediaUrl === '') {
+            throw new RuntimeException('Instagram post media_url is required.');
+        }
+
+        $containerEndpoint = "https://graph.instagram.com/{$graphVersion}/{$accountId}/media";
+        $publishEndpoint = "https://graph.instagram.com/{$graphVersion}/{$accountId}/media_publish";
+        $containerPayload = [
+            'access_token' => $accessToken,
+        ];
+
+        if ($caption !== '') {
+            $containerPayload['caption'] = $caption;
+        }
+
+        if ($mediaType === 'VIDEO') {
+            $containerPayload['media_type'] = 'REELS';
+            $containerPayload['video_url'] = $mediaUrl;
+            $containerPayload['share_to_feed'] = 'true';
+        } else {
+            $containerPayload['image_url'] = $mediaUrl;
+
+            if ($altText !== '') {
+                $containerPayload['alt_text'] = $altText;
+            }
+        }
+
+        if (app()->environment('local')) {
+            $providerMediaId = 'local-debug-post-' . now()->timestamp;
+            $localPost = $this->upsertSocialPostWithMedia($connection, [
+                'id' => $providerMediaId,
+                'caption' => $caption,
+                'media_type' => $mediaType === 'VIDEO' ? 'REELS' : 'IMAGE',
+                'media_url' => $mediaType === 'IMAGE' ? $mediaUrl : null,
+                'thumbnail_url' => null,
+                'permalink' => 'https://instagram.local/debug/media/' . $providerMediaId,
+                'timestamp' => now()->toIso8601String(),
+                'like_count' => 0,
+                'comments_count' => 0,
+                'raw' => [
+                    'mode' => 'local_debug',
+                    'media_url' => $mediaUrl,
+                ],
+            ]);
+
+            return [
+                'mode' => 'local_debug',
+                'creation_id' => 'local-debug-container-' . now()->timestamp,
+                'id' => $providerMediaId,
+                'container_status' => 'FINISHED',
+                'post' => $localPost,
+            ];
+        }
+
+        $containerResponse = Http::timeout(90)->asForm()->post($containerEndpoint, $containerPayload);
+
+        if (! $containerResponse->successful()) {
+            throw new RuntimeException('Instagram post container creation failed: ' . $containerResponse->body());
+        }
+
+        $creationId = (string) ($containerResponse->json('id') ?? '');
+
+        if ($creationId === '') {
+            throw new RuntimeException('Instagram post container creation did not return an id.');
+        }
+
+        $containerStatus = $mediaType === 'VIDEO'
+            ? $this->waitForContainerReady($creationId, $accessToken, $graphVersion)
+            : ['status_code' => null, 'attempts' => 0, 'response' => null];
+
+        $publishResponse = Http::timeout(90)->asForm()->post($publishEndpoint, [
+            'creation_id' => $creationId,
+            'access_token' => $accessToken,
+        ]);
+
+        if (! $publishResponse->successful()) {
+            throw new RuntimeException('Instagram post publish failed: ' . $publishResponse->body());
+        }
+
+        $providerMediaId = (string) ($publishResponse->json('id') ?? '');
+
+        if ($providerMediaId === '') {
+            throw new RuntimeException('Instagram post publish did not return an id.');
+        }
+
+        $details = null;
+
+        try {
+            $details = $this->fetchMediaDetails($connection, $providerMediaId);
+        } catch (\Throwable) {
+            $details = null;
+        }
+
+        $postPayload = is_array($details) && ! empty($details['id'])
+            ? $details
+            : [
+                'id' => $providerMediaId,
+                'caption' => $caption,
+                'media_type' => $mediaType === 'VIDEO' ? 'REELS' : 'IMAGE',
+                'media_url' => $mediaUrl,
+                'thumbnail_url' => null,
+                'permalink' => null,
+                'timestamp' => now()->toIso8601String(),
+                'like_count' => 0,
+                'comments_count' => 0,
+            ];
+
+        $postPayload['raw'] = array_merge(is_array($postPayload['raw'] ?? null) ? $postPayload['raw'] : [], [
+            'published_from' => 'leadochat_social_posts',
+            'creation_id' => $creationId,
+            'container_status' => $containerStatus,
+            'resolved_media_url' => $mediaUrl,
+        ]);
+
+        $post = $this->upsertSocialPostWithMedia($connection, $postPayload);
+
+        return array_merge($publishResponse->json(), [
+            'creation_id' => $creationId,
+            'container_status' => $containerStatus['status_code'] ?? null,
+            'container_status_attempts' => $containerStatus['attempts'] ?? null,
+            'container_status_response' => $containerStatus['response'] ?? null,
+            'post' => $post,
+        ]);
+    }
+
     public function syncMediaFeed(ProviderConnection $connection, array $options = []): array
     {
         $feed = $this->fetchMediaFeed($connection, $options);
@@ -402,6 +540,46 @@ class InstagramContentService
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    protected function waitForContainerReady(string $creationId, string $accessToken, string $graphVersion): array
+    {
+        $statusEndpoint = "https://graph.instagram.com/{$graphVersion}/{$creationId}";
+        $lastStatus = null;
+        $lastBody = null;
+        $attempts = 80;
+
+        for ($attempt = 1; $attempt <= $attempts; $attempt++) {
+            $response = Http::timeout(30)
+                ->withToken($accessToken)
+                ->acceptJson()
+                ->get($statusEndpoint, [
+                    'fields' => 'status_code,status',
+                ]);
+
+            if (! $response->successful()) {
+                throw new RuntimeException('Instagram post container status check failed: ' . $response->body());
+            }
+
+            $lastStatus = (string) ($response->json('status_code') ?? '');
+            $lastBody = $response->json();
+
+            if ($lastStatus === 'FINISHED') {
+                return [
+                    'status_code' => $lastStatus,
+                    'attempts' => $attempt,
+                    'response' => is_array($lastBody) ? $lastBody : null,
+                ];
+            }
+
+            if (in_array($lastStatus, ['ERROR', 'EXPIRED'], true)) {
+                throw new RuntimeException('Instagram post container failed with status ' . $lastStatus . ': ' . json_encode($lastBody));
+            }
+
+            usleep(3000000);
+        }
+
+        throw new RuntimeException('Instagram post video is still processing after ' . $attempts . ' checks. Last status: ' . ($lastStatus ?: 'unknown') . '.');
     }
 
     protected function resolveAccessToken(ProviderConnection $connection): string
