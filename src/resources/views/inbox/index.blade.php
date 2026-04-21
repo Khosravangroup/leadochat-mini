@@ -151,8 +151,8 @@
             position: absolute;
             right: -2px;
             bottom: -2px;
-            width: 18px;
-            height: 18px;
+            width: 20px;
+            height: 20px;
             border-radius: 999px;
             border: 2px solid var(--lc-panel);
             display: inline-flex;
@@ -167,8 +167,8 @@
         }
 
         .lc-channel-badge svg {
-            width: 10px;
-            height: 10px;
+            width: 12px;
+            height: 12px;
             display: block;
         }
 
@@ -628,7 +628,7 @@
 
         .lc-message-wrap {
             display: flex;
-            align-items: flex-end;
+            align-items: flex-start;
             gap: .65rem;
             max-width: 90%;
         }
@@ -649,13 +649,42 @@
             min-width: 0;
             max-width: 100%;
             position: relative;
+            display: flex;
+            flex-direction: column;
+            gap: .3rem;
         }
 
         .lc-message-name {
-            margin: 0 0 .35rem;
+            margin: 0;
             font-size: .78rem;
             font-weight: 600;
             color: var(--lc-text-soft);
+        }
+
+        .lc-message-agent {
+            display: inline-flex;
+            align-items: center;
+            gap: .35rem;
+            align-self: flex-end;
+            max-width: 100%;
+            color: var(--lc-text-soft);
+        }
+
+        .lc-message-agent-avatar {
+            width: 20px;
+            height: 20px;
+            min-width: 20px;
+            border-radius: 999px;
+            object-fit: cover;
+            background: #ddd;
+        }
+
+        .lc-message-agent-name {
+            font-size: .76rem;
+            font-weight: 700;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .lc-bubble {
@@ -666,6 +695,9 @@
             line-height: 1.55;
             word-break: break-word;
             box-shadow: 0 1px 2px rgba(0,0,0,.03);
+            display: flex;
+            flex-direction: column;
+            gap: .45rem;
         }
 
         .lc-bubble.inbound {
@@ -678,6 +710,24 @@
             background: var(--lc-outgoing);
             border: 1px solid var(--lc-outgoing-border);
             color: var(--lc-text);
+        }
+
+        .lc-bubble-body {
+            min-width: 0;
+        }
+
+        .lc-bubble-footer {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: .38rem;
+            font-size: .69rem;
+            line-height: 1;
+            color: var(--lc-text-muted);
+        }
+
+        .lc-bubble.inbound .lc-bubble-footer {
+            color: #94a3b8;
         }
 
         .lc-reply {
@@ -1851,10 +1901,10 @@
 
                                     @if ($conversation->provider === 'instagram')
                                         <span class="lc-channel-badge instagram" aria-hidden="true">
-                                            <svg viewBox="0 0 24 24">
-                                                <rect x="4.75" y="4.75" width="14.5" height="14.5" rx="4.25"></rect>
-                                                <circle cx="12" cy="12" r="3.35"></circle>
-                                                <circle cx="16.6" cy="7.4" r="1.05" fill="currentColor" stroke="none"></circle>
+                                            <svg viewBox="0 0 24 24" fill="none">
+                                                <rect x="4.5" y="4.5" width="15" height="15" rx="4"></rect>
+                                                <circle cx="12" cy="12" r="3.2"></circle>
+                                                <circle cx="16.9" cy="7.3" r="1.1" fill="currentColor" stroke="none"></circle>
                                             </svg>
                                         </span>
                                     @endif
@@ -1903,10 +1953,10 @@
 
                                     @if ($selectedConversation->provider === 'instagram')
                                         <span class="lc-channel-badge instagram" aria-hidden="true">
-                                            <svg viewBox="0 0 24 24">
-                                                <rect x="4.75" y="4.75" width="14.5" height="14.5" rx="4.25"></rect>
-                                                <circle cx="12" cy="12" r="3.35"></circle>
-                                                <circle cx="16.6" cy="7.4" r="1.05" fill="currentColor" stroke="none"></circle>
+                                            <svg viewBox="0 0 24 24" fill="none">
+                                                <rect x="4.5" y="4.5" width="15" height="15" rx="4"></rect>
+                                                <circle cx="12" cy="12" r="3.2"></circle>
+                                                <circle cx="16.9" cy="7.3" r="1.1" fill="currentColor" stroke="none"></circle>
                                             </svg>
                                         </span>
                                     @endif
@@ -2105,11 +2155,22 @@
                                             >
 
                                             <div class="lc-message-body">
-                                                @unless ($isOutbound)
+                                                @if ($isOutbound)
+                                                    <div class="lc-message-agent">
+                                                        <img
+                                                            class="lc-message-agent-avatar"
+                                                            src="{{ $sender?->avatar_url ?? 'https://ui-avatars.com/api/?name=' . urlencode($sender?->display_name ?? 'LC') . '&background=724cda&color=ffffff' }}"
+                                                            alt="{{ $sender?->display_name ?? 'Agent' }}"
+                                                        >
+                                                        <div class="lc-message-agent-name">
+                                                            {{ $sender?->display_name ?? 'Agent' }}
+                                                        </div>
+                                                    </div>
+                                                @else
                                                     <div class="lc-message-name">
                                                         {{ $sender?->display_name ?? 'User' }}
                                                     </div>
-                                                @endunless
+                                                @endif
 
                                                 @if ($isStoryReplyMessage)
                                                     <div style="margin-bottom: .35rem; display:flex; gap:.35rem; flex-wrap:wrap;">
@@ -2215,78 +2276,96 @@
 
                                                 @unless ($renderCommentPrivateReplyCard)
                                                     <div class="lc-bubble {{ $isOutbound ? 'outbound' : 'inbound' }}">
-                                                        @if ($reply)
-                                                            <div class="lc-reply">
-                                                                Reply to: {{ $reply->text_body ?: ($reply->message_type . ' message') }}
-                                                            </div>
-                                                        @endif
-
-                                                        @if ($message->message_type === 'text')
-                                                            <div>{{ $message->text_body }}</div>
-                                                        @endif
-
-                                                        @if ($message->message_type === 'image')
-                                                            @foreach ($message->attachments as $attachment)
-                                                                <div class="lc-image-card">
-                                                                    <img src="{{ $attachment->url }}" alt="Image attachment">
+                                                        <div class="lc-bubble-body">
+                                                            @if ($reply)
+                                                                <div class="lc-reply">
+                                                                    Reply to: {{ $reply->text_body ?: ($reply->message_type . ' message') }}
                                                                 </div>
-                                                            @endforeach
-
-                                                            @if ($message->caption)
-                                                                <div>{{ $message->caption }}</div>
                                                             @endif
-                                                        @endif
 
-                                                        @if ($message->message_type === 'file')
-                                                            @foreach ($message->attachments as $attachment)
-                                                                <div class="lc-file-card">
-                                                                    <div class="lc-file-icon">📎</div>
-                                                                    <div class="lc-file-meta">
-                                                                        <div class="lc-file-name">
-                                                                            <a href="{{ $attachment->url }}" target="_blank" style="color: inherit; text-decoration: none;">
-                                                                                {{ $attachment->file_name ?: 'Attachment' }}
-                                                                            </a>
-                                                                        </div>
-                                                                        <div class="lc-file-sub">
-                                                                            {{ $attachment->mime_type ?: 'file' }}
-                                                                            @if ($attachment->file_size)
-                                                                                • {{ number_format($attachment->file_size / 1024, 1) }} KB
-                                                                            @endif
+                                                            @if ($message->message_type === 'text')
+                                                                <div>{{ $message->text_body }}</div>
+                                                            @endif
+
+                                                            @if ($message->message_type === 'image')
+                                                                @foreach ($message->attachments as $attachment)
+                                                                    <div class="lc-image-card">
+                                                                        <img src="{{ $attachment->url }}" alt="Image attachment">
+                                                                    </div>
+                                                                @endforeach
+
+                                                                @if ($message->caption)
+                                                                    <div>{{ $message->caption }}</div>
+                                                                @endif
+                                                            @endif
+
+                                                            @if ($message->message_type === 'file')
+                                                                @foreach ($message->attachments as $attachment)
+                                                                    <div class="lc-file-card">
+                                                                        <div class="lc-file-icon">📎</div>
+                                                                        <div class="lc-file-meta">
+                                                                            <div class="lc-file-name">
+                                                                                <a href="{{ $attachment->url }}" target="_blank" style="color: inherit; text-decoration: none;">
+                                                                                    {{ $attachment->file_name ?: 'Attachment' }}
+                                                                                </a>
+                                                                            </div>
+                                                                            <div class="lc-file-sub">
+                                                                                {{ $attachment->mime_type ?: 'file' }}
+                                                                                @if ($attachment->file_size)
+                                                                                    • {{ number_format($attachment->file_size / 1024, 1) }} KB
+                                                                                @endif
+                                                                            </div>
                                                                         </div>
                                                                     </div>
-                                                                </div>
-                                                            @endforeach
+                                                                @endforeach
 
-                                                            @if ($message->caption)
-                                                                <div>{{ $message->caption }}</div>
+                                                                @if ($message->caption)
+                                                                    <div>{{ $message->caption }}</div>
+                                                                @endif
                                                             @endif
-                                                        @endif
 
-                                                        @if ($message->message_type === 'video')
-                                                            @foreach ($message->attachments as $attachment)
-                                                                <div class="lc-image-card">
-                                                                    <video controls playsinline style="display:block;width:100%;max-height:360px;background:#000;">
-                                                                        <source src="{{ $attachment->url }}" type="{{ $attachment->mime_type }}">
-                                                                    </video>
-                                                                </div>
-                                                            @endforeach
+                                                            @if ($message->message_type === 'video')
+                                                                @foreach ($message->attachments as $attachment)
+                                                                    <div class="lc-image-card">
+                                                                        <video controls playsinline style="display:block;width:100%;max-height:360px;background:#000;">
+                                                                            <source src="{{ $attachment->url }}" type="{{ $attachment->mime_type }}">
+                                                                        </video>
+                                                                    </div>
+                                                                @endforeach
 
-                                                            @if ($message->caption)
-                                                                <div>{{ $message->caption }}</div>
+                                                                @if ($message->caption)
+                                                                    <div>{{ $message->caption }}</div>
+                                                                @endif
                                                             @endif
-                                                        @endif
 
-                                                        @if ($message->message_type === 'voice')
-                                                            @foreach ($message->attachments as $attachment)
-                                                                <div class="lc-voice-card">
-                                                                    <div class="lc-voice-title">Voice message</div>
-                                                                    <div class="lc-voice-sub">Duration: {{ $attachment->duration_seconds ?? '-' }} sec</div>
-                                                                    <audio controls>
-                                                                        <source src="{{ $attachment->url }}" type="{{ $attachment->mime_type }}">
-                                                                    </audio>
-                                                                </div>
-                                                            @endforeach
-                                                        @endif
+                                                            @if ($message->message_type === 'voice')
+                                                                @foreach ($message->attachments as $attachment)
+                                                                    <div class="lc-voice-card">
+                                                                        <div class="lc-voice-title">Voice message</div>
+                                                                        <div class="lc-voice-sub">Duration: {{ $attachment->duration_seconds ?? '-' }} sec</div>
+                                                                        <audio controls>
+                                                                            <source src="{{ $attachment->url }}" type="{{ $attachment->mime_type }}">
+                                                                        </audio>
+                                                                    </div>
+                                                                @endforeach
+                                                            @endif
+                                                        </div>
+
+                                                        <div class="lc-bubble-footer">
+                                                            <span>{{ optional($message->created_at)->format('M d, Y H:i') }}</span>
+
+                                                            @if ($isOutbound)
+                                                                @if ($message->status === 'sent')
+                                                                    <span class="lc-status-icon sent" aria-label="sent">✓</span>
+                                                                @elseif ($message->status === 'delivered')
+                                                                    <span class="lc-status-icon delivered" aria-label="delivered">✓✓</span>
+                                                                @elseif ($message->status === 'read')
+                                                                    <span class="lc-status-icon read" aria-label="read">✓✓</span>
+                                                                @elseif ($message->status === 'failed')
+                                                                    <span class="lc-status-icon failed" aria-label="failed">!</span>
+                                                                @endif
+                                                            @endif
+                                                        </div>
                                                     </div>
                                                 @endunless
 
@@ -2307,20 +2386,6 @@
                                                 </div>
 
                                                 <div class="lc-message-meta">
-                                                    <span>{{ optional($message->created_at)->format('M d, Y H:i') }}</span>
-
-                                                    @if ($isOutbound)
-                                                        @if ($message->status === 'sent')
-                                                            <span class="lc-status-icon sent" aria-label="sent">✓</span>
-                                                        @elseif ($message->status === 'delivered')
-                                                            <span class="lc-status-icon delivered" aria-label="delivered">✓✓</span>
-                                                        @elseif ($message->status === 'read')
-                                                            <span class="lc-status-icon read" aria-label="read">✓✓</span>
-                                                        @elseif ($message->status === 'failed')
-                                                            <span class="lc-status-icon failed" aria-label="failed">!</span>
-                                                        @endif
-                                                    @endif
-
                                                     <a
                                                         href="{{ route('inbox.show', ['conversation' => $selectedConversation->id, 'reply' => $message->id]) }}"
                                                         style="color: var(--lc-primary); text-decoration: none; font-weight: 600;"
@@ -4426,7 +4491,10 @@
             });
 
             document.addEventListener('submit', async function (event) {
-                const actionForm = event.target.closest('.lc-conversation-action-form');
+                const submittedForm = event.target instanceof HTMLFormElement ? event.target : null;
+                const actionForm = submittedForm && submittedForm.matches('.lc-conversation-action-form')
+                    ? submittedForm
+                    : null;
 
                 if (actionForm) {
                     event.preventDefault();
@@ -4439,7 +4507,8 @@
                     }
 
                     try {
-                        const response = await fetch(actionForm.action, {
+                        const actionUrl = actionForm.getAttribute('action') || actionForm.action;
+                        const response = await fetch(actionUrl, {
                             method: 'POST',
                             body: new FormData(actionForm),
                             headers: {
@@ -4468,7 +4537,9 @@
                     return;
                 }
 
-                const reactionForm = event.target.closest('.lc-reaction-form');
+                const reactionForm = submittedForm && submittedForm.matches('.lc-reaction-form')
+                    ? submittedForm
+                    : null;
 
                 if (reactionForm) {
                     event.preventDefault();
@@ -4496,7 +4567,8 @@
                     }
 
                     try {
-                        const response = await fetch(reactionForm.action, {
+                        const reactionUrl = reactionForm.getAttribute('action') || reactionForm.action;
+                        const response = await fetch(reactionUrl, {
                             method: 'POST',
                             body: new FormData(reactionForm),
                             headers: {
