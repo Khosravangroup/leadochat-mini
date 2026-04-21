@@ -276,22 +276,23 @@ class InstagramService
                     'delivery_mode' => 'instagram_comment_reply_dm',
                     'send_result' => $sendResult,
                     'social_comment_reply' => true,
-                'message_context_type' => 'comment_reply_dm',
-                'social_comment_id' => $comment->id,
-                'social_post_id' => $socialPost?->id,
-                'post_cover_url' => $socialPost?->thumbnail_url ?: $socialPost?->media_url,
-                'provider_media_id' => $comment->provider_media_id,
-                'provider_comment_id' => $comment->provider_comment_id,
-                'comment_author' => $this->resolveCommentAuthorName($comment),
-                'comment_text' => $comment->text,
-                'post_caption' => $socialPost?->caption,
+                    'message_context_type' => 'comment_reply_dm',
+                    'native_private_reply' => true,
+                    'social_comment_id' => $comment->id,
+                    'social_post_id' => $socialPost?->id,
+                    'post_cover_url' => $socialPost?->thumbnail_url ?: $socialPost?->media_url,
+                    'provider_media_id' => $comment->provider_media_id,
+                    'provider_comment_id' => $comment->provider_comment_id,
+                    'comment_author' => $this->resolveCommentAuthorName($comment),
+                    'comment_text' => $comment->text,
+                    'post_caption' => $socialPost?->caption,
                     'post_permalink' => $socialPost?->permalink,
                     'post_media_type' => $socialPost?->media_type,
                 ],
             ]);
 
             $conversation->update([
-                'last_message_preview' => 'DM reply to comment: ' . $this->trimPreview($text),
+                'last_message_preview' => 'Comment DM reply',
                 'last_message_at' => $sentAt,
             ]);
 

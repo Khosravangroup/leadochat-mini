@@ -130,13 +130,46 @@
             padding: 1rem 1.25rem;
         }
 
-        .lc-avatar {
+        .lc-avatar-wrap {
+            position: relative;
             width: 42px;
             height: 42px;
             min-width: 42px;
+            flex: 0 0 42px;
+        }
+
+        .lc-avatar {
+            width: 100%;
+            height: 100%;
+            min-width: 0;
             border-radius: 999px;
             object-fit: cover;
             background: #ddd;
+        }
+
+        .lc-channel-badge {
+            position: absolute;
+            right: -2px;
+            bottom: -2px;
+            width: 18px;
+            height: 18px;
+            border-radius: 999px;
+            border: 2px solid var(--lc-panel);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            box-shadow: 0 4px 10px rgba(15, 23, 42, .18);
+        }
+
+        .lc-channel-badge.instagram {
+            background: linear-gradient(135deg, #f58529 0%, #dd2a7b 55%, #515bd4 100%);
+        }
+
+        .lc-channel-badge svg {
+            width: 10px;
+            height: 10px;
+            display: block;
         }
 
         .lc-conversation-meta {
@@ -329,6 +362,103 @@
             letter-spacing: .02em;
         }
 
+        .lc-comment-private-reply-card {
+            margin-bottom: .45rem;
+            border: 1px solid #bae6fd;
+            background: linear-gradient(180deg, #f8fdff 0%, #eef8ff 100%);
+            border-radius: 12px;
+            padding: .7rem;
+            display: grid;
+            gap: .65rem;
+        }
+
+        .lc-comment-private-reply-top {
+            display: flex;
+            align-items: center;
+            gap: .4rem;
+            flex-wrap: wrap;
+        }
+
+        .lc-comment-private-reply-author {
+            font-size: .72rem;
+            font-weight: 700;
+            color: #0f172a;
+        }
+
+        .lc-comment-private-reply-layout {
+            display: grid;
+            grid-template-columns: 70px minmax(0, 1fr);
+            gap: .7rem;
+            align-items: start;
+        }
+
+        .lc-comment-private-reply-cover {
+            width: 70px;
+            height: 70px;
+            overflow: hidden;
+            border-radius: 10px;
+            border: 1px solid #bae6fd;
+            background: #dbeafe;
+        }
+
+        .lc-comment-private-reply-cover img {
+            display: block;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .lc-comment-private-reply-content {
+            min-width: 0;
+            display: grid;
+            gap: .42rem;
+        }
+
+        .lc-comment-private-reply-section {
+            min-width: 0;
+        }
+
+        .lc-comment-private-reply-kicker {
+            display: block;
+            margin-bottom: .16rem;
+            font-size: .64rem;
+            font-weight: 800;
+            color: #0369a1;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+        }
+
+        .lc-comment-private-reply-copy {
+            font-size: .77rem;
+            line-height: 1.45;
+            color: #0f172a;
+            word-break: break-word;
+        }
+
+        .lc-comment-private-reply-comment .lc-comment-private-reply-copy {
+            color: #075985;
+        }
+
+        .lc-comment-private-reply-response {
+            border-top: 1px solid #bae6fd;
+            padding-top: .5rem;
+        }
+
+        .lc-comment-private-reply-link {
+            display: inline-flex;
+            align-items: center;
+            min-height: 26px;
+            width: fit-content;
+            border-radius: 999px;
+            border: 1px solid #7dd3fc;
+            background: #ffffff;
+            padding: 0 .7rem;
+            font-size: .72rem;
+            font-weight: 700;
+            color: #0369a1;
+            text-decoration: none;
+        }
+
         .lc-main {
             flex: 1;
             min-width: 0;
@@ -395,14 +525,14 @@
         .lc-center-actions {
             display: flex;
             align-items: center;
-            gap: .5rem;
+            gap: .45rem;
             flex-wrap: wrap;
         }
 
         .lc-icon-btn {
-            width: 34px;
-            height: 34px;
-            border-radius: 10px;
+            width: 38px;
+            height: 38px;
+            border-radius: 8px;
             border: 1px solid var(--lc-border);
             background: var(--lc-panel);
             color: var(--lc-text-soft);
@@ -410,7 +540,43 @@
             align-items: center;
             justify-content: center;
             font-size: .9rem;
-            cursor: default;
+            cursor: pointer;
+            transition: background .18s ease, color .18s ease, border-color .18s ease, transform .18s ease;
+        }
+
+        .lc-icon-btn:hover,
+        .lc-icon-btn:focus-visible {
+            background: #f8fafc;
+            color: #0f172a;
+            border-color: #d6d3d1;
+            transform: translateY(-1px);
+            outline: none;
+        }
+
+        .lc-icon-btn svg {
+            width: 18px;
+            height: 18px;
+            stroke: currentColor;
+            stroke-width: 1.85;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            fill: none;
+        }
+
+        .lc-icon-btn.archive {
+            color: #1d4ed8;
+        }
+
+        .lc-icon-btn.restore {
+            color: #0f766e;
+        }
+
+        .lc-icon-btn.trash {
+            color: #dc2626;
+        }
+
+        .lc-icon-btn.refresh {
+            color: #4f46e5;
         }
 
         .lc-message-area {
@@ -1137,35 +1303,35 @@
 
         .lc-composer-wrap {
             flex: 0 0 auto;
-            padding: .85rem 1rem 1rem;
+            padding: .6rem 1rem .8rem;
             background: var(--lc-panel);
             border-top: 1px solid var(--lc-border);
         }
 
         .lc-composer {
             border-top: 1px solid var(--lc-border);
-            padding-top: .7rem;
+            padding-top: .45rem;
         }
 
         .lc-message-types {
             display: flex;
             align-items: center;
-            gap: .4rem;
-            margin-bottom: .65rem;
+            gap: .32rem;
+            margin-bottom: .4rem;
             flex-wrap: wrap;
             color: var(--lc-text-soft);
-            font-size: .8rem;
+            font-size: .74rem;
         }
 
         .lc-message-type-pill {
             display: inline-flex;
             align-items: center;
-            height: 24px;
+            height: 21px;
             border-radius: 999px;
             border: 1px solid var(--lc-border);
             background: var(--lc-panel);
-            padding: 0 .6rem;
-            font-size: .72rem;
+            padding: 0 .52rem;
+            font-size: .67rem;
             font-weight: 600;
             color: var(--lc-text-soft);
         }
@@ -1179,12 +1345,12 @@
 
         .lc-editor-box textarea {
             width: 100%;
-            min-height: 68px;
+            min-height: 48px;
             border: 0;
             resize: none;
             outline: none;
-            padding: .8rem .9rem .6rem;
-            font-size: .95rem;
+            padding: .65rem .85rem .45rem;
+            font-size: .93rem;
             color: var(--lc-text);
             background: transparent;
         }
@@ -1199,7 +1365,7 @@
             justify-content: space-between;
             gap: .75rem;
             border-top: 1px solid var(--lc-border);
-            padding: .65rem .8rem;
+            padding: .52rem .75rem;
             flex-wrap: wrap;
         }
 
@@ -1214,7 +1380,7 @@
         .lc-editor-icon {
             font-size: 1rem;
             line-height: 1;
-            cursor: default;
+            cursor: pointer;
         }
 
         .lc-send {
@@ -1226,6 +1392,75 @@
             color: #fff;
             font-weight: 700;
             font-size: .9rem;
+        }
+
+        .lc-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 80;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+
+        .lc-modal.is-open {
+            display: flex;
+        }
+
+        .lc-modal-backdrop {
+            position: absolute;
+            inset: 0;
+            background: rgba(15, 23, 42, .44);
+            backdrop-filter: blur(2px);
+        }
+
+        .lc-modal-card {
+            position: relative;
+            width: min(100%, 420px);
+            border-radius: 14px;
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 20px 50px rgba(15, 23, 42, .18);
+            padding: 1rem;
+            display: grid;
+            gap: .8rem;
+        }
+
+        .lc-modal-title {
+            font-size: 1rem;
+            font-weight: 800;
+            color: #0f172a;
+        }
+
+        .lc-modal-body {
+            font-size: .9rem;
+            line-height: 1.55;
+            color: #475569;
+        }
+
+        .lc-modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: .55rem;
+        }
+
+        .lc-modal-btn {
+            min-height: 38px;
+            border-radius: 8px;
+            border: 1px solid #dbe3ec;
+            background: #fff;
+            padding: 0 .9rem;
+            font-size: .85rem;
+            font-weight: 700;
+            color: #334155;
+            cursor: pointer;
+        }
+
+        .lc-modal-btn.primary {
+            border-color: #724cda;
+            background: #724cda;
+            color: #fff;
         }
 
         .lc-aside {
@@ -1488,7 +1723,7 @@
             }
 
             .lc-composer-wrap {
-                padding: .75rem .9rem .85rem;
+                padding: .55rem .9rem .75rem;
             }
 
             .lc-sidebar-title {
@@ -1520,7 +1755,8 @@
             }
 
             .lc-message-avatar,
-            .lc-avatar {
+            .lc-avatar,
+            .lc-avatar-wrap {
                 width: 34px;
                 height: 34px;
                 min-width: 34px;
@@ -1536,8 +1772,8 @@
             }
 
             .lc-editor-box textarea {
-                min-height: 60px;
-                padding: .75rem .85rem .55rem;
+                min-height: 52px;
+                padding: .62rem .8rem .45rem;
             }
 
             .lc-editor-actions {
@@ -1606,11 +1842,23 @@
 
                         <a href="{{ route('inbox.show', ['conversation' => $conversation->id, 'view' => ($viewMode ?? 'inbox')]) }}" class="lc-conversation-item {{ $isSelected ? 'is-active' : '' }}">
                             <div class="lc-conversation-item-inner">
-                                <img
-                                    class="lc-avatar"
-                                    src="{{ $customer?->avatar_url ?? $conversation->avatar_url ?? 'https://ui-avatars.com/api/?name=User&background=e2e8f0&color=334155' }}"
-                                    alt="Avatar"
-                                >
+                                <div class="lc-avatar-wrap">
+                                    <img
+                                        class="lc-avatar"
+                                        src="{{ $customer?->avatar_url ?? $conversation->avatar_url ?? 'https://ui-avatars.com/api/?name=User&background=e2e8f0&color=334155' }}"
+                                        alt="Avatar"
+                                    >
+
+                                    @if ($conversation->provider === 'instagram')
+                                        <span class="lc-channel-badge instagram" aria-hidden="true">
+                                            <svg viewBox="0 0 24 24">
+                                                <rect x="4.75" y="4.75" width="14.5" height="14.5" rx="4.25"></rect>
+                                                <circle cx="12" cy="12" r="3.35"></circle>
+                                                <circle cx="16.6" cy="7.4" r="1.05" fill="currentColor" stroke="none"></circle>
+                                            </svg>
+                                        </span>
+                                    @endif
+                                </div>
 
                                 <div class="lc-conversation-meta">
                                     <div class="lc-conversation-top">
@@ -1628,7 +1876,6 @@
                                     </div>
 
                                     <div class="lc-conversation-bottom">
-                                        <span class="lc-badge provider">{{ $conversation->provider }}</span>
                                         @if ($conversation->unread_count > 0)
                                             <span class="lc-badge unread">{{ $conversation->unread_count }}</span>
                                         @endif
@@ -1647,11 +1894,23 @@
                     @if ($selectedConversation)
                         <div class="lc-center-header">
                             <div class="lc-center-header-left">
-                                <img
-                                    class="lc-avatar"
-                                    src="{{ $selectedCustomer?->avatar_url ?? $selectedConversation->avatar_url ?? 'https://ui-avatars.com/api/?name=User&background=e2e8f0&color=334155' }}"
-                                    alt="Avatar"
-                                >
+                                <div class="lc-avatar-wrap">
+                                    <img
+                                        class="lc-avatar"
+                                        src="{{ $selectedCustomer?->avatar_url ?? $selectedConversation->avatar_url ?? 'https://ui-avatars.com/api/?name=User&background=e2e8f0&color=334155' }}"
+                                        alt="Avatar"
+                                    >
+
+                                    @if ($selectedConversation->provider === 'instagram')
+                                        <span class="lc-channel-badge instagram" aria-hidden="true">
+                                            <svg viewBox="0 0 24 24">
+                                                <rect x="4.75" y="4.75" width="14.5" height="14.5" rx="4.25"></rect>
+                                                <circle cx="12" cy="12" r="3.35"></circle>
+                                                <circle cx="16.6" cy="7.4" r="1.05" fill="currentColor" stroke="none"></circle>
+                                            </svg>
+                                        </span>
+                                    @endif
+                                </div>
 
                                 <div class="lc-center-header-text">
                                     <div class="lc-chat-title">
@@ -1670,35 +1929,107 @@
 
                             <div class="lc-center-actions">
                                 @if (($viewMode ?? 'inbox') === 'trash')
-                                    <form method="POST" action="{{ route('inbox.restore', $selectedConversation) }}" onsubmit="return confirm('Restore this conversation?');" style="display:inline;">
+                                    <form
+                                        class="lc-conversation-action-form"
+                                        method="POST"
+                                        action="{{ route('inbox.restore', $selectedConversation) }}"
+                                        data-confirm-title="Restore conversation"
+                                        data-confirm-message="This conversation will return to the inbox."
+                                        data-confirm-submit="Restore"
+                                        style="display:inline;"
+                                    >
                                         @csrf
-                                        <button type="submit" class="lc-icon-btn" title="Restore">↩</button>
+                                        <button type="submit" class="lc-icon-btn restore" title="Restore" aria-label="Restore conversation">
+                                            <svg viewBox="0 0 24 24">
+                                                <path d="M9 14 4 9m0 0 5-5M4 9h8a7 7 0 1 1 0 14h-1"></path>
+                                            </svg>
+                                        </button>
                                     </form>
                                 @elseif (($viewMode ?? 'inbox') === 'archived')
-                                    <form method="POST" action="{{ route('inbox.unarchive', $selectedConversation) }}" onsubmit="return confirm('Unarchive this conversation?');" style="display:inline;">
+                                    <form
+                                        class="lc-conversation-action-form"
+                                        method="POST"
+                                        action="{{ route('inbox.unarchive', $selectedConversation) }}"
+                                        data-confirm-title="Unarchive conversation"
+                                        data-confirm-message="This conversation will return to the inbox."
+                                        data-confirm-submit="Unarchive"
+                                        style="display:inline;"
+                                    >
                                         @csrf
-                                        <button type="submit" class="lc-icon-btn" title="Unarchive">↩</button>
+                                        <button type="submit" class="lc-icon-btn restore" title="Unarchive" aria-label="Unarchive conversation">
+                                            <svg viewBox="0 0 24 24">
+                                                <path d="M9 14 4 9m0 0 5-5M4 9h8a7 7 0 1 1 0 14h-1"></path>
+                                            </svg>
+                                        </button>
                                     </form>
 
-                                    <form method="POST" action="{{ route('inbox.trash', $selectedConversation) }}" onsubmit="return confirm('Move this conversation to trash?');" style="display:inline;">
+                                    <form
+                                        class="lc-conversation-action-form"
+                                        method="POST"
+                                        action="{{ route('inbox.trash', $selectedConversation) }}"
+                                        data-confirm-title="Move to trash"
+                                        data-confirm-message="This conversation will be moved to trash."
+                                        data-confirm-submit="Move to trash"
+                                        style="display:inline;"
+                                    >
                                         @csrf
-                                        <button type="submit" class="lc-icon-btn" title="Trash">🗑</button>
+                                        <button type="submit" class="lc-icon-btn trash" title="Trash" aria-label="Move conversation to trash">
+                                            <svg viewBox="0 0 24 24">
+                                                <path d="M3 6h18"></path>
+                                                <path d="M8 6V4.75A1.75 1.75 0 0 1 9.75 3h4.5A1.75 1.75 0 0 1 16 4.75V6"></path>
+                                                <path d="M19 6l-.85 12.2A2 2 0 0 1 16.15 20H7.85a2 2 0 0 1-1.99-1.8L5 6"></path>
+                                                <path d="M10 10.25v5.5M14 10.25v5.5"></path>
+                                            </svg>
+                                        </button>
                                     </form>
                                 @else
-                                    <form method="POST" action="{{ route('inbox.archive', $selectedConversation) }}" onsubmit="return confirm('Archive this conversation?');" style="display:inline;">
+                                    <form
+                                        class="lc-conversation-action-form"
+                                        method="POST"
+                                        action="{{ route('inbox.archive', $selectedConversation) }}"
+                                        data-confirm-title="Archive conversation"
+                                        data-confirm-message="This conversation will be moved out of the active inbox."
+                                        data-confirm-submit="Archive"
+                                        style="display:inline;"
+                                    >
                                         @csrf
-                                        <button type="submit" class="lc-icon-btn" title="Archive">✓</button>
+                                        <button type="submit" class="lc-icon-btn archive" title="Archive" aria-label="Archive conversation">
+                                            <svg viewBox="0 0 24 24">
+                                                <path d="M4 7.5h16"></path>
+                                                <path d="M5.75 4h12.5A1.75 1.75 0 0 1 20 5.75v2.5A1.75 1.75 0 0 1 18.25 10H5.75A1.75 1.75 0 0 1 4 8.25v-2.5A1.75 1.75 0 0 1 5.75 4Z"></path>
+                                                <path d="M7 10v7.25A1.75 1.75 0 0 0 8.75 19h6.5A1.75 1.75 0 0 0 17 17.25V10"></path>
+                                                <path d="m10 13 2 2 2-2"></path>
+                                            </svg>
+                                        </button>
                                     </form>
 
-                                    <form method="POST" action="{{ route('inbox.trash', $selectedConversation) }}" onsubmit="return confirm('Move this conversation to trash?');" style="display:inline;">
+                                    <form
+                                        class="lc-conversation-action-form"
+                                        method="POST"
+                                        action="{{ route('inbox.trash', $selectedConversation) }}"
+                                        data-confirm-title="Move to trash"
+                                        data-confirm-message="This conversation will be moved to trash."
+                                        data-confirm-submit="Move to trash"
+                                        style="display:inline;"
+                                    >
                                         @csrf
-                                        <button type="submit" class="lc-icon-btn" title="Trash">🗑</button>
+                                        <button type="submit" class="lc-icon-btn trash" title="Trash" aria-label="Move conversation to trash">
+                                            <svg viewBox="0 0 24 24">
+                                                <path d="M3 6h18"></path>
+                                                <path d="M8 6V4.75A1.75 1.75 0 0 1 9.75 3h4.5A1.75 1.75 0 0 1 16 4.75V6"></path>
+                                                <path d="M19 6l-.85 12.2A2 2 0 0 1 16.15 20H7.85a2 2 0 0 1-1.99-1.8L5 6"></path>
+                                                <path d="M10 10.25v5.5M14 10.25v5.5"></path>
+                                            </svg>
+                                        </button>
                                     </form>
                                 @endif
 
-                                <button type="button" class="lc-icon-btn">⟳</button>
-                                <button type="button" class="lc-icon-btn">⇩</button>
-                                <button type="button" class="lc-icon-btn">⋯</button>
+                                <button type="button" id="lcRefreshConversationBtn" class="lc-icon-btn refresh" title="Refresh" aria-label="Refresh conversation">
+                                    <svg viewBox="0 0 24 24">
+                                        <path d="M21 12a9 9 0 1 1-2.64-6.36"></path>
+                                        <path d="M21 3v6h-6"></path>
+                                    </svg>
+                                </button>
                             </div>
                         </div>
 
@@ -1744,6 +2075,10 @@
                                         $commentReplyPostCoverUrl = is_string($messageMeta['post_cover_url'] ?? null)
                                             ? $messageMeta['post_cover_url']
                                             : null;
+                                        $commentReplyPostPermalink = is_string($messageMeta['post_permalink'] ?? null)
+                                            ? $messageMeta['post_permalink']
+                                            : null;
+                                        $renderCommentPrivateReplyCard = $isCommentReplyDmMessage && $isOutbound;
                                         $agentReaction = is_array($messageMeta['agent_reaction'] ?? null)
                                             ? $messageMeta['agent_reaction']
                                             : null;
@@ -1806,7 +2141,51 @@
                                                     </div>
                                                 @endif
 
-                                                @if ($isCommentReplyDmMessage)
+                                                @if ($renderCommentPrivateReplyCard)
+                                                    <div class="lc-comment-private-reply-card">
+                                                        <div class="lc-comment-private-reply-top">
+                                                            <span class="lc-badge comment-reply">Comment DM reply</span>
+                                                            @if ($commentReplyAuthor)
+                                                                <span class="lc-comment-private-reply-author">{{ $commentReplyAuthor }}</span>
+                                                            @endif
+                                                        </div>
+
+                                                        <div class="lc-comment-private-reply-layout">
+                                                            @if ($commentReplyPostCoverUrl)
+                                                                <div class="lc-comment-private-reply-cover">
+                                                                    <img src="{{ $commentReplyPostCoverUrl }}" alt="Instagram post cover">
+                                                                </div>
+                                                            @endif
+
+                                                            <div class="lc-comment-private-reply-content">
+                                                                @if ($commentReplyPostCaption)
+                                                                    <div class="lc-comment-private-reply-section">
+                                                                        <span class="lc-comment-private-reply-kicker">Post caption</span>
+                                                                        <div class="lc-comment-private-reply-copy">{{ $commentReplyPostCaption }}</div>
+                                                                    </div>
+                                                                @endif
+
+                                                                @if ($commentReplyText)
+                                                                    <div class="lc-comment-private-reply-section lc-comment-private-reply-comment">
+                                                                        <span class="lc-comment-private-reply-kicker">Comment</span>
+                                                                        <div class="lc-comment-private-reply-copy">{{ $commentReplyText }}</div>
+                                                                    </div>
+                                                                @endif
+
+                                                                <div class="lc-comment-private-reply-section lc-comment-private-reply-response">
+                                                                    <span class="lc-comment-private-reply-kicker">Reply</span>
+                                                                    <div class="lc-comment-private-reply-copy">{{ $message->text_body }}</div>
+                                                                </div>
+
+                                                                @if ($commentReplyPostPermalink)
+                                                                    <a href="{{ $commentReplyPostPermalink }}" target="_blank" rel="noopener noreferrer" class="lc-comment-private-reply-link">
+                                                                        Open post
+                                                                    </a>
+                                                                @endif
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                @elseif ($isCommentReplyDmMessage)
                                                     <div style="margin-bottom: .35rem; display:flex; gap:.35rem; flex-wrap:wrap;">
                                                         <span class="lc-badge comment-reply">Comment DM reply</span>
                                                     </div>
@@ -1834,82 +2213,82 @@
                                                     </div>
                                                 @endif
 
-                                                <div class="lc-bubble {{ $isOutbound ? 'outbound' : 'inbound' }}">
-                                                    @if ($reply)
-                                                        <div class="lc-reply">
-                                                            Reply to: {{ $reply->text_body ?: ($reply->message_type . ' message') }}
-                                                        </div>
-                                                    @endif
-
-                                                    @if ($message->message_type === 'text')
-                                                        <div>{{ $message->text_body }}</div>
-                                                    @endif
-
-                                                    @if ($message->message_type === 'image')
-                                                        @foreach ($message->attachments as $attachment)
-                                                            <div class="lc-image-card">
-                                                                <img src="{{ $attachment->url }}" alt="Image attachment">
+                                                @unless ($renderCommentPrivateReplyCard)
+                                                    <div class="lc-bubble {{ $isOutbound ? 'outbound' : 'inbound' }}">
+                                                        @if ($reply)
+                                                            <div class="lc-reply">
+                                                                Reply to: {{ $reply->text_body ?: ($reply->message_type . ' message') }}
                                                             </div>
-                                                        @endforeach
-
-                                                        @if ($message->caption)
-                                                            <div>{{ $message->caption }}</div>
                                                         @endif
-                                                    @endif
 
-                                                    @if ($message->message_type === 'file')
-                                                        @foreach ($message->attachments as $attachment)
-                                                            <div class="lc-file-card">
-                                                                <div class="lc-file-icon">📎</div>
-                                                                <div class="lc-file-meta">
-                                                                    <div class="lc-file-name">
-                                                                        <a href="{{ $attachment->url }}" target="_blank" style="color: inherit; text-decoration: none;">
-                                                                            {{ $attachment->file_name ?: 'Attachment' }}
-                                                                        </a>
-                                                                    </div>
-                                                                    <div class="lc-file-sub">
-                                                                        {{ $attachment->mime_type ?: 'file' }}
-                                                                        @if ($attachment->file_size)
-                                                                            • {{ number_format($attachment->file_size / 1024, 1) }} KB
-                                                                        @endif
+                                                        @if ($message->message_type === 'text')
+                                                            <div>{{ $message->text_body }}</div>
+                                                        @endif
+
+                                                        @if ($message->message_type === 'image')
+                                                            @foreach ($message->attachments as $attachment)
+                                                                <div class="lc-image-card">
+                                                                    <img src="{{ $attachment->url }}" alt="Image attachment">
+                                                                </div>
+                                                            @endforeach
+
+                                                            @if ($message->caption)
+                                                                <div>{{ $message->caption }}</div>
+                                                            @endif
+                                                        @endif
+
+                                                        @if ($message->message_type === 'file')
+                                                            @foreach ($message->attachments as $attachment)
+                                                                <div class="lc-file-card">
+                                                                    <div class="lc-file-icon">📎</div>
+                                                                    <div class="lc-file-meta">
+                                                                        <div class="lc-file-name">
+                                                                            <a href="{{ $attachment->url }}" target="_blank" style="color: inherit; text-decoration: none;">
+                                                                                {{ $attachment->file_name ?: 'Attachment' }}
+                                                                            </a>
+                                                                        </div>
+                                                                        <div class="lc-file-sub">
+                                                                            {{ $attachment->mime_type ?: 'file' }}
+                                                                            @if ($attachment->file_size)
+                                                                                • {{ number_format($attachment->file_size / 1024, 1) }} KB
+                                                                            @endif
+                                                                        </div>
                                                                     </div>
                                                                 </div>
-                                                            </div>
-                                                        @endforeach
+                                                            @endforeach
 
-                                                        @if ($message->caption)
-                                                            <div>{{ $message->caption }}</div>
+                                                            @if ($message->caption)
+                                                                <div>{{ $message->caption }}</div>
+                                                            @endif
                                                         @endif
-                                                    @endif
 
-                                                    @if ($message->message_type === 'video')
-                                                        @foreach ($message->attachments as $attachment)
-                                                            <div class="lc-image-card">
-                                                                <video controls playsinline style="display:block;width:100%;max-height:360px;background:#000;">
-                                                                    <source src="{{ $attachment->url }}" type="{{ $attachment->mime_type }}">
-                                                                </video>
-                                                            </div>
-                                                        @endforeach
+                                                        @if ($message->message_type === 'video')
+                                                            @foreach ($message->attachments as $attachment)
+                                                                <div class="lc-image-card">
+                                                                    <video controls playsinline style="display:block;width:100%;max-height:360px;background:#000;">
+                                                                        <source src="{{ $attachment->url }}" type="{{ $attachment->mime_type }}">
+                                                                    </video>
+                                                                </div>
+                                                            @endforeach
 
-                                                        @if ($message->caption)
-                                                            <div>{{ $message->caption }}</div>
+                                                            @if ($message->caption)
+                                                                <div>{{ $message->caption }}</div>
+                                                            @endif
                                                         @endif
-                                                    @endif
 
-                                                    @if ($message->message_type === 'voice')
-                                                        @foreach ($message->attachments as $attachment)
-                                                            <div class="lc-voice-card">
-                                                                <div class="lc-voice-title">Voice message</div>
-                                                                <div class="lc-voice-sub">Duration: {{ $attachment->duration_seconds ?? '-' }} sec</div>
-                                                                <audio controls>
-                                                                    <source src="{{ $attachment->url }}" type="{{ $attachment->mime_type }}">
-                                                                </audio>
-                                                            </div>
-                                                        @endforeach
-                                                    @endif
-
-
-                                                </div>
+                                                        @if ($message->message_type === 'voice')
+                                                            @foreach ($message->attachments as $attachment)
+                                                                <div class="lc-voice-card">
+                                                                    <div class="lc-voice-title">Voice message</div>
+                                                                    <div class="lc-voice-sub">Duration: {{ $attachment->duration_seconds ?? '-' }} sec</div>
+                                                                    <audio controls>
+                                                                        <source src="{{ $attachment->url }}" type="{{ $attachment->mime_type }}">
+                                                                    </audio>
+                                                                </div>
+                                                            @endforeach
+                                                        @endif
+                                                    </div>
+                                                @endunless
 
                                                 <div class="lc-reaction-strip" aria-live="polite">
                                                     <span
@@ -2484,6 +2863,93 @@
             </div>
         </div>
     </div>
+
+    <div id="lcConfirmModal" class="lc-modal" aria-hidden="true">
+        <div class="lc-modal-backdrop" data-confirm-close></div>
+
+        <div class="lc-modal-card" role="dialog" aria-modal="true" aria-labelledby="lcConfirmModalTitle">
+            <div id="lcConfirmModalTitle" class="lc-modal-title">Confirm action</div>
+            <div id="lcConfirmModalBody" class="lc-modal-body">Please confirm this action.</div>
+
+            <div class="lc-modal-actions">
+                <button type="button" id="lcConfirmModalCancel" class="lc-modal-btn">Cancel</button>
+                <button type="button" id="lcConfirmModalSubmit" class="lc-modal-btn primary">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const modal = document.getElementById('lcConfirmModal');
+            const modalTitle = document.getElementById('lcConfirmModalTitle');
+            const modalBody = document.getElementById('lcConfirmModalBody');
+            const modalCancel = document.getElementById('lcConfirmModalCancel');
+            const modalSubmit = document.getElementById('lcConfirmModalSubmit');
+
+            if (!modal || !modalTitle || !modalBody || !modalCancel || !modalSubmit) {
+                return;
+            }
+
+            let pendingForm = null;
+
+            const closeModal = () => {
+                modal.classList.remove('is-open');
+                modal.setAttribute('aria-hidden', 'true');
+                pendingForm = null;
+            };
+
+            const openModal = (form) => {
+                pendingForm = form;
+                modalTitle.textContent = form.getAttribute('data-confirm-title') || 'Confirm action';
+                modalBody.textContent = form.getAttribute('data-confirm-message') || 'Please confirm this action.';
+                modalSubmit.textContent = form.getAttribute('data-confirm-submit') || 'Confirm';
+                modal.classList.add('is-open');
+                modal.setAttribute('aria-hidden', 'false');
+            };
+
+            document.addEventListener('submit', function (event) {
+                const form = event.target.closest('form[data-confirm-title]');
+
+                if (!form) {
+                    return;
+                }
+
+                if (form.dataset.confirmed === '1') {
+                    delete form.dataset.confirmed;
+                    return;
+                }
+
+                event.preventDefault();
+                openModal(form);
+            });
+
+            modal.addEventListener('click', function (event) {
+                if (event.target.closest('[data-confirm-close]')) {
+                    closeModal();
+                }
+            });
+
+            modalCancel.addEventListener('click', closeModal);
+
+            modalSubmit.addEventListener('click', function () {
+                if (!pendingForm) {
+                    closeModal();
+                    return;
+                }
+
+                pendingForm.dataset.confirmed = '1';
+                const form = pendingForm;
+                closeModal();
+                form.requestSubmit();
+            });
+
+            document.addEventListener('keydown', function (event) {
+                if (event.key === 'Escape' && modal.classList.contains('is-open')) {
+                    closeModal();
+                }
+            });
+        });
+    </script>
 
     <script>
         document.addEventListener('DOMContentLoaded', function () {
@@ -3708,6 +4174,7 @@
             let isRefreshingPane = false;
             let refreshQueued = false;
             const messageArea = document.getElementById('lcMessageArea');
+            const refreshConversationBtn = document.getElementById('lcRefreshConversationBtn');
             const cssEscape = function (value) {
                 if (window.CSS && typeof window.CSS.escape === 'function') {
                     return window.CSS.escape(value);
@@ -3842,6 +4309,12 @@
 
             startSnapshotPolling();
 
+            if (refreshConversationBtn) {
+                refreshConversationBtn.addEventListener('click', function () {
+                    schedulePaneRefresh({ scrollToBottom: false, delay: 10 });
+                });
+            }
+
             const closeReactionPickers = function (except = null) {
                 document.querySelectorAll('.lc-reaction-form.is-open').forEach((form) => {
                     if (form === except) {
@@ -3953,6 +4426,48 @@
             });
 
             document.addEventListener('submit', async function (event) {
+                const actionForm = event.target.closest('.lc-conversation-action-form');
+
+                if (actionForm) {
+                    event.preventDefault();
+
+                    const submitButton = event.submitter || actionForm.querySelector('button[type="submit"]');
+                    const originalDisabled = submitButton ? submitButton.disabled : false;
+
+                    if (submitButton) {
+                        submitButton.disabled = true;
+                    }
+
+                    try {
+                        const response = await fetch(actionForm.action, {
+                            method: 'POST',
+                            body: new FormData(actionForm),
+                            headers: {
+                                Accept: 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest',
+                            },
+                            credentials: 'same-origin',
+                        });
+
+                        const data = await response.json().catch(() => ({}));
+
+                        if (!response.ok || data.ok === false) {
+                            window.alert(data.error || data.message || 'Action failed.');
+                            return;
+                        }
+
+                        window.location.assign(data.redirect_url || @json(route('inbox.index')));
+                    } catch (error) {
+                        window.alert('Action failed.');
+                    } finally {
+                        if (submitButton) {
+                            submitButton.disabled = originalDisabled;
+                        }
+                    }
+
+                    return;
+                }
+
                 const reactionForm = event.target.closest('.lc-reaction-form');
 
                 if (reactionForm) {

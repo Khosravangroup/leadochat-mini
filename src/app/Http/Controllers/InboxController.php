@@ -942,7 +942,7 @@ class InboxController extends Controller
         ]);
     }
 
-    public function archiveConversation(Request $request, Conversation $conversation): RedirectResponse
+    public function archiveConversation(Request $request, Conversation $conversation): RedirectResponse|JsonResponse
     {
         $user = $request->user();
         $workspace = $user?->currentWorkspace();
@@ -956,10 +956,10 @@ class InboxController extends Controller
             'status' => 'archived',
         ]);
 
-        return redirect()->route('inbox.index');
+        return $this->respondWithConversationAction($request, route('inbox.index'), 'Conversation archived.');
     }
 
-    public function unarchiveConversation(Request $request, Conversation $conversation): RedirectResponse
+    public function unarchiveConversation(Request $request, Conversation $conversation): RedirectResponse|JsonResponse
     {
         $user = $request->user();
         $workspace = $user?->currentWorkspace();
@@ -973,10 +973,10 @@ class InboxController extends Controller
             'status' => 'active',
         ]);
 
-        return redirect()->route('inbox.index');
+        return $this->respondWithConversationAction($request, route('inbox.index'), 'Conversation unarchived.');
     }
 
-    public function trashConversation(Request $request, Conversation $conversation): RedirectResponse
+    public function trashConversation(Request $request, Conversation $conversation): RedirectResponse|JsonResponse
     {
         $user = $request->user();
         $workspace = $user?->currentWorkspace();
@@ -990,10 +990,10 @@ class InboxController extends Controller
             'is_archived' => false,
         ]);
 
-        return redirect()->route('inbox.index');
+        return $this->respondWithConversationAction($request, route('inbox.index'), 'Conversation moved to trash.');
     }
 
-    public function restoreConversation(Request $request, Conversation $conversation): RedirectResponse
+    public function restoreConversation(Request $request, Conversation $conversation): RedirectResponse|JsonResponse
     {
         $user = $request->user();
         $workspace = $user?->currentWorkspace();
@@ -1007,7 +1007,23 @@ class InboxController extends Controller
             'is_archived' => false,
         ]);
 
-        return redirect()->route('inbox.index');
+        return $this->respondWithConversationAction($request, route('inbox.index'), 'Conversation restored.');
+    }
+
+    protected function respondWithConversationAction(
+        Request $request,
+        string $redirectUrl,
+        string $message
+    ): RedirectResponse|JsonResponse {
+        if ($request->expectsJson() || $request->ajax()) {
+            return response()->json([
+                'ok' => true,
+                'message' => $message,
+                'redirect_url' => $redirectUrl,
+            ]);
+        }
+
+        return redirect()->to($redirectUrl)->with('status', $message);
     }
 
     protected function guardWorkspaceConversationAccess(?Conversation $conversation, ?object $workspace, bool $allowArchived = false): void
