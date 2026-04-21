@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Events\WorkspaceRealtimeUpdated;
 use App\Models\ProviderConnection;
+use App\Models\Message;
 use App\Models\SocialComment;
 use App\Models\SocialPost;
 use App\Models\SocialStory;
@@ -13,6 +14,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use Symfony\Component\Process\Process;
 
 
 class SocialController extends Controller
@@ -645,12 +648,90 @@ class SocialController extends Controller
             ->get();
 
         $pageData['stories'] = $stories;
+        $pageData['storyEngagements'] = $this->buildStoryEngagements($workspace, $stories);
         $pageData['storySyncError'] = $syncError;
         $pageData['storySyncResult'] = $syncResult;
         $pageData['storyPublishEnabled'] = (bool) ($activeConnection && $activeConnection->status === 'connected');
         $pageData['socialCounts']['stories'] = $stories->count();
 
         return $pageData;
+    }
+
+    protected function buildStoryEngagements(object $workspace, $stories): array
+    {
+        $storyIds = $stories
+            ->pluck('provider_story_id')
+            ->filter()
+            ->map(fn ($id) => (string) $id)
+            ->values();
+
+        if ($storyIds->isEmpty()) {
+            return [];
+        }
+
+        $messages = Message::query()
+            ->where('messages.provider', 'instagram')
+            ->where('messages.direction', 'inbound')
+            ->whereHas('conversation', fn ($query) => $query->where('workspace_id', $workspace->id))
+            ->with('senderParticipant')
+            ->latest('messages.created_at')
+            ->limit(500)
+            ->get()
+            ->filter(function (Message $message) use ($storyIds) {
+                $meta = is_array($message->meta) ? $message->meta : [];
+
+                return in_array((string) ($meta['story_id'] ?? ''), $storyIds->all(), true);
+            });
+
+        $engagements = [];
+        $likeEmojis = ['❤️', '❤', '😍', '🔥', '👏', '🙌', '👍'];
+
+        foreach ($storyIds as $storyId) {
+            $engagements[$storyId] = [
+                'reply_count' => 0,
+                'like_count' => 0,
+                'likers' => [],
+            ];
+        }
+
+        foreach ($messages as $message) {
+            $meta = is_array($message->meta) ? $message->meta : [];
+            $storyId = (string) ($meta['story_id'] ?? '');
+
+            if ($storyId === '' || ! isset($engagements[$storyId])) {
+                continue;
+            }
+
+            $engagements[$storyId]['reply_count']++;
+
+            $text = trim((string) ($message->text_body ?? ''));
+            $reaction = is_array($meta['reaction'] ?? null) ? $meta['reaction'] : [];
+            $looksLikeLike = in_array($text, $likeEmojis, true)
+                || in_array((string) ($reaction['emoji'] ?? ''), $likeEmojis, true)
+                || in_array((string) ($reaction['reaction'] ?? ''), ['love', 'like'], true);
+
+            if (! $looksLikeLike) {
+                continue;
+            }
+
+            $participant = $message->senderParticipant;
+            $actorKey = (string) ($participant?->provider_user_id ?? $participant?->id ?? $message->id);
+
+            if (! isset($engagements[$storyId]['likers'][$actorKey])) {
+                $engagements[$storyId]['likers'][$actorKey] = [
+                    'name' => $participant?->display_name ?: $participant?->handle ?: 'Instagram user',
+                    'handle' => $participant?->handle,
+                    'avatar_url' => $participant?->avatar_url,
+                ];
+            }
+        }
+
+        foreach ($engagements as $storyId => $engagement) {
+            $engagements[$storyId]['likers'] = array_values($engagement['likers']);
+            $engagements[$storyId]['like_count'] = count($engagements[$storyId]['likers']);
+        }
+
+        return $engagements;
     }
 
     protected function storeSyncedStories(object $workspace, ProviderConnection $connection, array $remoteStories): void
@@ -745,26 +826,131 @@ class SocialController extends Controller
         $size = (int) $file->getSize();
 
         if ($mediaType === 'IMAGE') {
-            if (! in_array($mime, ['image/jpeg', 'image/jpg'], true)) {
-                return 'Instagram Story image uploads must be JPEG.';
-            }
-
             if ($size > 8 * 1024 * 1024) {
-                return 'Instagram Story image uploads must be 8 MB or smaller.';
+                return 'Instagram Story image source uploads must be 8 MB or smaller before conversion.';
             }
 
             return null;
         }
 
-        if (! in_array($mime, ['video/mp4', 'video/quicktime'], true)) {
-            return 'Instagram Story videos must be MP4 or MOV.';
-        }
-
         if ($size > 100 * 1024 * 1024) {
-            return 'Instagram Story videos must be 100 MB or smaller.';
+            return 'Instagram Story video source uploads must be 100 MB or smaller before conversion.';
         }
 
         return null;
+    }
+
+    protected function prepareStoryUploadForInstagram(
+        \Illuminate\Http\UploadedFile $file,
+        string $mediaType,
+        string $fit,
+        float $zoom,
+        float $offsetX,
+        float $offsetY
+    ): array {
+        return $mediaType === 'VIDEO'
+            ? $this->prepareStoryVideoUploadForInstagram($file, $fit)
+            : $this->prepareStoryImageUploadForInstagram($file, $fit, $zoom, $offsetX, $offsetY);
+    }
+
+    protected function prepareStoryImageUploadForInstagram(
+        \Illuminate\Http\UploadedFile $file,
+        string $fit,
+        float $zoom,
+        float $offsetX,
+        float $offsetY
+    ): array {
+        $source = @imagecreatefromstring((string) file_get_contents($file->getRealPath()));
+
+        if (! $source) {
+            throw new \RuntimeException('Unsupported image file. Please upload a standard image file.');
+        }
+
+        $sourceWidth = imagesx($source);
+        $sourceHeight = imagesy($source);
+        $targetWidth = 1080;
+        $targetHeight = 1920;
+        $canvas = imagecreatetruecolor($targetWidth, $targetHeight);
+        $background = imagecolorallocate($canvas, 0, 0, 0);
+        imagefill($canvas, 0, 0, $background);
+
+        $baseScale = $fit === 'contain'
+            ? min($targetWidth / $sourceWidth, $targetHeight / $sourceHeight)
+            : max($targetWidth / $sourceWidth, $targetHeight / $sourceHeight);
+        $scale = max(0.5, min($zoom, 2.5)) * $baseScale;
+        $drawWidth = (int) round($sourceWidth * $scale);
+        $drawHeight = (int) round($sourceHeight * $scale);
+        $drawX = (int) round(($targetWidth - $drawWidth) / 2 + (($offsetX / 100) * ($targetWidth / 2)));
+        $drawY = (int) round(($targetHeight - $drawHeight) / 2 + (($offsetY / 100) * ($targetHeight / 2)));
+
+        imagecopyresampled($canvas, $source, $drawX, $drawY, 0, 0, $drawWidth, $drawHeight, $sourceWidth, $sourceHeight);
+
+        $storedPath = 'social/stories/' . Str::uuid() . '.jpg';
+        $absolutePath = Storage::disk('public')->path($storedPath);
+
+        if (! is_dir(dirname($absolutePath))) {
+            mkdir(dirname($absolutePath), 0775, true);
+        }
+
+        imagejpeg($canvas, $absolutePath, 90);
+        imagedestroy($source);
+        imagedestroy($canvas);
+
+        return [
+            'stored_path' => $storedPath,
+            'media_url' => url(Storage::url($storedPath)),
+            'media_type' => 'IMAGE',
+            'mime_type' => 'image/jpeg',
+            'normalized' => true,
+        ];
+    }
+
+    protected function prepareStoryVideoUploadForInstagram(\Illuminate\Http\UploadedFile $file, string $fit): array
+    {
+        $storedPath = 'social/stories/' . Str::uuid() . '.mp4';
+        $absolutePath = Storage::disk('public')->path($storedPath);
+
+        if (! is_dir(dirname($absolutePath))) {
+            mkdir(dirname($absolutePath), 0775, true);
+        }
+
+        $filter = $fit === 'contain'
+            ? 'scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black'
+            : 'scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920';
+
+        $process = new Process([
+            'ffmpeg',
+            '-y',
+            '-i',
+            $file->getRealPath(),
+            '-vf',
+            $filter,
+            '-c:v',
+            'libx264',
+            '-preset',
+            'veryfast',
+            '-pix_fmt',
+            'yuv420p',
+            '-c:a',
+            'aac',
+            '-movflags',
+            '+faststart',
+            $absolutePath,
+        ]);
+        $process->setTimeout(300);
+        $process->run();
+
+        if (! $process->isSuccessful()) {
+            throw new \RuntimeException('Video conversion failed. Please try an MP4 or MOV file.');
+        }
+
+        return [
+            'stored_path' => $storedPath,
+            'media_url' => url(Storage::url($storedPath)),
+            'media_type' => 'VIDEO',
+            'mime_type' => 'video/mp4',
+            'normalized' => true,
+        ];
     }
 
     protected function storyResponsePayload(SocialStory $story): array
@@ -793,8 +979,13 @@ class SocialController extends Controller
 
         $validated = $request->validate([
             'media_type' => ['required', 'in:IMAGE,VIDEO'],
-            'story_file' => ['nullable', 'file', 'mimetypes:image/jpeg,video/mp4,video/quicktime', 'max:102400'],
+            'story_file' => ['nullable', 'file', 'mimetypes:image/jpeg,image/png,image/webp,image/gif,image/bmp,video/mp4,video/quicktime,video/webm,video/x-msvideo,video/x-matroska', 'max:102400'],
             'media_url' => ['nullable', 'url', 'max:2048'],
+            'story_fit' => ['nullable', 'string', 'in:cover,contain'],
+            'story_zoom' => ['nullable', 'numeric', 'min:0.5', 'max:2.5'],
+            'story_offset_x' => ['nullable', 'numeric', 'min:-100', 'max:100'],
+            'story_offset_y' => ['nullable', 'numeric', 'min:-100', 'max:100'],
+            'story_confirmed' => ['accepted'],
         ]);
 
         $requestedMediaType = (string) $validated['media_type'];
@@ -802,6 +993,10 @@ class SocialController extends Controller
         $uploadedFileKind = $this->detectStoryFileKind($uploadedFile);
         $mediaUrlKind = $this->detectStoryUrlKind($validated['media_url'] ?? null);
         $uploadValidationError = $this->validateStoryUploadForInstagram($uploadedFile, $requestedMediaType);
+        $storyFit = (string) ($validated['story_fit'] ?? 'cover');
+        $storyZoom = (float) ($validated['story_zoom'] ?? 1);
+        $storyOffsetX = (float) ($validated['story_offset_x'] ?? 0);
+        $storyOffsetY = (float) ($validated['story_offset_y'] ?? 0);
 
         if (! $uploadedFile && empty($validated['media_url'])) {
             if ($request->expectsJson()) {
@@ -847,8 +1042,16 @@ class SocialController extends Controller
         $storedPath = null;
 
         if ($request->hasFile('story_file')) {
-            $storedPath = $request->file('story_file')->store('social/stories', 'public');
-            $resolvedMediaUrl = url(Storage::url($storedPath));
+            $preparedUpload = $this->prepareStoryUploadForInstagram(
+                $request->file('story_file'),
+                $requestedMediaType,
+                $storyFit,
+                $storyZoom,
+                $storyOffsetX,
+                $storyOffsetY
+            );
+            $storedPath = $preparedUpload['stored_path'];
+            $resolvedMediaUrl = $preparedUpload['media_url'];
         } elseif (!empty($validated['media_url'])) {
             $resolvedMediaUrl = $validated['media_url'];
         }
@@ -905,6 +1108,12 @@ class SocialController extends Controller
                 'resolved_media_url' => $resolvedMediaUrl,
                 'media_type' => $requestedMediaType,
                 'published_from' => 'leadochat_social_stories',
+                'preview_settings' => [
+                    'fit' => $storyFit,
+                    'zoom' => $storyZoom,
+                    'offset_x' => $storyOffsetX,
+                    'offset_y' => $storyOffsetY,
+                ],
             ]);
             $story->save();
 

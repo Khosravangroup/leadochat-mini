@@ -267,6 +267,30 @@
             gap: .28rem;
         }
 
+        .lc-story-reply-preview {
+            display: grid;
+            grid-template-columns: 54px minmax(0, 1fr);
+            gap: .55rem;
+            align-items: center;
+        }
+
+        .lc-story-reply-thumb {
+            width: 54px;
+            height: 96px;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #1e1b4b;
+            border: 1px solid #ddd6fe;
+        }
+
+        .lc-story-reply-thumb img,
+        .lc-story-reply-thumb video {
+            display: block;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
         .lc-comment-reply-box {
             margin-bottom: .45rem;
             border: 1px solid #bae6fd;
@@ -2121,6 +2145,19 @@
                                         $storyReplyContext = is_array($messageMeta['story_context'] ?? null)
                                             ? $messageMeta['story_context']
                                             : [];
+                                        $storyPreview = is_array($messageMeta['story_preview'] ?? null)
+                                            ? $messageMeta['story_preview']
+                                            : [];
+                                        $storyPreviewMediaUrl = is_string($storyPreview['thumbnail_url'] ?? null) && $storyPreview['thumbnail_url'] !== ''
+                                            ? $storyPreview['thumbnail_url']
+                                            : (is_string($storyPreview['media_url'] ?? null) && $storyPreview['media_url'] !== ''
+                                                ? $storyPreview['media_url']
+                                                : (is_string($storyReplyContext['thumbnail_url'] ?? null) && $storyReplyContext['thumbnail_url'] !== ''
+                                                    ? $storyReplyContext['thumbnail_url']
+                                                    : (is_string($storyReplyContext['media_url'] ?? null) && $storyReplyContext['media_url'] !== ''
+                                                        ? $storyReplyContext['media_url']
+                                                        : (is_string($storyReplyContext['url'] ?? null) ? $storyReplyContext['url'] : null))));
+                                        $storyPreviewMediaType = strtoupper((string) ($storyPreview['media_type'] ?? 'IMAGE'));
                                         $storyReplyReferral = is_array($messageMeta['referral'] ?? null)
                                             ? $messageMeta['referral']
                                             : [];
@@ -2190,6 +2227,21 @@
 
                                                     <div class="lc-story-reply-box">
                                                         <div class="lc-story-reply-title">Instagram story context</div>
+
+                                                        @if ($storyPreviewMediaUrl)
+                                                            <div class="lc-story-reply-preview">
+                                                                <div class="lc-story-reply-thumb">
+                                                                    @if ($storyPreviewMediaType === 'VIDEO')
+                                                                        <video src="{{ $storyPreviewMediaUrl }}" muted playsinline preload="metadata"></video>
+                                                                    @else
+                                                                        <img src="{{ $storyPreviewMediaUrl }}" alt="Story thumbnail">
+                                                                    @endif
+                                                                </div>
+                                                                <div class="lc-story-reply-text">
+                                                                    Reply to your Instagram Story
+                                                                </div>
+                                                            </div>
+                                                        @endif
 
                                                         <div class="lc-story-reply-meta">
                                                             @if ($storyReplyContextType)

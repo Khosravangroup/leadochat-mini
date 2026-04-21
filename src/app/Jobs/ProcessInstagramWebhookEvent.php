@@ -6,6 +6,7 @@ use App\Events\WorkspaceRealtimeUpdated;
 use App\Models\ProviderConnection;
 use App\Models\SocialComment;
 use App\Models\SocialPost;
+use App\Models\SocialStory;
 use App\Models\WebhookEvent;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -723,6 +724,7 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
             $storyId = is_string($normalized['story_id'] ?? null) && $normalized['story_id'] !== ''
                 ? $normalized['story_id']
                 : null;
+            $storyPreview = $storyId ? $this->resolveStoryPreviewForMessage($conversation, $storyId) : null;
 
             if ($providerMessageId === '') {
                 $providerMessageId = $this->buildFallbackProviderMessageId($conversation, $normalized) ?? '';
@@ -760,6 +762,7 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
                 'referral' => is_array($normalized['referral'] ?? null) ? $normalized['referral'] : [],
                 'reaction' => is_array($normalized['reaction'] ?? null) ? $normalized['reaction'] : [],
                 'story_context' => is_array($normalized['story_context'] ?? null) ? $normalized['story_context'] : [],
+                'story_preview' => $storyPreview,
             ]);
             $message->save();
 
@@ -867,6 +870,33 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
         return [
             'message_id' => $message->id,
             'skipped_reason' => null,
+        ];
+    }
+
+    protected function resolveStoryPreviewForMessage(Conversation $conversation, string $storyId): ?array
+    {
+        $story = SocialStory::query()
+            ->where('workspace_id', $conversation->workspace_id)
+            ->where('provider', 'instagram')
+            ->where('provider_story_id', $storyId)
+            ->when($conversation->provider_connection_id, fn ($query) => $query->where('provider_connection_id', $conversation->provider_connection_id))
+            ->latest('posted_at')
+            ->latest('id')
+            ->first();
+
+        if (! $story) {
+            return null;
+        }
+
+        $raw = is_array($story->raw) ? $story->raw : [];
+
+        return [
+            'provider_story_id' => $story->provider_story_id,
+            'media_url' => $story->media_url,
+            'thumbnail_url' => $story->thumbnail_url,
+            'media_type' => $raw['media_type'] ?? $raw['remote_story']['media_type'] ?? null,
+            'posted_at' => optional($story->posted_at)->toIso8601String(),
+            'expires_at' => optional($story->expires_at)->toIso8601String(),
         ];
     }
 

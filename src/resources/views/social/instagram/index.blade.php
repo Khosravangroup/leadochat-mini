@@ -755,9 +755,12 @@
                 gap: 6px;
                 justify-items: center;
                 color: #334155;
-                text-decoration: none;
+                border: 0;
+                background: transparent;
+                padding: 0;
                 font-size: 11px;
                 font-weight: 800;
+                cursor: pointer;
             }
 
             .social-story-ring-media {
@@ -933,7 +936,13 @@
                 width: 100%;
                 height: 100%;
                 object-fit: cover;
+                transform: translate(var(--story-offset-x, 0%), var(--story-offset-y, 0%)) scale(var(--story-zoom, 1));
                 background: #0f172a;
+            }
+
+            .social-story-preview-box.is-contain .social-story-preview-image,
+            .social-story-preview-box.is-contain .social-story-preview-video {
+                object-fit: contain;
             }
 
             .social-story-preview-image[hidden],
@@ -952,6 +961,105 @@
                 font-size: 12px;
                 line-height: 1.6;
                 color: #475569;
+            }
+
+            .social-story-preview-controls {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 10px;
+            }
+
+            .social-story-preview-controls input[type="range"] {
+                width: 100%;
+            }
+
+            .social-story-confirm {
+                display: flex;
+                align-items: flex-start;
+                gap: 8px;
+                font-size: 12px;
+                line-height: 1.5;
+                color: #334155;
+                font-weight: 700;
+            }
+
+            .social-story-view-button {
+                border: 0;
+                padding: 0;
+                width: 100%;
+                background: transparent;
+                cursor: pointer;
+            }
+
+            .social-story-viewer {
+                position: fixed;
+                inset: 0;
+                z-index: 60;
+                display: none;
+                align-items: center;
+                justify-content: center;
+                padding: 20px;
+            }
+
+            .social-story-viewer.is-open {
+                display: flex;
+            }
+
+            .social-story-viewer-backdrop {
+                position: absolute;
+                inset: 0;
+                background: rgba(15, 23, 42, .72);
+            }
+
+            .social-story-viewer-card {
+                position: relative;
+                width: min(92vw, 380px);
+                background: #020617;
+                border-radius: 8px;
+                overflow: hidden;
+                color: #fff;
+                box-shadow: 0 24px 80px rgba(15, 23, 42, .45);
+            }
+
+            .social-story-viewer-media {
+                width: 100%;
+                aspect-ratio: 9 / 16;
+                background: #020617;
+            }
+
+            .social-story-viewer-media img,
+            .social-story-viewer-media video {
+                width: 100%;
+                height: 100%;
+                object-fit: contain;
+                display: block;
+            }
+
+            .social-story-viewer-info {
+                position: absolute;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                padding: 56px 14px 14px;
+                background: linear-gradient(180deg, rgba(2, 6, 23, 0), rgba(2, 6, 23, .82));
+                display: grid;
+                gap: 6px;
+                font-size: 12px;
+            }
+
+            .social-story-viewer-close {
+                position: absolute;
+                top: 10px;
+                right: 10px;
+                z-index: 2;
+                width: 32px;
+                height: 32px;
+                border: 0;
+                border-radius: 999px;
+                background: rgba(15, 23, 42, .72);
+                color: #fff;
+                font-size: 20px;
+                cursor: pointer;
             }
 
             .social-story-progress {
@@ -1888,8 +1996,19 @@
                                         $storyRaw = is_array($story->raw) ? $story->raw : [];
                                         $storyMediaUrl = $story->thumbnail_url ?: $story->media_url;
                                         $storyMediaType = strtoupper((string) ($storyRaw['media_type'] ?? $storyRaw['remote_story']['media_type'] ?? 'IMAGE'));
+                                        $storyEngagement = ($storyEngagements ?? [])[$story->provider_story_id] ?? ['reply_count' => 0, 'like_count' => 0, 'likers' => []];
                                     @endphp
-                                    <div class="social-story-ring">
+                                    <button
+                                        type="button"
+                                        class="social-story-ring"
+                                        data-story-view-url="{{ $story->media_url ?: $story->thumbnail_url }}"
+                                        data-story-view-type="{{ $storyMediaType }}"
+                                        data-story-view-title="{{ $activeInstagramConnection?->provider_account_name ?: 'Instagram Story' }}"
+                                        data-story-view-meta="{{ $story->posted_at ? $story->posted_at->format('Y-m-d H:i') : 'Published Story' }}"
+                                        data-story-view-likes="{{ $storyEngagement['like_count'] ?? 0 }}"
+                                        data-story-view-replies="{{ $storyEngagement['reply_count'] ?? 0 }}"
+                                        data-story-view-likers="{{ collect($storyEngagement['likers'] ?? [])->pluck('name')->take(8)->implode(', ') }}"
+                                    >
                                         <div class="social-story-ring-media">
                                             <div class="social-story-ring-media-inner">
                                                 @if ($storyMediaUrl && $storyMediaType === 'VIDEO')
@@ -1900,7 +2019,7 @@
                                             </div>
                                         </div>
                                         <span>{{ $activeInstagramConnection?->provider_account_name ?: 'Story' }}</span>
-                                    </div>
+                                    </button>
                                 @endforeach
                             </div>
                         @endif
@@ -1927,6 +2046,10 @@
                                 >
                                     @csrf
                                     <input type="hidden" name="instagram_account" value="{{ $selectedInstagramAccountId }}">
+                                    <input type="hidden" name="story_fit" value="cover">
+                                    <input type="hidden" name="story_zoom" value="1">
+                                    <input type="hidden" name="story_offset_x" value="0">
+                                    <input type="hidden" name="story_offset_y" value="0">
 
                                     <div class="social-placeholder-label">Publish Story</div>
 
@@ -1952,7 +2075,7 @@
                                                 type="file"
                                                 name="story_file"
                                                 class="social-story-file"
-                                                accept="image/jpeg,video/mp4,video/quicktime"
+                                                accept="image/*,video/*"
                                                 {{ $storyPublishEnabled ? '' : 'disabled' }}
                                             >
                                             @error('story_file')
@@ -1976,9 +2099,39 @@
                                         @enderror
                                     </div>
 
+                                    <div class="social-story-preview-controls">
+                                        <div class="social-story-field">
+                                            <label class="social-story-label">Preview fit</label>
+                                            <select id="story-fit-control" class="social-story-select" {{ $storyPublishEnabled ? '' : 'disabled' }}>
+                                                <option value="cover">Fill 9:16 frame</option>
+                                                <option value="contain">Fit whole media</option>
+                                            </select>
+                                        </div>
+
+                                        <div class="social-story-field">
+                                            <label class="social-story-label">Size</label>
+                                            <input id="story-zoom-control" type="range" min="0.5" max="2.5" step="0.05" value="1" {{ $storyPublishEnabled ? '' : 'disabled' }}>
+                                        </div>
+
+                                        <div class="social-story-field">
+                                            <label class="social-story-label">Horizontal position</label>
+                                            <input id="story-offset-x-control" type="range" min="-100" max="100" step="1" value="0" {{ $storyPublishEnabled ? '' : 'disabled' }}>
+                                        </div>
+
+                                        <div class="social-story-field">
+                                            <label class="social-story-label">Vertical position</label>
+                                            <input id="story-offset-y-control" type="range" min="-100" max="100" step="1" value="0" {{ $storyPublishEnabled ? '' : 'disabled' }}>
+                                        </div>
+                                    </div>
+
+                                    <label class="social-story-confirm">
+                                        <input type="checkbox" name="story_confirmed" value="1" {{ $storyPublishEnabled ? '' : 'disabled' }}>
+                                        <span>I confirm the preview framing is ready to publish.</span>
+                                    </label>
+
                                     <div class="social-story-limits">
-                                        <div>Use one media item only. Recommended size is 1080 × 1920, 9:16.</div>
-                                        <div>Image: JPEG, max 8 MB. Video: MP4 or MOV, 3-60 seconds, max 100 MB.</div>
+                                        <div>Use one media item only. Final media is normalized to 1080 × 1920, 9:16.</div>
+                                        <div>Images are converted to JPEG. Videos are converted to MP4 when the server supports conversion.</div>
                                         <div>Instagram API publishing does not support Story text overlays, stickers, links, polls, music, or captions.</div>
                                     </div>
 
@@ -2028,28 +2181,41 @@
                                         $storyMediaUrl = $story->media_url ?: $story->thumbnail_url;
                                         $storyMediaType = strtoupper((string) ($storyRaw['media_type'] ?? $storyRaw['remote_story']['media_type'] ?? 'IMAGE'));
                                         $storyStatus = strtolower((string) ($story->status ?: 'draft'));
+                                        $storyEngagement = ($storyEngagements ?? [])[$story->provider_story_id] ?? ['reply_count' => 0, 'like_count' => 0, 'likers' => []];
                                     @endphp
                                     <div class="social-story-card">
                                         <div class="social-story-media">
-                                            @if ($storyMediaUrl && $storyMediaType === 'VIDEO')
-                                                <video
-                                                    src="{{ $storyMediaUrl }}"
-                                                    class="social-story-video"
-                                                    controls
-                                                    playsinline
-                                                    preload="metadata"
-                                                ></video>
-                                            @elseif ($storyMediaUrl)
-                                                <img
-                                                    src="{{ $storyMediaUrl }}"
-                                                    alt="Instagram story {{ $story->provider_story_id }}"
-                                                    class="social-story-image"
-                                                >
-                                            @else
-                                                <div class="social-story-fallback">
-                                                    Story preview is not available yet
-                                                </div>
-                                            @endif
+                                            <button
+                                                type="button"
+                                                class="social-story-view-button"
+                                                data-story-view-url="{{ $storyMediaUrl }}"
+                                                data-story-view-type="{{ $storyMediaType }}"
+                                                data-story-view-title="{{ $activeInstagramConnection?->provider_account_name ?: 'Instagram Story' }}"
+                                                data-story-view-meta="{{ $story->posted_at ? $story->posted_at->format('Y-m-d H:i') : 'Published Story' }}"
+                                                data-story-view-likes="{{ $storyEngagement['like_count'] ?? 0 }}"
+                                                data-story-view-replies="{{ $storyEngagement['reply_count'] ?? 0 }}"
+                                                data-story-view-likers="{{ collect($storyEngagement['likers'] ?? [])->pluck('name')->take(8)->implode(', ') }}"
+                                            >
+                                                @if ($storyMediaUrl && $storyMediaType === 'VIDEO')
+                                                    <video
+                                                        src="{{ $storyMediaUrl }}"
+                                                        class="social-story-video"
+                                                        muted
+                                                        playsinline
+                                                        preload="metadata"
+                                                    ></video>
+                                                @elseif ($storyMediaUrl)
+                                                    <img
+                                                        src="{{ $storyMediaUrl }}"
+                                                        alt="Instagram story {{ $story->provider_story_id }}"
+                                                        class="social-story-image"
+                                                    >
+                                                @else
+                                                    <div class="social-story-fallback">
+                                                        Story preview is not available yet
+                                                    </div>
+                                                @endif
+                                            </button>
                                         </div>
 
                                         <div class="social-story-body">
@@ -2072,8 +2238,19 @@
                                                 </span>
                                             </div>
 
+                                            <div class="social-story-meta">
+                                                <span class="social-post-badge">♥ {{ $storyEngagement['like_count'] ?? 0 }} captured likes</span>
+                                                <span class="social-post-badge">↩ {{ $storyEngagement['reply_count'] ?? 0 }} replies</span>
+                                            </div>
+
+                                            @if (!empty($storyEngagement['likers']))
+                                                <div class="social-story-help">
+                                                    Liked by {{ collect($storyEngagement['likers'])->pluck('name')->take(5)->implode(', ') }}
+                                                </div>
+                                            @endif
+
                                             <div class="social-story-actions">
-                                                <form method="POST" action="{{ route('social.instagram.stories.delete', $story) }}">
+                                                <form method="POST" action="{{ route('social.instagram.stories.delete', $story) }}" data-story-delete-form>
                                                     @csrf
                                                     @method('DELETE')
                                                     <input type="hidden" name="instagram_account" value="{{ $selectedInstagramAccountId }}">
@@ -2087,6 +2264,20 @@
                                 @endforeach
                             </div>
                         @endif
+                    </div>
+
+                    <div class="social-story-viewer" id="social-story-viewer" aria-hidden="true">
+                        <div class="social-story-viewer-backdrop" data-story-viewer-close></div>
+                        <div class="social-story-viewer-card" role="dialog" aria-modal="true" aria-label="Story viewer">
+                            <button type="button" class="social-story-viewer-close" data-story-viewer-close aria-label="Close">×</button>
+                            <div class="social-story-viewer-media" id="social-story-viewer-media"></div>
+                            <div class="social-story-viewer-info">
+                                <strong id="social-story-viewer-title">Instagram Story</strong>
+                                <span id="social-story-viewer-meta"></span>
+                                <span id="social-story-viewer-engagement"></span>
+                                <span id="social-story-viewer-likers"></span>
+                            </div>
+                        </div>
                     </div>
                 @endif
 
@@ -2141,6 +2332,7 @@
                             }
 
                             bindStoryPublisher();
+                            bindStoryViewerAndDeletes();
 
                             restoreSocialState();
                             return true;
@@ -2387,9 +2579,32 @@
                             const fileInput = form?.querySelector('input[name="story_file"]');
                             const mediaUrlInput = form?.querySelector('input[name="media_url"]');
                             const mediaTypeInput = form?.querySelector('select[name="media_type"]');
+                            const previewBox = document.getElementById('story-preview-box');
+                            const fitControl = document.getElementById('story-fit-control');
+                            const zoomControl = document.getElementById('story-zoom-control');
+                            const offsetXControl = document.getElementById('story-offset-x-control');
+                            const offsetYControl = document.getElementById('story-offset-y-control');
                             const selectedFile = fileInput?.files && fileInput.files[0] ? fileInput.files[0] : null;
                             const mediaUrl = mediaUrlInput ? mediaUrlInput.value.trim() : '';
                             const selectedMediaType = mediaTypeInput ? mediaTypeInput.value : 'IMAGE';
+                            const fit = fitControl?.value || 'cover';
+                            const zoom = zoomControl?.value || '1';
+                            const offsetX = offsetXControl?.value || '0';
+                            const offsetY = offsetYControl?.value || '0';
+
+                            const fitInput = form?.querySelector('input[name="story_fit"]');
+                            const zoomInput = form?.querySelector('input[name="story_zoom"]');
+                            const offsetXInput = form?.querySelector('input[name="story_offset_x"]');
+                            const offsetYInput = form?.querySelector('input[name="story_offset_y"]');
+
+                            if (fitInput) fitInput.value = fit;
+                            if (zoomInput) zoomInput.value = zoom;
+                            if (offsetXInput) offsetXInput.value = offsetX;
+                            if (offsetYInput) offsetYInput.value = offsetY;
+                            previewBox?.classList.toggle('is-contain', fit === 'contain');
+                            previewBox?.style.setProperty('--story-zoom', zoom);
+                            previewBox?.style.setProperty('--story-offset-x', `${offsetX}%`);
+                            previewBox?.style.setProperty('--story-offset-y', `${offsetY}%`);
 
                             if (storyPreviewObjectUrl) {
                                 URL.revokeObjectURL(storyPreviewObjectUrl);
@@ -2434,6 +2649,10 @@
                             const fileInput = form.querySelector('input[name="story_file"]');
                             const mediaUrlInput = form.querySelector('input[name="media_url"]');
                             const mediaTypeInput = form.querySelector('select[name="media_type"]');
+                            const fitControl = document.getElementById('story-fit-control');
+                            const zoomControl = document.getElementById('story-zoom-control');
+                            const offsetXControl = document.getElementById('story-offset-x-control');
+                            const offsetYControl = document.getElementById('story-offset-y-control');
                             const submitButton = form.querySelector('button[type="submit"]');
 
                             fileInput?.addEventListener('change', function () {
@@ -2452,12 +2671,22 @@
 
                             mediaUrlInput?.addEventListener('input', updateStoryPreview);
                             mediaTypeInput?.addEventListener('change', updateStoryPreview);
+                            fitControl?.addEventListener('change', updateStoryPreview);
+                            zoomControl?.addEventListener('input', updateStoryPreview);
+                            offsetXControl?.addEventListener('input', updateStoryPreview);
+                            offsetYControl?.addEventListener('input', updateStoryPreview);
                             updateStoryPreview();
 
                             form.addEventListener('submit', function (event) {
                                 event.preventDefault();
 
                                 const selectedFile = fileInput?.files && fileInput.files[0] ? fileInput.files[0] : null;
+                                const confirmed = form.querySelector('input[name="story_confirmed"]')?.checked;
+
+                                if (!confirmed) {
+                                    setStoryMessage('Please confirm the Story preview before publishing.', true);
+                                    return;
+                                }
 
                                 if (selectedFile && mediaTypeInput?.value === 'IMAGE' && selectedFile.size > 8 * 1024 * 1024) {
                                     setStoryMessage('Image Stories must be 8 MB or smaller.', true);
@@ -2540,7 +2769,80 @@
                             });
                         };
 
+                        const bindStoryViewerAndDeletes = function () {
+                            const viewer = document.getElementById('social-story-viewer');
+                            const mediaBox = document.getElementById('social-story-viewer-media');
+                            const title = document.getElementById('social-story-viewer-title');
+                            const meta = document.getElementById('social-story-viewer-meta');
+                            const engagement = document.getElementById('social-story-viewer-engagement');
+                            const likers = document.getElementById('social-story-viewer-likers');
+
+                            document.querySelectorAll('[data-story-view-url]').forEach(function (button) {
+                                if (button.dataset.bound === '1') {
+                                    return;
+                                }
+
+                                button.dataset.bound = '1';
+                                button.addEventListener('click', function () {
+                                    const url = button.getAttribute('data-story-view-url') || '';
+                                    const type = button.getAttribute('data-story-view-type') || 'IMAGE';
+
+                                    if (!viewer || !mediaBox || !url) {
+                                        return;
+                                    }
+
+                                    mediaBox.innerHTML = type === 'VIDEO'
+                                        ? `<video src="${url}" controls autoplay playsinline></video>`
+                                        : `<img src="${url}" alt="Instagram Story">`;
+
+                                    if (title) title.textContent = button.getAttribute('data-story-view-title') || 'Instagram Story';
+                                    if (meta) meta.textContent = button.getAttribute('data-story-view-meta') || '';
+                                    if (engagement) {
+                                        engagement.textContent = `♥ ${button.getAttribute('data-story-view-likes') || '0'} captured likes · ↩ ${button.getAttribute('data-story-view-replies') || '0'} replies`;
+                                    }
+                                    if (likers) {
+                                        const names = button.getAttribute('data-story-view-likers') || '';
+                                        likers.textContent = names ? `Liked by ${names}` : 'No captured Story likes yet';
+                                    }
+
+                                    viewer.classList.add('is-open');
+                                    viewer.setAttribute('aria-hidden', 'false');
+                                });
+                            });
+
+                            document.querySelectorAll('[data-story-viewer-close]').forEach(function (closer) {
+                                if (closer.dataset.bound === '1') {
+                                    return;
+                                }
+
+                                closer.dataset.bound = '1';
+                                closer.addEventListener('click', function () {
+                                    if (!viewer || !mediaBox) {
+                                        return;
+                                    }
+
+                                    viewer.classList.remove('is-open');
+                                    viewer.setAttribute('aria-hidden', 'true');
+                                    mediaBox.innerHTML = '';
+                                });
+                            });
+
+                            document.querySelectorAll('[data-story-delete-form]').forEach(function (form) {
+                                if (form.dataset.bound === '1') {
+                                    return;
+                                }
+
+                                form.dataset.bound = '1';
+                                form.addEventListener('submit', function (event) {
+                                    if (!window.confirm('Remove this Story from the Leadochat list? This does not delete it from Instagram.')) {
+                                        event.preventDefault();
+                                    }
+                                });
+                            });
+                        };
+
                         bindStoryPublisher();
+                        bindStoryViewerAndDeletes();
 
                         if (!workspaceId || !window.Echo) {
                             return;
