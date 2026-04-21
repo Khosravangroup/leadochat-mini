@@ -53,6 +53,7 @@
         .ws-nav-link {
             display: flex;
             align-items: center;
+            justify-content: space-between;
             min-height: 40px;
             padding: 0 12px;
             border-radius: 10px;
@@ -73,6 +74,30 @@
             background: #eef2ff;
             color: #4338ca;
             border-color: #c7d2fe;
+        }
+
+        .ws-nav-link-text {
+            min-width: 0;
+        }
+
+        .ws-nav-pill {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 20px;
+            padding: 0 8px;
+            border-radius: 999px;
+            background: #f1f5f9;
+            color: #64748b;
+            font-size: 10px;
+            font-weight: 800;
+            line-height: 1;
+            white-space: nowrap;
+        }
+
+        .ws-nav-link.is-active .ws-nav-pill {
+            background: #c7d2fe;
+            color: #3730a3;
         }
 
         .ws-section-title {
@@ -137,7 +162,10 @@
                             href="{{ route('settings.index', ['section' => $key]) }}"
                             class="ws-nav-link {{ $section === $key ? 'is-active' : '' }}"
                         >
-                            {{ $label }}
+                            <span class="ws-nav-link-text">{{ $label }}</span>
+                            @if (in_array($key, ['automation', 'ai', 'billing', 'security', 'advanced'], true))
+                                <span class="ws-nav-pill">Soon</span>
+                            @endif
                         </a>
                     @endforeach
                 </nav>
@@ -163,6 +191,8 @@
                         Create and manage teammate accounts for this workspace. Every workspace member can manage their own profile details.
                     @elseif ($section === 'channels')
                         Manage connected channels for this workspace. Reuse the existing Instagram flow here and keep Facebook and WhatsApp ready for the next phases.
+                    @elseif (in_array($section, ['automation', 'ai', 'billing', 'security', 'advanced'], true))
+                        This section will be added soon.
                     @else
                         This section is reserved and will be implemented in the next phases.
                     @endif
@@ -1732,6 +1762,10 @@
                                 @endforelse
                             </div>
                         </div>
+                    </div>
+                @elseif (in_array($section, ['automation', 'ai', 'billing', 'security', 'advanced'], true))
+                    <div class="ws-placeholder">
+                        {{ $sections[$section] }} will be added soon.
                     </div>
                 @else
                     <div class="ws-placeholder">

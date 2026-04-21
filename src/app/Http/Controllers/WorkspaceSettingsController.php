@@ -21,7 +21,7 @@ class WorkspaceSettingsController extends Controller
     {
         $user = $request->user();
         $workspace = $user?->currentWorkspace();
-        $section = $request->query('section', 'tags');
+        $section = $request->query('section', 'general');
 
         $sections = [
             'general' => 'General',
@@ -38,7 +38,7 @@ class WorkspaceSettingsController extends Controller
         ];
 
         if (!array_key_exists($section, $sections)) {
-            $section = 'tags';
+            $section = 'general';
         }
 
         $workspaceTags = collect();
