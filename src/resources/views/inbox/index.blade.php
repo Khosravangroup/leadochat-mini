@@ -3032,20 +3032,38 @@
             }
 
             let pendingForm = null;
+            let modalOpenedAt = 0;
+            let openerElement = null;
+            const confirmDelayMs = 250;
 
             const closeModal = () => {
                 modal.classList.remove('is-open');
                 modal.setAttribute('aria-hidden', 'true');
+                modalSubmit.disabled = false;
                 pendingForm = null;
+                modalOpenedAt = 0;
+
+                if (openerElement && document.contains(openerElement)) {
+                    openerElement.focus({ preventScroll: true });
+                }
+
+                openerElement = null;
             };
 
-            const openModal = (form) => {
+            const openModal = (form, trigger = null) => {
                 pendingForm = form;
+                openerElement = trigger?.submitter || trigger?.target?.querySelector?.('button[type="submit"]') || document.activeElement;
+                modalOpenedAt = Date.now();
                 modalTitle.textContent = form.getAttribute('data-confirm-title') || 'Confirm action';
                 modalBody.textContent = form.getAttribute('data-confirm-message') || 'Please confirm this action.';
                 modalSubmit.textContent = form.getAttribute('data-confirm-submit') || 'Confirm';
+                modalSubmit.disabled = false;
                 modal.classList.add('is-open');
                 modal.setAttribute('aria-hidden', 'false');
+
+                requestAnimationFrame(function () {
+                    modalCancel.focus({ preventScroll: true });
+                });
             };
 
             document.addEventListener('submit', function (event) {
@@ -3061,8 +3079,9 @@
                 }
 
                 event.preventDefault();
+                event.stopPropagation();
                 event.stopImmediatePropagation();
-                openModal(form);
+                openModal(form, event);
             });
 
             modal.addEventListener('click', function (event) {
@@ -3071,18 +3090,32 @@
                 }
             });
 
-            modalCancel.addEventListener('click', closeModal);
+            modalCancel.addEventListener('click', function (event) {
+                event.preventDefault();
+                event.stopPropagation();
+                closeModal();
+            });
 
-            modalSubmit.addEventListener('click', function () {
+            modalSubmit.addEventListener('click', function (event) {
+                event.preventDefault();
+                event.stopPropagation();
+
                 if (!pendingForm) {
                     closeModal();
                     return;
                 }
 
-                pendingForm.dataset.confirmed = '1';
+                if (Date.now() - modalOpenedAt < confirmDelayMs) {
+                    return;
+                }
+
                 const form = pendingForm;
-                closeModal();
-                form.requestSubmit();
+                modalSubmit.disabled = true;
+                pendingForm = null;
+                modal.classList.remove('is-open');
+                modal.setAttribute('aria-hidden', 'true');
+
+                HTMLFormElement.prototype.submit.call(form);
             });
 
             document.addEventListener('keydown', function (event) {

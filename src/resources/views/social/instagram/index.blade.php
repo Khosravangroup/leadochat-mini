@@ -2053,6 +2053,128 @@
                                     });
                             };
 
+                            const ensureSocialActionConfirmModal = function () {
+                                let modal = document.getElementById('social-action-confirm-modal');
+
+                                if (!modal) {
+                                    modal = document.createElement('div');
+                                    modal.id = 'social-action-confirm-modal';
+                                    modal.className = 'social-story-confirm-modal';
+                                    modal.setAttribute('aria-hidden', 'true');
+                                    modal.innerHTML = `
+                                        <div class="social-story-confirm-backdrop" data-social-action-confirm-close></div>
+                                        <div class="social-story-confirm-card" role="dialog" aria-modal="true" aria-labelledby="social-action-confirm-title">
+                                            <div id="social-action-confirm-title" class="social-story-confirm-title">Confirm action</div>
+                                            <div id="social-action-confirm-body" class="social-story-confirm-body">Please confirm this action.</div>
+                                            <div class="social-story-confirm-actions">
+                                                <button type="button" class="social-story-confirm-button" id="social-action-confirm-cancel">Cancel</button>
+                                                <button type="button" class="social-story-confirm-button primary" id="social-action-confirm-submit">Confirm</button>
+                                            </div>
+                                        </div>
+                                    `;
+                                    document.body.appendChild(modal);
+                                }
+
+                                return {
+                                    modal,
+                                    title: document.getElementById('social-action-confirm-title'),
+                                    body: document.getElementById('social-action-confirm-body'),
+                                    cancel: document.getElementById('social-action-confirm-cancel'),
+                                    submit: document.getElementById('social-action-confirm-submit'),
+                                };
+                            };
+
+                            window.socialConfirmAction = function (options = {}) {
+                                return new Promise(function (resolve) {
+                                    const refs = ensureSocialActionConfirmModal();
+                                    const openedAt = Date.now();
+                                    const confirmDelayMs = 250;
+
+                                    if (!refs.modal || !refs.title || !refs.body || !refs.cancel || !refs.submit) {
+                                        resolve(false);
+                                        return;
+                                    }
+
+                                    const previousKeydownHandler = refs.modal._socialConfirmKeydownHandler;
+
+                                    if (previousKeydownHandler) {
+                                        document.removeEventListener('keydown', previousKeydownHandler);
+                                    }
+
+                                    let settled = false;
+                                    const settle = function (value) {
+                                        if (settled) {
+                                            return;
+                                        }
+
+                                        settled = true;
+                                        refs.modal.classList.remove('is-open');
+                                        refs.modal.setAttribute('aria-hidden', 'true');
+                                        refs.submit.disabled = false;
+                                        refs.cancel.onclick = null;
+                                        refs.submit.onclick = null;
+                                        refs.modal.onclick = null;
+
+                                        if (refs.modal._socialConfirmKeydownHandler) {
+                                            document.removeEventListener('keydown', refs.modal._socialConfirmKeydownHandler);
+                                            refs.modal._socialConfirmKeydownHandler = null;
+                                        }
+
+                                        resolve(value);
+                                    };
+
+                                    refs.title.textContent = options.title || 'Confirm action';
+                                    refs.body.textContent = options.message || 'Please confirm this action.';
+                                    refs.submit.textContent = options.submitText || 'Confirm';
+                                    refs.submit.disabled = false;
+                                    refs.modal.classList.add('is-open');
+                                    refs.modal.setAttribute('aria-hidden', 'false');
+
+                                    refs.cancel.onclick = function (event) {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        settle(false);
+                                    };
+
+                                    refs.submit.onclick = function (event) {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+
+                                        if (Date.now() - openedAt < confirmDelayMs) {
+                                            return;
+                                        }
+
+                                        refs.submit.disabled = true;
+                                        settle(true);
+                                    };
+
+                                    refs.modal.onclick = function (event) {
+                                        if (event.target.closest('[data-social-action-confirm-close]')) {
+                                            event.preventDefault();
+                                            event.stopPropagation();
+                                            settle(false);
+                                        }
+                                    };
+
+                                    refs.modal._socialConfirmKeydownHandler = function (event) {
+                                        if (!refs.modal.classList.contains('is-open')) {
+                                            return;
+                                        }
+
+                                        if (event.key === 'Escape') {
+                                            event.preventDefault();
+                                            settle(false);
+                                        }
+                                    };
+
+                                    document.addEventListener('keydown', refs.modal._socialConfirmKeydownHandler);
+
+                                    requestAnimationFrame(function () {
+                                        refs.cancel.focus({ preventScroll: true });
+                                    });
+                                });
+                            };
+
                             window.socialBindInlineCommentActions = function () {
                                 document.querySelectorAll('.social-inline-comment-form, .social-inline-post-form').forEach(function (form) {
                                     if (form.dataset.boundSocialForm === '1') {
@@ -2060,12 +2182,21 @@
                                     }
 
                                     form.dataset.boundSocialForm = '1';
-                                    form.addEventListener('submit', function (event) {
+                                    form.addEventListener('submit', async function (event) {
                                         event.preventDefault();
+                                        event.stopPropagation();
 
                                         const confirmMessage = form.getAttribute('data-confirm-message');
-                                        if (confirmMessage && !window.confirm(confirmMessage)) {
-                                            return;
+                                        if (confirmMessage) {
+                                            const confirmed = await window.socialConfirmAction({
+                                                title: form.getAttribute('data-confirm-title') || 'Confirm action',
+                                                message: confirmMessage,
+                                                submitText: form.getAttribute('data-confirm-submit') || 'Confirm',
+                                            });
+
+                                            if (!confirmed) {
+                                                return;
+                                            }
                                         }
 
                                         window.socialSubmitInlineForm(form);
@@ -3640,6 +3771,8 @@
                             const confirmBody = document.getElementById('social-story-confirm-body');
                             const confirmCancel = document.getElementById('social-story-confirm-cancel');
                             const confirmSubmit = document.getElementById('social-story-confirm-submit');
+                            const confirmDelayMs = 250;
+                            let confirmOpenedAt = 0;
 
                             const closeDeleteModal = function () {
                                 if (!confirmModal) {
@@ -3649,6 +3782,7 @@
                                 confirmModal.classList.remove('is-open');
                                 confirmModal.setAttribute('aria-hidden', 'true');
                                 confirmModal.pendingDeleteForm = null;
+                                confirmOpenedAt = 0;
                             };
 
                             const openDeleteModal = function (form) {
@@ -3657,12 +3791,17 @@
                                 }
 
                                 confirmModal.pendingDeleteForm = form;
+                                confirmOpenedAt = Date.now();
                                 confirmTitle.textContent = form.getAttribute('data-confirm-title') || 'Remove Story';
                                 confirmBody.textContent = form.getAttribute('data-confirm-message') || 'Remove this Story from the Leadochat list?';
                                 confirmSubmit.textContent = form.getAttribute('data-confirm-submit') || 'Remove';
                                 confirmSubmit.disabled = false;
                                 confirmModal.classList.add('is-open');
                                 confirmModal.setAttribute('aria-hidden', 'false');
+
+                                requestAnimationFrame(function () {
+                                    confirmCancel?.focus({ preventScroll: true });
+                                });
                             };
 
                             const submitDeleteForm = async function (form) {
@@ -3773,6 +3912,7 @@
                                 form.dataset.bound = '1';
                                 form.addEventListener('submit', function (event) {
                                     event.preventDefault();
+                                    event.stopPropagation();
                                     openDeleteModal(form);
                                 });
                             });
@@ -3788,12 +3928,23 @@
 
                             if (confirmCancel && confirmCancel.dataset.bound !== '1') {
                                 confirmCancel.dataset.bound = '1';
-                                confirmCancel.addEventListener('click', closeDeleteModal);
+                                confirmCancel.addEventListener('click', function (event) {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    closeDeleteModal();
+                                });
                             }
 
                             if (confirmSubmit && confirmSubmit.dataset.bound !== '1') {
                                 confirmSubmit.dataset.bound = '1';
-                                confirmSubmit.addEventListener('click', function () {
+                                confirmSubmit.addEventListener('click', function (event) {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+
+                                    if (Date.now() - confirmOpenedAt < confirmDelayMs) {
+                                        return;
+                                    }
+
                                     submitDeleteForm(confirmModal?.pendingDeleteForm || null);
                                 });
                             }
