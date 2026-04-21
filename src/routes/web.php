@@ -72,6 +72,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::get('/settings', [WorkspaceSettingsController::class, 'index'])->name('settings.index');
     Route::patch('/settings/general', [WorkspaceSettingsController::class, 'updateGeneral'])->name('settings.general.update');
+    Route::post('/settings/team', [WorkspaceSettingsController::class, 'createTeamMember'])->name('settings.team.create');
     Route::post('/settings/tags', [WorkspaceSettingsController::class, 'createTag'])->name('settings.tags.create');
     Route::post('/settings/tags/{tag}', [WorkspaceSettingsController::class, 'updateTag'])->name('settings.tags.update');
     Route::delete('/settings/tags/{tag}', [WorkspaceSettingsController::class, 'deleteTag'])->name('settings.tags.delete');

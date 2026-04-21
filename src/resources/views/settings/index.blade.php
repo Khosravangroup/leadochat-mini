@@ -160,7 +160,7 @@
                     @elseif ($section === 'departments')
                         Manage workspace departments here. Inbox will assign each conversation to one department.
                     @elseif ($section === 'team')
-                        Review workspace members here. For the current MVP, every workspace member is treated as an available agent.
+                        Create and manage teammate accounts for this workspace. Every workspace member can manage their own profile details.
                     @elseif ($section === 'channels')
                         Manage connected channels for this workspace. Reuse the existing Instagram flow here and keep Facebook and WhatsApp ready for the next phases.
                     @else
@@ -1008,6 +1008,7 @@
                         }
 
                         .ws-team-card,
+                        .ws-team-create-card,
                         .ws-team-list-card {
                             border: 1px solid #e2e8f0;
                             border-radius: 14px;
@@ -1032,6 +1033,67 @@
                             align-items: stretch;
                         }
 
+                        .ws-team-form {
+                            display: grid;
+                            gap: 12px;
+                        }
+
+                        .ws-team-form-grid {
+                            display: grid;
+                            grid-template-columns: repeat(2, minmax(0, 1fr));
+                            gap: 10px;
+                        }
+
+                        .ws-team-form-field {
+                            display: grid;
+                            gap: 6px;
+                        }
+
+                        .ws-team-label {
+                            font-size: 12px;
+                            font-weight: 800;
+                            color: #334155;
+                        }
+
+                        .ws-team-input {
+                            width: 100%;
+                            height: 40px;
+                            border: 1px solid #cbd5e1;
+                            border-radius: 10px;
+                            padding: 0 12px;
+                            font-size: 13px;
+                            color: #0f172a;
+                            background: #fff;
+                            outline: none;
+                        }
+
+                        .ws-team-input:focus {
+                            border-color: #818cf8;
+                            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+                        }
+
+                        .ws-team-help {
+                            font-size: 12px;
+                            line-height: 1.5;
+                            color: #64748b;
+                        }
+
+                        .ws-team-error {
+                            font-size: 12px;
+                            font-weight: 700;
+                            color: #dc2626;
+                        }
+
+                        .ws-team-success {
+                            border: 1px solid #bbf7d0;
+                            border-radius: 10px;
+                            background: #f0fdf4;
+                            padding: 10px 12px;
+                            font-size: 13px;
+                            font-weight: 700;
+                            color: #166534;
+                        }
+
                         .ws-team-row {
                             display: flex;
                             align-items: center;
@@ -1043,6 +1105,24 @@
                             border-radius: 12px;
                             background: #fff;
                             padding: 10px 12px;
+                        }
+
+                        .ws-team-left-wrap {
+                            display: flex;
+                            align-items: center;
+                            gap: 10px;
+                            min-width: 0;
+                            flex: 1 1 auto;
+                        }
+
+                        .ws-team-avatar {
+                            width: 42px;
+                            height: 42px;
+                            border-radius: 999px;
+                            object-fit: cover;
+                            flex: 0 0 auto;
+                            border: 1px solid #cbd5e1;
+                            background: #f8fafc;
                         }
 
                         .ws-team-left {
@@ -1102,6 +1182,10 @@
                         }
 
                         @media (max-width: 920px) {
+                            .ws-team-form-grid {
+                                grid-template-columns: 1fr;
+                            }
+
                             .ws-team-row {
                                 flex-direction: column;
                                 align-items: flex-start;
@@ -1116,13 +1200,100 @@
                     <div class="ws-team-shell">
                         <div class="ws-team-card">
                             <div class="ws-section-subtitle" style="margin-top:0; margin-bottom:10px;">
-                                Team members available in this workspace
+                                Workspace team
                             </div>
 
                             <div class="ws-team-note">
-                                In this MVP, every member of the current workspace is treated as an available agent for inbox assignment. Role-based filtering can be added later.
+                                Every member in this workspace can sign in with their own email and password, update their own name, and manage their own profile picture.
                             </div>
                         </div>
+
+                        @if ($canManageTeam)
+                            <div class="ws-team-create-card">
+                                <div class="ws-section-subtitle" style="margin-top:0; margin-bottom:12px;">
+                                    Add team member
+                                </div>
+
+                                @if (session('status'))
+                                    <div class="ws-team-success" style="margin-bottom:12px;">
+                                        {{ session('status') }}
+                                    </div>
+                                @endif
+
+                                <form method="POST" action="{{ route('settings.team.create') }}" class="ws-team-form">
+                                    @csrf
+
+                                    <div class="ws-team-form-grid">
+                                        <div class="ws-team-form-field">
+                                            <label class="ws-team-label" for="wsTeamName">Full name</label>
+                                            <input
+                                                id="wsTeamName"
+                                                name="name"
+                                                type="text"
+                                                class="ws-team-input"
+                                                value="{{ old('name') }}"
+                                                maxlength="255"
+                                                required
+                                            >
+                                            @error('name')
+                                                <div class="ws-team-error">{{ $message }}</div>
+                                            @enderror
+                                        </div>
+
+                                        <div class="ws-team-form-field">
+                                            <label class="ws-team-label" for="wsTeamEmail">Email</label>
+                                            <input
+                                                id="wsTeamEmail"
+                                                name="email"
+                                                type="email"
+                                                class="ws-team-input"
+                                                value="{{ old('email') }}"
+                                                maxlength="255"
+                                                required
+                                            >
+                                            @error('email')
+                                                <div class="ws-team-error">{{ $message }}</div>
+                                            @enderror
+                                        </div>
+                                    </div>
+
+                                    <div class="ws-team-form-grid">
+                                        <div class="ws-team-form-field">
+                                            <label class="ws-team-label" for="wsTeamPassword">Password</label>
+                                            <input
+                                                id="wsTeamPassword"
+                                                name="password"
+                                                type="password"
+                                                class="ws-team-input"
+                                                required
+                                            >
+                                            @error('password')
+                                                <div class="ws-team-error">{{ $message }}</div>
+                                            @enderror
+                                        </div>
+
+                                        <div class="ws-team-form-field">
+                                            <label class="ws-team-label" for="wsTeamPasswordConfirmation">Confirm password</label>
+                                            <input
+                                                id="wsTeamPasswordConfirmation"
+                                                name="password_confirmation"
+                                                type="password"
+                                                class="ws-team-input"
+                                                required
+                                            >
+                                        </div>
+                                    </div>
+
+                                    <div class="ws-team-help">
+                                        The new teammate will be added directly to this workspace and can log in immediately.
+                                    </div>
+
+                                    <div style="display:flex; justify-content:flex-end;">
+                                        <button class="ws-btn" type="submit">Create member</button>
+                                    </div>
+                                </form>
+                            </div>
+                        @endif
 
                         <div class="ws-team-list-card">
                             <div class="ws-section-subtitle" style="margin-top:0; margin-bottom:12px;">
@@ -1131,13 +1302,20 @@
 
                             <div class="ws-team-list">
                                 @forelse ($workspaceMembers as $member)
+                                    @php
+                                        $memberAvatar = $member->avatar_url ?: ('https://ui-avatars.com/api/?name=' . urlencode($member->name ?: 'User') . '&background=e2e8f0&color=334155');
+                                    @endphp
                                     <div class="ws-team-row">
-                                        <div class="ws-team-left">
-                                            <div class="ws-team-name">
-                                                {{ $member->name ?: 'Unnamed user' }}
-                                            </div>
-                                            <div class="ws-team-meta">
-                                                {{ $member->email ?: 'No email' }}
+                                        <div class="ws-team-left-wrap">
+                                            <img class="ws-team-avatar" src="{{ $memberAvatar }}" alt="{{ $member->name ?: 'User' }}">
+
+                                            <div class="ws-team-left">
+                                                <div class="ws-team-name">
+                                                    {{ $member->name ?: 'Unnamed user' }}
+                                                </div>
+                                                <div class="ws-team-meta">
+                                                    {{ $member->email ?: 'No email' }}
+                                                </div>
                                             </div>
                                         </div>
 
@@ -1145,6 +1323,11 @@
                                             <span class="ws-team-role">
                                                 {{ $member->pivot->role ?: 'member' }}
                                             </span>
+                                            @if (auth()->id() === $member->id)
+                                                <span class="ws-team-agent">
+                                                    You
+                                                </span>
+                                            @endif
                                             <span class="ws-team-agent">
                                                 Agent
                                             </span>

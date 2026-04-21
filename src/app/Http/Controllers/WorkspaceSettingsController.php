@@ -4,11 +4,16 @@ namespace App\Http\Controllers;
 
 use App\Models\WorkspaceTag;
 use App\Models\ProviderConnection;
+use App\Models\User;
 use App\Models\WorkspaceDepartment;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rules\Password;
 
 class WorkspaceSettingsController extends Controller
 {
@@ -107,7 +112,49 @@ class WorkspaceSettingsController extends Controller
             'workspaceMembers' => $workspaceMembers,
             'providerConnections' => $providerConnections,
             'providerCards' => $providerCards,
+            'canManageTeam' => $workspace && $user && (
+                (int) $workspace->owner_id === (int) $user->id
+                || $workspace->members()->whereKey($user->id)->wherePivot('role', 'owner')->exists()
+            ),
         ]);
+    }
+
+    public function createTeamMember(Request $request): RedirectResponse
+    {
+        $user = $request->user();
+        $workspace = $user?->currentWorkspace();
+
+        if (! $workspace) {
+            abort(404);
+        }
+
+        $isOwner = (int) $workspace->owner_id === (int) $user->id
+            || $workspace->members()->whereKey($user->id)->wherePivot('role', 'owner')->exists();
+
+        abort_unless($isOwner, 403);
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:users,email'],
+            'password' => ['required', 'confirmed', Password::defaults()],
+        ]);
+
+        DB::transaction(function () use ($workspace, $validated) {
+            $member = User::create([
+                'name' => trim($validated['name']),
+                'email' => Str::lower(trim($validated['email'])),
+                'password' => Hash::make($validated['password']),
+                'email_verified_at' => now(),
+            ]);
+
+            $workspace->members()->attach($member->id, [
+                'role' => 'member',
+            ]);
+        });
+
+        return redirect()->route('settings.index', [
+            'section' => 'team',
+        ])->with('status', 'Team member account created successfully.');
     }
 
     public function updateGeneral(Request $request): RedirectResponse
