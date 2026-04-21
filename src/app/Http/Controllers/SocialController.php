@@ -638,23 +638,57 @@ class SocialController extends Controller
             }
         }
 
+        $this->archiveExpiredStories($workspace, $activeConnection);
+
         $stories = SocialStory::query()
             ->where('workspace_id', $workspace->id)
             ->where('provider', 'instagram')
             ->when($activeConnection, fn ($query) => $query->where('provider_connection_id', $activeConnection->id))
-            ->where('status', '!=', 'deleted')
+            ->whereNotIn('status', ['deleted', 'removed'])
             ->latest('posted_at')
             ->latest('id')
             ->get();
 
-        $pageData['stories'] = $stories;
+        $activeStories = $stories
+            ->filter(fn (SocialStory $story) => strtolower((string) $story->status) !== 'archived'
+                && (! $story->expires_at || $story->expires_at->isFuture()))
+            ->values();
+
+        $archivedStories = $stories
+            ->filter(fn (SocialStory $story) => strtolower((string) $story->status) === 'archived'
+                || ($story->expires_at && $story->expires_at->isPast()))
+            ->values();
+
+        $pageData['stories'] = $activeStories;
+        $pageData['archivedStories'] = $archivedStories;
         $pageData['storyEngagements'] = $this->buildStoryEngagements($workspace, $stories);
         $pageData['storySyncError'] = $syncError;
         $pageData['storySyncResult'] = $syncResult;
         $pageData['storyPublishEnabled'] = (bool) ($activeConnection && $activeConnection->status === 'connected');
-        $pageData['socialCounts']['stories'] = $stories->count();
+        $pageData['socialCounts']['stories'] = $activeStories->count();
+        $pageData['socialCounts']['story_archives'] = $archivedStories->count();
 
         return $pageData;
+    }
+
+    protected function archiveExpiredStories(object $workspace, ?ProviderConnection $connection): void
+    {
+        SocialStory::query()
+            ->where('workspace_id', $workspace->id)
+            ->where('provider', 'instagram')
+            ->when($connection, fn ($query) => $query->where('provider_connection_id', $connection->id))
+            ->whereNotIn('status', ['archived', 'deleted', 'removed'])
+            ->whereNotNull('expires_at')
+            ->where('expires_at', '<=', now())
+            ->get()
+            ->each(function (SocialStory $story) {
+                $story->status = 'archived';
+                $story->raw = array_merge(is_array($story->raw) ? $story->raw : [], [
+                    'archived_from' => 'story_expired',
+                    'archived_at' => now()->toIso8601String(),
+                ]);
+                $story->save();
+            });
     }
 
     protected function buildStoryEngagements(object $workspace, $stories): array
@@ -915,24 +949,43 @@ class SocialController extends Controller
         }
 
         $filter = $fit === 'contain'
-            ? 'scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black'
-            : 'scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920';
+            ? 'scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black,setsar=1,format=yuv420p'
+            : 'scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,format=yuv420p';
 
         $process = new Process([
             'ffmpeg',
             '-y',
             '-i',
             $file->getRealPath(),
+            '-map',
+            '0:v:0',
+            '-map',
+            '0:a?',
+            '-t',
+            '60',
             '-vf',
             $filter,
+            '-r',
+            '30',
             '-c:v',
             'libx264',
+            '-profile:v',
+            'main',
+            '-level',
+            '4.1',
             '-preset',
             'veryfast',
+            '-crf',
+            '23',
             '-pix_fmt',
             'yuv420p',
             '-c:a',
             'aac',
+            '-ar',
+            '44100',
+            '-ac',
+            '2',
+            '-shortest',
             '-movflags',
             '+faststart',
             $absolutePath,
@@ -1151,7 +1204,7 @@ class SocialController extends Controller
         }
     }
 
-    public function deleteInstagramStory(Request $request, SocialStory $story): RedirectResponse
+    public function deleteInstagramStory(Request $request, SocialStory $story): RedirectResponse|JsonResponse
     {
         $workspace = $request->user()?->currentWorkspace();
 
@@ -1162,11 +1215,30 @@ class SocialController extends Controller
         );
 
         try {
-            $story->status = 'deleted';
+            $story->status = 'removed';
+            $story->raw = array_merge(is_array($story->raw) ? $story->raw : [], [
+                'removed_from_leadochat_list_at' => now()->toIso8601String(),
+                'removed_from_leadochat_list_by' => $request->user()?->id,
+            ]);
             $story->save();
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'ok' => true,
+                    'message' => 'Story removed from the Leadochat list.',
+                    'story_id' => $story->id,
+                ]);
+            }
 
             return $this->redirectToInstagramStories($request)->with('social_success', 'Story record deleted successfully.');
         } catch (\Throwable $exception) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => 'Remove story failed: ' . $exception->getMessage(),
+                ], 422);
+            }
+
             return $this->redirectToInstagramStories($request)->with('social_error', 'Delete story failed: ' . $exception->getMessage());
         }
     }

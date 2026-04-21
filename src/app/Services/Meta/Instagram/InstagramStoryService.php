@@ -48,7 +48,7 @@ class InstagramStoryService
             ];
         }
 
-        $containerResponse = Http::asForm()->post($containerEndpoint, $containerPayload);
+        $containerResponse = Http::timeout(90)->asForm()->post($containerEndpoint, $containerPayload);
 
         if (! $containerResponse->successful()) {
             throw new RuntimeException('Instagram story container creation failed: ' . $containerResponse->body());
@@ -62,7 +62,7 @@ class InstagramStoryService
 
         $containerStatus = $this->waitForContainerReady($creationId, $accessToken, $graphVersion, $mediaType);
 
-        $publishResponse = Http::asForm()->post($publishEndpoint, [
+        $publishResponse = Http::timeout(90)->asForm()->post($publishEndpoint, [
             'creation_id' => $creationId,
             'access_token' => $accessToken,
         ]);
@@ -73,7 +73,9 @@ class InstagramStoryService
 
         return array_merge($publishResponse->json(), [
             'creation_id' => $creationId,
-            'container_status' => $containerStatus,
+            'container_status' => $containerStatus['status_code'] ?? null,
+            'container_status_attempts' => $containerStatus['attempts'] ?? null,
+            'container_status_response' => $containerStatus['response'] ?? null,
         ]);
     }
 
@@ -112,45 +114,61 @@ class InstagramStoryService
         ];
     }
 
-    protected function waitForContainerReady(string $creationId, string $accessToken, string $graphVersion, string $mediaType): ?string
+    protected function waitForContainerReady(string $creationId, string $accessToken, string $graphVersion, string $mediaType): array
     {
         $statusEndpoint = "https://graph.instagram.com/{$graphVersion}/{$creationId}";
         $lastStatus = null;
-        $attempts = $mediaType === 'VIDEO' ? 10 : 2;
+        $lastBody = null;
+        $attempts = $mediaType === 'VIDEO' ? 40 : 6;
+        $sleepMicroseconds = $mediaType === 'VIDEO' ? 3000000 : 1500000;
 
         for ($attempt = 1; $attempt <= $attempts; $attempt++) {
-            $response = Http::withToken($accessToken)
+            $response = Http::timeout(30)
+                ->withToken($accessToken)
                 ->acceptJson()
                 ->get($statusEndpoint, [
-                    'fields' => 'status_code',
+                    'fields' => 'status_code,status',
                 ]);
 
             if (! $response->successful()) {
                 if ($mediaType === 'IMAGE') {
-                    return $lastStatus;
+                    return [
+                        'status_code' => $lastStatus,
+                        'attempts' => $attempt,
+                        'response' => $lastBody,
+                    ];
                 }
 
                 throw new RuntimeException('Instagram story container status check failed: ' . $response->body());
             }
 
             $lastStatus = (string) ($response->json('status_code') ?? '');
+            $lastBody = $response->json();
 
             if ($lastStatus === 'FINISHED' || $lastStatus === '') {
-                return $lastStatus !== '' ? $lastStatus : null;
+                return [
+                    'status_code' => $lastStatus !== '' ? $lastStatus : null,
+                    'attempts' => $attempt,
+                    'response' => is_array($lastBody) ? $lastBody : null,
+                ];
             }
 
             if (in_array($lastStatus, ['ERROR', 'EXPIRED'], true)) {
-                throw new RuntimeException('Instagram story container failed with status ' . $lastStatus . '.');
+                throw new RuntimeException('Instagram story container failed with status ' . $lastStatus . ': ' . json_encode($lastBody));
             }
 
-            usleep(1500000);
+            usleep($sleepMicroseconds);
         }
 
         if ($mediaType === 'VIDEO') {
-            throw new RuntimeException('Instagram story video is still processing. Please try again in a moment.');
+            throw new RuntimeException('Instagram story video is still processing after ' . $attempts . ' checks. Last status: ' . ($lastStatus ?: 'unknown') . '.');
         }
 
-        return $lastStatus;
+        return [
+            'status_code' => $lastStatus,
+            'attempts' => $attempts,
+            'response' => is_array($lastBody) ? $lastBody : null,
+        ];
     }
 
     protected function resolveAccessToken(ProviderConnection $connection): string

@@ -867,6 +867,45 @@
                 border-color: #93c5fd;
             }
 
+            .social-story-status-badge.archived {
+                background: #f8fafc;
+                color: #475569;
+                border-color: #cbd5e1;
+            }
+
+            .social-story-status-badge.removed {
+                background: #fef2f2;
+                color: #991b1b;
+                border-color: #fca5a5;
+            }
+
+            .social-story-archive-section {
+                margin-top: 20px;
+            }
+
+            .social-story-section-header {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 12px;
+                margin: 18px 0 12px;
+                flex-wrap: wrap;
+            }
+
+            .social-story-section-header h4 {
+                margin: 0;
+                font-size: 14px;
+                font-weight: 900;
+                color: #0f172a;
+            }
+
+            .social-story-section-header span {
+                font-size: 12px;
+                line-height: 1.6;
+                color: #64748b;
+                font-weight: 700;
+            }
+
             .social-story-form {
                 display: grid;
                 gap: 12px;
@@ -1060,6 +1099,76 @@
                 color: #fff;
                 font-size: 20px;
                 cursor: pointer;
+            }
+
+            .social-story-confirm-modal {
+                position: fixed;
+                inset: 0;
+                z-index: 70;
+                display: none;
+                align-items: center;
+                justify-content: center;
+                padding: 18px;
+            }
+
+            .social-story-confirm-modal.is-open {
+                display: flex;
+            }
+
+            .social-story-confirm-backdrop {
+                position: absolute;
+                inset: 0;
+                background: rgba(15, 23, 42, .46);
+                backdrop-filter: blur(2px);
+            }
+
+            .social-story-confirm-card {
+                position: relative;
+                width: min(100%, 420px);
+                border-radius: 8px;
+                background: #fff;
+                border: 1px solid #e2e8f0;
+                box-shadow: 0 24px 60px rgba(15, 23, 42, .2);
+                padding: 16px;
+                display: grid;
+                gap: 12px;
+            }
+
+            .social-story-confirm-title {
+                font-size: 15px;
+                font-weight: 900;
+                color: #0f172a;
+            }
+
+            .social-story-confirm-body {
+                font-size: 13px;
+                line-height: 1.7;
+                color: #475569;
+            }
+
+            .social-story-confirm-actions {
+                display: flex;
+                justify-content: flex-end;
+                gap: 8px;
+                flex-wrap: wrap;
+            }
+
+            .social-story-confirm-button {
+                min-height: 38px;
+                border-radius: 8px;
+                border: 1px solid #dbe3ec;
+                background: #fff;
+                padding: 0 14px;
+                font-size: 13px;
+                font-weight: 800;
+                color: #334155;
+                cursor: pointer;
+            }
+
+            .social-story-confirm-button.primary {
+                border-color: #b91c1c;
+                background: #b91c1c;
+                color: #fff;
             }
 
             .social-story-progress {
@@ -1981,7 +2090,14 @@
                     </div>
                 @else
                     <div id="social-stories-root">
-                        <h3 class="social-section-title">Stories — {{ $socialCounts['stories'] }} active stories</h3>
+                        @php
+                            $archivedStories = $archivedStories ?? collect();
+                            $storyArchiveCount = $socialCounts['story_archives'] ?? $archivedStories->count();
+                        @endphp
+
+                        <h3 class="social-section-title">
+                            Stories — {{ $socialCounts['stories'] }} active stories · {{ $storyArchiveCount }} archived
+                        </h3>
 
                         @if (!empty($storySyncError))
                             <div class="social-sync-banner error">
@@ -2157,7 +2273,7 @@
                             </div>
                         </div>
 
-                        @if (($stories ?? collect())->isEmpty())
+                        @if (($stories ?? collect())->isEmpty() && $archivedStories->isEmpty())
                             <div class="social-placeholder-grid">
                                 <div class="social-placeholder-box">
                                     <div class="social-placeholder-label">No active stories yet</div>
@@ -2174,95 +2290,197 @@
                                 </div>
                             </div>
                         @else
-                            <div class="social-story-grid" id="social-story-grid">
-                                @foreach ($stories as $story)
-                                    @php
-                                        $storyRaw = is_array($story->raw) ? $story->raw : [];
-                                        $storyMediaUrl = $story->media_url ?: $story->thumbnail_url;
-                                        $storyMediaType = strtoupper((string) ($storyRaw['media_type'] ?? $storyRaw['remote_story']['media_type'] ?? 'IMAGE'));
-                                        $storyStatus = strtolower((string) ($story->status ?: 'draft'));
-                                        $storyEngagement = ($storyEngagements ?? [])[$story->provider_story_id] ?? ['reply_count' => 0, 'like_count' => 0, 'likers' => []];
-                                    @endphp
-                                    <div class="social-story-card">
-                                        <div class="social-story-media">
-                                            <button
-                                                type="button"
-                                                class="social-story-view-button"
-                                                data-story-view-url="{{ $storyMediaUrl }}"
-                                                data-story-view-type="{{ $storyMediaType }}"
-                                                data-story-view-title="{{ $activeInstagramConnection?->provider_account_name ?: 'Instagram Story' }}"
-                                                data-story-view-meta="{{ $story->posted_at ? $story->posted_at->format('Y-m-d H:i') : 'Published Story' }}"
-                                                data-story-view-likes="{{ $storyEngagement['like_count'] ?? 0 }}"
-                                                data-story-view-replies="{{ $storyEngagement['reply_count'] ?? 0 }}"
-                                                data-story-view-likers="{{ collect($storyEngagement['likers'] ?? [])->pluck('name')->take(8)->implode(', ') }}"
-                                            >
-                                                @if ($storyMediaUrl && $storyMediaType === 'VIDEO')
-                                                    <video
-                                                        src="{{ $storyMediaUrl }}"
-                                                        class="social-story-video"
-                                                        muted
-                                                        playsinline
-                                                        preload="metadata"
-                                                    ></video>
-                                                @elseif ($storyMediaUrl)
-                                                    <img
-                                                        src="{{ $storyMediaUrl }}"
-                                                        alt="Instagram story {{ $story->provider_story_id }}"
-                                                        class="social-story-image"
-                                                    >
-                                                @else
-                                                    <div class="social-story-fallback">
-                                                        Story preview is not available yet
+                            @if (($stories ?? collect())->isNotEmpty())
+                                <div class="social-story-section-header">
+                                    <h4>Active Stories</h4>
+                                    <span>Visible Stories published in the last 24 hours.</span>
+                                </div>
+
+                                <div class="social-story-grid" id="social-story-grid">
+                                    @foreach ($stories as $story)
+                                        @php
+                                            $storyRaw = is_array($story->raw) ? $story->raw : [];
+                                            $storyMediaUrl = $story->media_url ?: $story->thumbnail_url;
+                                            $storyMediaType = strtoupper((string) ($storyRaw['media_type'] ?? $storyRaw['remote_story']['media_type'] ?? 'IMAGE'));
+                                            $storyStatus = strtolower((string) ($story->status ?: 'draft'));
+                                            $storyEngagement = ($storyEngagements ?? [])[$story->provider_story_id] ?? ['reply_count' => 0, 'like_count' => 0, 'likers' => []];
+                                        @endphp
+                                        <div class="social-story-card">
+                                            <div class="social-story-media">
+                                                <button
+                                                    type="button"
+                                                    class="social-story-view-button"
+                                                    data-story-view-url="{{ $storyMediaUrl }}"
+                                                    data-story-view-type="{{ $storyMediaType }}"
+                                                    data-story-view-title="{{ $activeInstagramConnection?->provider_account_name ?: 'Instagram Story' }}"
+                                                    data-story-view-meta="{{ $story->posted_at ? $story->posted_at->format('Y-m-d H:i') : 'Published Story' }}"
+                                                    data-story-view-likes="{{ $storyEngagement['like_count'] ?? 0 }}"
+                                                    data-story-view-replies="{{ $storyEngagement['reply_count'] ?? 0 }}"
+                                                    data-story-view-likers="{{ collect($storyEngagement['likers'] ?? [])->pluck('name')->take(8)->implode(', ') }}"
+                                                >
+                                                    @if ($storyMediaUrl && $storyMediaType === 'VIDEO')
+                                                        <video
+                                                            src="{{ $storyMediaUrl }}"
+                                                            class="social-story-video"
+                                                            muted
+                                                            playsinline
+                                                            preload="metadata"
+                                                        ></video>
+                                                    @elseif ($storyMediaUrl)
+                                                        <img
+                                                            src="{{ $storyMediaUrl }}"
+                                                            alt="Instagram story {{ $story->provider_story_id }}"
+                                                            class="social-story-image"
+                                                        >
+                                                    @else
+                                                        <div class="social-story-fallback">
+                                                            Story preview is not available yet
+                                                        </div>
+                                                    @endif
+                                                </button>
+                                            </div>
+
+                                            <div class="social-story-body">
+                                                <div class="social-story-meta">
+                                                    <span class="social-post-badge social-story-status-badge {{ $storyStatus }}">
+                                                        {{ ucfirst($storyStatus) }}
+                                                    </span>
+                                                    <span class="social-post-badge">{{ ucfirst(strtolower($storyMediaType)) }}</span>
+                                                </div>
+
+                                                <div class="social-story-meta">
+                                                    <span class="social-post-badge">
+                                                        Posted: {{ $story->posted_at ? $story->posted_at->format('Y-m-d H:i') : 'No publish time' }}
+                                                    </span>
+                                                </div>
+
+                                                <div class="social-story-meta">
+                                                    <span class="social-post-badge">
+                                                        Expires: {{ $story->expires_at ? $story->expires_at->format('Y-m-d H:i') : 'No expiry time' }}
+                                                    </span>
+                                                </div>
+
+                                                <div class="social-story-meta">
+                                                    <span class="social-post-badge">♥ {{ $storyEngagement['like_count'] ?? 0 }} captured likes</span>
+                                                    <span class="social-post-badge">↩ {{ $storyEngagement['reply_count'] ?? 0 }} replies</span>
+                                                </div>
+
+                                                @if (!empty($storyEngagement['likers']))
+                                                    <div class="social-story-help">
+                                                        Liked by {{ collect($storyEngagement['likers'])->pluck('name')->take(5)->implode(', ') }}
                                                     </div>
                                                 @endif
-                                            </button>
-                                        </div>
 
-                                        <div class="social-story-body">
-                                            <div class="social-story-meta">
-                                                <span class="social-post-badge social-story-status-badge {{ $storyStatus }}">
-                                                    {{ ucfirst($storyStatus) }}
-                                                </span>
-                                                <span class="social-post-badge">{{ ucfirst(strtolower($storyMediaType)) }}</span>
-                                            </div>
-
-                                            <div class="social-story-meta">
-                                                <span class="social-post-badge">
-                                                    Posted: {{ $story->posted_at ? $story->posted_at->format('Y-m-d H:i') : 'No publish time' }}
-                                                </span>
-                                            </div>
-
-                                            <div class="social-story-meta">
-                                                <span class="social-post-badge">
-                                                    Expires: {{ $story->expires_at ? $story->expires_at->format('Y-m-d H:i') : 'No expiry time' }}
-                                                </span>
-                                            </div>
-
-                                            <div class="social-story-meta">
-                                                <span class="social-post-badge">♥ {{ $storyEngagement['like_count'] ?? 0 }} captured likes</span>
-                                                <span class="social-post-badge">↩ {{ $storyEngagement['reply_count'] ?? 0 }} replies</span>
-                                            </div>
-
-                                            @if (!empty($storyEngagement['likers']))
-                                                <div class="social-story-help">
-                                                    Liked by {{ collect($storyEngagement['likers'])->pluck('name')->take(5)->implode(', ') }}
+                                                <div class="social-story-actions">
+                                                    <form
+                                                        method="POST"
+                                                        action="{{ route('social.instagram.stories.delete', $story) }}"
+                                                        data-story-delete-form
+                                                        data-confirm-title="Remove Story"
+                                                        data-confirm-message="Remove this Story from the Leadochat list? This will not delete the Story from Instagram or the archive record."
+                                                        data-confirm-submit="Remove"
+                                                    >
+                                                        @csrf
+                                                        @method('DELETE')
+                                                        <input type="hidden" name="instagram_account" value="{{ $selectedInstagramAccountId }}">
+                                                        <button type="submit" class="social-post-action-button">
+                                                            Remove from list
+                                                        </button>
+                                                    </form>
                                                 </div>
-                                            @endif
-
-                                            <div class="social-story-actions">
-                                                <form method="POST" action="{{ route('social.instagram.stories.delete', $story) }}" data-story-delete-form>
-                                                    @csrf
-                                                    @method('DELETE')
-                                                    <input type="hidden" name="instagram_account" value="{{ $selectedInstagramAccountId }}">
-                                                    <button type="submit" class="social-post-action-button">
-                                                        Remove from list
-                                                    </button>
-                                                </form>
                                             </div>
                                         </div>
+                                    @endforeach
+                                </div>
+                            @endif
+
+                            @if ($archivedStories->isNotEmpty())
+                                <div class="social-story-archive-section">
+                                    <div class="social-story-section-header">
+                                        <h4>Story Archive</h4>
+                                        <span>Stories move here automatically after 24 hours and stay available for review.</span>
                                     </div>
-                                @endforeach
-                            </div>
+
+                                    <div class="social-story-grid">
+                                        @foreach ($archivedStories as $story)
+                                            @php
+                                                $storyRaw = is_array($story->raw) ? $story->raw : [];
+                                                $storyMediaUrl = $story->media_url ?: $story->thumbnail_url;
+                                                $storyMediaType = strtoupper((string) ($storyRaw['media_type'] ?? $storyRaw['remote_story']['media_type'] ?? 'IMAGE'));
+                                                $storyStatus = strtolower((string) ($story->status ?: 'archived'));
+                                                $storyEngagement = ($storyEngagements ?? [])[$story->provider_story_id] ?? ['reply_count' => 0, 'like_count' => 0, 'likers' => []];
+                                            @endphp
+                                            <div class="social-story-card">
+                                                <div class="social-story-media">
+                                                    <button
+                                                        type="button"
+                                                        class="social-story-view-button"
+                                                        data-story-view-url="{{ $storyMediaUrl }}"
+                                                        data-story-view-type="{{ $storyMediaType }}"
+                                                        data-story-view-title="{{ $activeInstagramConnection?->provider_account_name ?: 'Instagram Story' }}"
+                                                        data-story-view-meta="{{ $story->posted_at ? $story->posted_at->format('Y-m-d H:i') : 'Archived Story' }}"
+                                                        data-story-view-likes="{{ $storyEngagement['like_count'] ?? 0 }}"
+                                                        data-story-view-replies="{{ $storyEngagement['reply_count'] ?? 0 }}"
+                                                        data-story-view-likers="{{ collect($storyEngagement['likers'] ?? [])->pluck('name')->take(8)->implode(', ') }}"
+                                                    >
+                                                        @if ($storyMediaUrl && $storyMediaType === 'VIDEO')
+                                                            <video
+                                                                src="{{ $storyMediaUrl }}"
+                                                                class="social-story-video"
+                                                                muted
+                                                                playsinline
+                                                                preload="metadata"
+                                                            ></video>
+                                                        @elseif ($storyMediaUrl)
+                                                            <img
+                                                                src="{{ $storyMediaUrl }}"
+                                                                alt="Archived Instagram story {{ $story->provider_story_id }}"
+                                                                class="social-story-image"
+                                                            >
+                                                        @else
+                                                            <div class="social-story-fallback">
+                                                                Story preview is not available yet
+                                                            </div>
+                                                        @endif
+                                                    </button>
+                                                </div>
+
+                                                <div class="social-story-body">
+                                                    <div class="social-story-meta">
+                                                        <span class="social-post-badge social-story-status-badge {{ $storyStatus }}">
+                                                            Archived
+                                                        </span>
+                                                        <span class="social-post-badge">{{ ucfirst(strtolower($storyMediaType)) }}</span>
+                                                    </div>
+
+                                                    <div class="social-story-meta">
+                                                        <span class="social-post-badge">
+                                                            Posted: {{ $story->posted_at ? $story->posted_at->format('Y-m-d H:i') : 'No publish time' }}
+                                                        </span>
+                                                    </div>
+
+                                                    <div class="social-story-meta">
+                                                        <span class="social-post-badge">
+                                                            Expired: {{ $story->expires_at ? $story->expires_at->format('Y-m-d H:i') : 'No expiry time' }}
+                                                        </span>
+                                                    </div>
+
+                                                    <div class="social-story-meta">
+                                                        <span class="social-post-badge">♥ {{ $storyEngagement['like_count'] ?? 0 }} captured likes</span>
+                                                        <span class="social-post-badge">↩ {{ $storyEngagement['reply_count'] ?? 0 }} replies</span>
+                                                    </div>
+
+                                                    @if (!empty($storyEngagement['likers']))
+                                                        <div class="social-story-help">
+                                                            Liked by {{ collect($storyEngagement['likers'])->pluck('name')->take(5)->implode(', ') }}
+                                                        </div>
+                                                    @endif
+                                                </div>
+                                            </div>
+                                        @endforeach
+                                    </div>
+                                </div>
+                            @endif
                         @endif
                     </div>
 
@@ -2279,6 +2497,18 @@
                             </div>
                         </div>
                     </div>
+
+                    <div class="social-story-confirm-modal" id="social-story-confirm-modal" aria-hidden="true">
+                        <div class="social-story-confirm-backdrop" data-story-confirm-close></div>
+                        <div class="social-story-confirm-card" role="dialog" aria-modal="true" aria-labelledby="social-story-confirm-title">
+                            <div id="social-story-confirm-title" class="social-story-confirm-title">Confirm action</div>
+                            <div id="social-story-confirm-body" class="social-story-confirm-body">Please confirm this action.</div>
+                            <div class="social-story-confirm-actions">
+                                <button type="button" class="social-story-confirm-button" id="social-story-confirm-cancel">Cancel</button>
+                                <button type="button" class="social-story-confirm-button primary" id="social-story-confirm-submit">Confirm</button>
+                            </div>
+                        </div>
+                    </div>
                 @endif
 
                 <script>
@@ -2292,6 +2522,8 @@
                         let isRefreshing = false;
                         let refreshQueued = false;
                         let storyPreviewObjectUrl = null;
+                        let storyProgressTimers = [];
+                        let storyProcessingInterval = null;
 
                         const rememberSocialState = function () {
                             sessionStorage.setItem('social_posts_scroll_y', String(window.scrollY || window.pageYOffset || 0));
@@ -2459,6 +2691,18 @@
                             progress.classList.add('is-visible');
                             bar.style.width = `${Math.max(0, Math.min(percent, 100))}%`;
                             label.textContent = text;
+                        };
+
+                        const clearStoryProgressTimers = function () {
+                            storyProgressTimers.forEach(function (timer) {
+                                clearTimeout(timer);
+                            });
+                            storyProgressTimers = [];
+
+                            if (storyProcessingInterval) {
+                                clearInterval(storyProcessingInterval);
+                                storyProcessingInterval = null;
+                            }
                         };
 
                         const setStoryMessage = function (message, isError = false) {
@@ -2679,6 +2923,7 @@
 
                             form.addEventListener('submit', function (event) {
                                 event.preventDefault();
+                                clearStoryProgressTimers();
 
                                 const selectedFile = fileInput?.files && fileInput.files[0] ? fileInput.files[0] : null;
                                 const confirmed = form.querySelector('input[name="story_confirmed"]')?.checked;
@@ -2733,6 +2978,7 @@
                                     }
 
                                     if (xhr.status >= 200 && xhr.status < 300 && data.ok !== false) {
+                                        clearStoryProgressTimers();
                                         setStoryProgress(100, 'Story published');
                                         setStoryMessage(data.message || 'Story published successfully.');
                                         form.reset();
@@ -2741,11 +2987,13 @@
                                         return;
                                     }
 
+                                    clearStoryProgressTimers();
                                     setStoryProgress(100, 'Publish failed');
                                     setStoryMessage(data.message || 'Story publish failed.', true);
                                 });
 
                                 xhr.addEventListener('error', function () {
+                                    clearStoryProgressTimers();
                                     setStoryProgress(100, 'Publish failed');
                                     setStoryMessage('Story publish failed. Please try again.', true);
                                 });
@@ -2760,12 +3008,21 @@
                                 xhr.setRequestHeader('Accept', 'application/json');
                                 xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
                                 xhr.send(formData);
-                                setTimeout(function () {
-                                    setStoryProgress(72, 'Creating Instagram Story container');
-                                }, 800);
-                                setTimeout(function () {
-                                    setStoryProgress(86, 'Publishing to Instagram');
-                                }, 2200);
+                                storyProgressTimers.push(setTimeout(function () {
+                                    setStoryProgress(68, 'Converting media for Instagram');
+                                }, 800));
+                                storyProgressTimers.push(setTimeout(function () {
+                                    setStoryProgress(78, 'Creating Instagram Story container');
+                                }, 2500));
+                                storyProgressTimers.push(setTimeout(function () {
+                                    setStoryProgress(88, 'Waiting for Instagram video processing');
+                                }, 7000));
+
+                                let waitingPercent = 88;
+                                storyProcessingInterval = setInterval(function () {
+                                    waitingPercent = Math.min(waitingPercent + 1, 96);
+                                    setStoryProgress(waitingPercent, 'Still waiting for Instagram to finish publishing');
+                                }, 6000);
                             });
                         };
 
@@ -2776,6 +3033,85 @@
                             const meta = document.getElementById('social-story-viewer-meta');
                             const engagement = document.getElementById('social-story-viewer-engagement');
                             const likers = document.getElementById('social-story-viewer-likers');
+                            const confirmModal = document.getElementById('social-story-confirm-modal');
+                            const confirmTitle = document.getElementById('social-story-confirm-title');
+                            const confirmBody = document.getElementById('social-story-confirm-body');
+                            const confirmCancel = document.getElementById('social-story-confirm-cancel');
+                            const confirmSubmit = document.getElementById('social-story-confirm-submit');
+
+                            const closeDeleteModal = function () {
+                                if (!confirmModal) {
+                                    return;
+                                }
+
+                                confirmModal.classList.remove('is-open');
+                                confirmModal.setAttribute('aria-hidden', 'true');
+                                confirmModal.pendingDeleteForm = null;
+                            };
+
+                            const openDeleteModal = function (form) {
+                                if (!confirmModal || !confirmTitle || !confirmBody || !confirmSubmit) {
+                                    return;
+                                }
+
+                                confirmModal.pendingDeleteForm = form;
+                                confirmTitle.textContent = form.getAttribute('data-confirm-title') || 'Remove Story';
+                                confirmBody.textContent = form.getAttribute('data-confirm-message') || 'Remove this Story from the Leadochat list?';
+                                confirmSubmit.textContent = form.getAttribute('data-confirm-submit') || 'Remove';
+                                confirmSubmit.disabled = false;
+                                confirmModal.classList.add('is-open');
+                                confirmModal.setAttribute('aria-hidden', 'false');
+                            };
+
+                            const submitDeleteForm = async function (form) {
+                                if (!form) {
+                                    closeDeleteModal();
+                                    return;
+                                }
+
+                                const formData = new FormData(form);
+
+                                if (confirmSubmit) {
+                                    confirmSubmit.disabled = true;
+                                }
+
+                                try {
+                                    const response = await fetch(form.getAttribute('action'), {
+                                        method: 'POST',
+                                        credentials: 'same-origin',
+                                        body: formData,
+                                        headers: {
+                                            'X-Requested-With': 'XMLHttpRequest',
+                                            'Accept': 'application/json',
+                                        },
+                                    });
+
+                                    let data = {};
+
+                                    try {
+                                        data = await response.json();
+                                    } catch (error) {
+                                        data = {};
+                                    }
+
+                                    if (!response.ok || data.ok === false) {
+                                        setStoryMessage(data.message || 'Remove Story failed.', true);
+                                        if (confirmSubmit) {
+                                            confirmSubmit.disabled = false;
+                                        }
+                                        return;
+                                    }
+
+                                    setStoryMessage(data.message || 'Story removed from the Leadochat list.');
+                                    closeDeleteModal();
+                                    scheduleSocialRefresh({ delay: 250 });
+                                } catch (error) {
+                                    setStoryMessage('Remove Story failed. Please try again.', true);
+                                    if (confirmSubmit) {
+                                        confirmSubmit.disabled = false;
+                                    }
+                                }
+                            };
 
                             document.querySelectorAll('[data-story-view-url]').forEach(function (button) {
                                 if (button.dataset.bound === '1') {
@@ -2834,11 +3170,31 @@
 
                                 form.dataset.bound = '1';
                                 form.addEventListener('submit', function (event) {
-                                    if (!window.confirm('Remove this Story from the Leadochat list? This does not delete it from Instagram.')) {
-                                        event.preventDefault();
-                                    }
+                                    event.preventDefault();
+                                    openDeleteModal(form);
                                 });
                             });
+
+                            document.querySelectorAll('[data-story-confirm-close]').forEach(function (closer) {
+                                if (closer.dataset.bound === '1') {
+                                    return;
+                                }
+
+                                closer.dataset.bound = '1';
+                                closer.addEventListener('click', closeDeleteModal);
+                            });
+
+                            if (confirmCancel && confirmCancel.dataset.bound !== '1') {
+                                confirmCancel.dataset.bound = '1';
+                                confirmCancel.addEventListener('click', closeDeleteModal);
+                            }
+
+                            if (confirmSubmit && confirmSubmit.dataset.bound !== '1') {
+                                confirmSubmit.dataset.bound = '1';
+                                confirmSubmit.addEventListener('click', function () {
+                                    submitDeleteForm(confirmModal?.pendingDeleteForm || null);
+                                });
+                            }
                         };
 
                         bindStoryPublisher();
