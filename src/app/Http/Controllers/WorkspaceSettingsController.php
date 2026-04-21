@@ -112,10 +112,7 @@ class WorkspaceSettingsController extends Controller
             'workspaceMembers' => $workspaceMembers,
             'providerConnections' => $providerConnections,
             'providerCards' => $providerCards,
-            'canManageTeam' => $workspace && $user && (
-                (int) $workspace->owner_id === (int) $user->id
-                || $workspace->members()->whereKey($user->id)->wherePivot('role', 'owner')->exists()
-            ),
+            'canManageTeam' => (bool) ($workspace && $user),
         ]);
     }
 
@@ -128,10 +125,7 @@ class WorkspaceSettingsController extends Controller
             abort(404);
         }
 
-        $isOwner = (int) $workspace->owner_id === (int) $user->id
-            || $workspace->members()->whereKey($user->id)->wherePivot('role', 'owner')->exists();
-
-        abort_unless($isOwner, 403);
+        abort_unless($workspace->members()->whereKey($user->id)->exists(), 403);
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
@@ -148,7 +142,7 @@ class WorkspaceSettingsController extends Controller
             ]);
 
             $workspace->members()->attach($member->id, [
-                'role' => 'member',
+                'role' => 'agent',
             ]);
         });
 
