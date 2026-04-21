@@ -73,6 +73,12 @@ class SocialController extends Controller
                     ->where('provider_connection_id', $connection->id)
                     ->where('status', '!=', 'deleted')
                     ->count(),
+                'story_count' => SocialStory::query()
+                    ->where('workspace_id', $workspace->id)
+                    ->where('provider', 'instagram')
+                    ->where('provider_connection_id', $connection->id)
+                    ->where('status', '!=', 'deleted')
+                    ->count(),
             ];
         })->values();
 
@@ -614,21 +620,78 @@ class SocialController extends Controller
     {
         $workspace = $pageData['workspace'];
         $activeConnection = $pageData['activeInstagramConnection'] ?? null;
+        $syncResult = null;
+        $syncError = null;
+
+        if ($activeConnection && $activeConnection->status === 'connected') {
+            try {
+                $syncResult = app(InstagramService::class)->syncStories($activeConnection, [
+                    'limit' => 25,
+                ]);
+
+                $this->storeSyncedStories($workspace, $activeConnection, $syncResult['stories'] ?? []);
+            } catch (\Throwable $exception) {
+                $syncError = $exception->getMessage();
+            }
+        }
 
         $stories = SocialStory::query()
             ->where('workspace_id', $workspace->id)
             ->where('provider', 'instagram')
             ->when($activeConnection, fn ($query) => $query->where('provider_connection_id', $activeConnection->id))
+            ->where('status', '!=', 'deleted')
             ->latest('posted_at')
             ->latest('id')
             ->get();
 
         $pageData['stories'] = $stories;
-        $pageData['storySyncError'] = null;
+        $pageData['storySyncError'] = $syncError;
+        $pageData['storySyncResult'] = $syncResult;
         $pageData['storyPublishEnabled'] = (bool) ($activeConnection && $activeConnection->status === 'connected');
         $pageData['socialCounts']['stories'] = $stories->count();
 
         return $pageData;
+    }
+
+    protected function storeSyncedStories(object $workspace, ProviderConnection $connection, array $remoteStories): void
+    {
+        foreach ($remoteStories as $remoteStory) {
+            if (! is_array($remoteStory)) {
+                continue;
+            }
+
+            $providerStoryId = trim((string) ($remoteStory['id'] ?? ''));
+
+            if ($providerStoryId === '') {
+                continue;
+            }
+
+            $postedAt = ! empty($remoteStory['timestamp'])
+                ? \Illuminate\Support\Carbon::parse($remoteStory['timestamp'])
+                : now();
+
+            $story = SocialStory::query()->firstOrNew([
+                'provider' => 'instagram',
+                'provider_story_id' => $providerStoryId,
+            ]);
+
+            $story->workspace_id = $workspace->id;
+            $story->provider_connection_id = $connection->id;
+            $story->provider = 'instagram';
+            $story->provider_story_id = $providerStoryId;
+            $story->media_url = $remoteStory['media_url'] ?? $story->media_url;
+            $story->thumbnail_url = $remoteStory['thumbnail_url'] ?? $story->thumbnail_url;
+            $story->posted_at = $postedAt;
+            $story->expires_at = $postedAt->copy()->addHours(24);
+            $story->status = 'published';
+            $story->raw = array_merge(is_array($story->raw) ? $story->raw : [], [
+                'source' => 'instagram_stories_sync',
+                'remote_story' => $remoteStory,
+                'media_type' => $remoteStory['media_type'] ?? null,
+                'permalink' => $remoteStory['permalink'] ?? null,
+            ]);
+            $story->save();
+        }
     }
 
     protected function detectStoryFileKind(?\Illuminate\Http\UploadedFile $file): ?string
@@ -661,18 +724,67 @@ class SocialController extends Controller
         $path = (string) parse_url($url, PHP_URL_PATH);
         $extension = strtolower((string) pathinfo($path, PATHINFO_EXTENSION));
 
-        if (in_array($extension, ['jpg', 'jpeg', 'png', 'webp', 'gif'], true)) {
+        if (in_array($extension, ['jpg', 'jpeg'], true)) {
             return 'IMAGE';
         }
 
-        if (in_array($extension, ['mp4', 'mov', 'm4v', 'webm'], true)) {
+        if (in_array($extension, ['mp4', 'mov'], true)) {
             return 'VIDEO';
         }
 
         return null;
     }
 
-    public function publishInstagramStory(Request $request): RedirectResponse
+    protected function validateStoryUploadForInstagram(?\Illuminate\Http\UploadedFile $file, string $mediaType): ?string
+    {
+        if (! $file) {
+            return null;
+        }
+
+        $mime = strtolower((string) ($file->getMimeType() ?? ''));
+        $size = (int) $file->getSize();
+
+        if ($mediaType === 'IMAGE') {
+            if (! in_array($mime, ['image/jpeg', 'image/jpg'], true)) {
+                return 'Instagram Story image uploads must be JPEG.';
+            }
+
+            if ($size > 8 * 1024 * 1024) {
+                return 'Instagram Story image uploads must be 8 MB or smaller.';
+            }
+
+            return null;
+        }
+
+        if (! in_array($mime, ['video/mp4', 'video/quicktime'], true)) {
+            return 'Instagram Story videos must be MP4 or MOV.';
+        }
+
+        if ($size > 100 * 1024 * 1024) {
+            return 'Instagram Story videos must be 100 MB or smaller.';
+        }
+
+        return null;
+    }
+
+    protected function storyResponsePayload(SocialStory $story): array
+    {
+        $raw = is_array($story->raw) ? $story->raw : [];
+
+        return [
+            'id' => $story->id,
+            'provider_story_id' => $story->provider_story_id,
+            'media_url' => $story->media_url,
+            'thumbnail_url' => $story->thumbnail_url,
+            'media_type' => $raw['media_type'] ?? $raw['remote_story']['media_type'] ?? null,
+            'status' => $story->status,
+            'posted_at' => optional($story->posted_at)->toIso8601String(),
+            'expires_at' => optional($story->expires_at)->toIso8601String(),
+            'permalink' => $raw['permalink'] ?? $raw['remote_story']['permalink'] ?? null,
+        ];
+    }
+
+    public function publishInstagramStory(Request $request): RedirectResponse|JsonResponse
     {
         $connection = $this->resolveWorkspaceInstagramConnection($request);
         $workspace = $request->user()?->currentWorkspace();
@@ -681,30 +793,52 @@ class SocialController extends Controller
 
         $validated = $request->validate([
             'media_type' => ['required', 'in:IMAGE,VIDEO'],
-            'story_file' => ['nullable', 'file', 'mimetypes:image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/webm', 'max:51200'],
+            'story_file' => ['nullable', 'file', 'mimetypes:image/jpeg,video/mp4,video/quicktime', 'max:102400'],
             'media_url' => ['nullable', 'url', 'max:2048'],
-            'caption' => ['nullable', 'string', 'max:2200'],
         ]);
 
         $requestedMediaType = (string) $validated['media_type'];
         $uploadedFile = $request->file('story_file');
         $uploadedFileKind = $this->detectStoryFileKind($uploadedFile);
         $mediaUrlKind = $this->detectStoryUrlKind($validated['media_url'] ?? null);
+        $uploadValidationError = $this->validateStoryUploadForInstagram($uploadedFile, $requestedMediaType);
 
         if (! $uploadedFile && empty($validated['media_url'])) {
-            return redirect()->route('social.instagram.stories')
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => 'Story file or media URL is required.'], 422);
+            }
+
+            return $this->redirectToInstagramStories($request)
                 ->with('social_error', 'Story file or media URL is required.')
                 ->withInput();
         }
 
+        if ($uploadValidationError !== null) {
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => $uploadValidationError], 422);
+            }
+
+            return $this->redirectToInstagramStories($request)
+                ->with('social_error', $uploadValidationError)
+                ->withInput();
+        }
+
         if ($uploadedFile && $uploadedFileKind !== null && $uploadedFileKind !== $requestedMediaType) {
-            return redirect()->route('social.instagram.stories')
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => 'Selected story file type does not match the selected media type.'], 422);
+            }
+
+            return $this->redirectToInstagramStories($request)
                 ->with('social_error', 'Selected story file type does not match the selected media type.')
                 ->withInput();
         }
 
         if (! $uploadedFile && !empty($validated['media_url']) && $mediaUrlKind !== null && $mediaUrlKind !== $requestedMediaType) {
-            return redirect()->route('social.instagram.stories')
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => 'Media URL type does not match the selected media type.'], 422);
+            }
+
+            return $this->redirectToInstagramStories($request)
                 ->with('social_error', 'Media URL type does not match the selected media type.')
                 ->withInput();
         }
@@ -714,20 +848,30 @@ class SocialController extends Controller
 
         if ($request->hasFile('story_file')) {
             $storedPath = $request->file('story_file')->store('social/stories', 'public');
-            $resolvedMediaUrl = Storage::disk('public')->url($storedPath);
+            $resolvedMediaUrl = url(Storage::url($storedPath));
         } elseif (!empty($validated['media_url'])) {
             $resolvedMediaUrl = $validated['media_url'];
         }
 
         if (! $resolvedMediaUrl) {
-            return redirect()->route('social.instagram.stories')
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => 'Story file or media URL is required.'], 422);
+            }
+
+            return $this->redirectToInstagramStories($request)
                 ->with('social_error', 'Story file or media URL is required.')
                 ->withInput();
         }
 
         if (! $uploadedFile && !empty($validated['media_url']) && $mediaUrlKind === null) {
-            return redirect()->route('social.instagram.stories')
-                ->with('social_error', 'Media URL must end with a supported image or video extension.')
+            $message = 'Media URL must end with .jpg, .jpeg, .mp4, or .mov.';
+
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => $message], 422);
+            }
+
+            return $this->redirectToInstagramStories($request)
+                ->with('social_error', $message)
                 ->withInput();
         }
 
@@ -735,7 +879,6 @@ class SocialController extends Controller
             $result = app(InstagramService::class)->publishStory($connection, [
                 'media_type' => $validated['media_type'],
                 'media_url' => $resolvedMediaUrl,
-                'caption' => $validated['caption'] ?? null,
             ]);
 
             $providerStoryId = (string) ($result['id'] ?? '');
@@ -760,14 +903,41 @@ class SocialController extends Controller
             $story->raw = array_merge($result, [
                 'uploaded_file_path' => $storedPath,
                 'resolved_media_url' => $resolvedMediaUrl,
+                'media_type' => $requestedMediaType,
+                'published_from' => 'leadochat_social_stories',
             ]);
             $story->save();
 
-            return redirect()->route('social.instagram.stories')
+            $this->broadcastSocialUpdate($request, 'instagram_story_published', [
+                'story_id' => $story->id,
+                'provider_story_id' => $story->provider_story_id,
+                'provider_connection_id' => $connection->id,
+            ]);
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'ok' => true,
+                    'message' => 'Story published successfully.',
+                    'story' => $this->storyResponsePayload($story),
+                    'publish_steps' => [
+                        'container_id' => $result['creation_id'] ?? null,
+                        'container_status' => $result['container_status'] ?? null,
+                        'provider_story_id' => $story->provider_story_id,
+                    ],
+                ]);
+            }
+
+            return $this->redirectToInstagramStories($request)
                 ->with('social_success', 'Story published successfully.');
         } catch (\Throwable $exception) {
-            return redirect()->route('social.instagram.stories')
-                ->with('social_error', 'Publish story failed: ' . $exception->getMessage())
+            $message = 'Publish story failed: ' . $exception->getMessage();
+
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => $message], 422);
+            }
+
+            return $this->redirectToInstagramStories($request)
+                ->with('social_error', $message)
                 ->withInput();
         }
     }

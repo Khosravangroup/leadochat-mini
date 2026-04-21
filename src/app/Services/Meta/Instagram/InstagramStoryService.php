@@ -15,7 +15,7 @@ class InstagramStoryService
 
         $mediaType = (string) ($payload['media_type'] ?? 'IMAGE');
         $mediaUrl = trim((string) ($payload['media_url'] ?? ''));
-        $caption = trim((string) ($payload['caption'] ?? ''));
+        $mediaType = strtoupper($mediaType) === 'VIDEO' ? 'VIDEO' : 'IMAGE';
 
         if ($mediaUrl === '') {
             throw new RuntimeException('Instagram story media_url is required.');
@@ -26,19 +26,14 @@ class InstagramStoryService
         $publishEndpoint = "https://graph.instagram.com/{$graphVersion}/{$accountId}/media_publish";
 
         $containerPayload = [
-            'media_type' => strtoupper($mediaType),
-            'is_stories' => 'true',
+            'media_type' => 'STORIES',
             'access_token' => $accessToken,
         ];
 
-        if (strtoupper($mediaType) === 'VIDEO') {
+        if ($mediaType === 'VIDEO') {
             $containerPayload['video_url'] = $mediaUrl;
         } else {
             $containerPayload['image_url'] = $mediaUrl;
-        }
-
-        if ($caption !== '') {
-            $containerPayload['caption'] = $caption;
         }
 
         if (app()->environment('local')) {
@@ -49,6 +44,7 @@ class InstagramStoryService
                 'container_payload' => $containerPayload,
                 'creation_id' => 'local-debug-story-container-' . now()->timestamp,
                 'id' => 'local-debug-story-' . now()->timestamp,
+                'container_status' => 'FINISHED',
             ];
         }
 
@@ -64,6 +60,8 @@ class InstagramStoryService
             throw new RuntimeException('Instagram story container creation did not return an id.');
         }
 
+        $containerStatus = $this->waitForContainerReady($creationId, $accessToken, $graphVersion, $mediaType);
+
         $publishResponse = Http::asForm()->post($publishEndpoint, [
             'creation_id' => $creationId,
             'access_token' => $accessToken,
@@ -75,7 +73,84 @@ class InstagramStoryService
 
         return array_merge($publishResponse->json(), [
             'creation_id' => $creationId,
+            'container_status' => $containerStatus,
         ]);
+    }
+
+    public function syncStories(ProviderConnection $connection, array $options = []): array
+    {
+        $accessToken = $this->resolveAccessToken($connection);
+        $accountId = $this->resolveAccountId($connection);
+        $graphVersion = $this->resolveGraphVersion();
+        $limit = max(1, min((int) ($options['limit'] ?? 25), 50));
+
+        if (app()->environment('local')) {
+            return [
+                'mode' => 'local_debug',
+                'synced' => 0,
+                'stories' => [],
+            ];
+        }
+
+        $response = Http::withToken($accessToken)
+            ->acceptJson()
+            ->get("https://graph.instagram.com/{$graphVersion}/{$accountId}/stories", [
+                'fields' => 'id,media_type,media_url,thumbnail_url,timestamp,permalink',
+                'limit' => $limit,
+            ]);
+
+        if (! $response->successful()) {
+            throw new RuntimeException('Instagram story sync failed: ' . $response->body());
+        }
+
+        $stories = $response->json('data');
+
+        return [
+            'mode' => 'live',
+            'synced' => is_array($stories) ? count($stories) : 0,
+            'stories' => is_array($stories) ? $stories : [],
+        ];
+    }
+
+    protected function waitForContainerReady(string $creationId, string $accessToken, string $graphVersion, string $mediaType): ?string
+    {
+        $statusEndpoint = "https://graph.instagram.com/{$graphVersion}/{$creationId}";
+        $lastStatus = null;
+        $attempts = $mediaType === 'VIDEO' ? 10 : 2;
+
+        for ($attempt = 1; $attempt <= $attempts; $attempt++) {
+            $response = Http::withToken($accessToken)
+                ->acceptJson()
+                ->get($statusEndpoint, [
+                    'fields' => 'status_code',
+                ]);
+
+            if (! $response->successful()) {
+                if ($mediaType === 'IMAGE') {
+                    return $lastStatus;
+                }
+
+                throw new RuntimeException('Instagram story container status check failed: ' . $response->body());
+            }
+
+            $lastStatus = (string) ($response->json('status_code') ?? '');
+
+            if ($lastStatus === 'FINISHED' || $lastStatus === '') {
+                return $lastStatus !== '' ? $lastStatus : null;
+            }
+
+            if (in_array($lastStatus, ['ERROR', 'EXPIRED'], true)) {
+                throw new RuntimeException('Instagram story container failed with status ' . $lastStatus . '.');
+            }
+
+            usleep(1500000);
+        }
+
+        if ($mediaType === 'VIDEO') {
+            throw new RuntimeException('Instagram story video is still processing. Please try again in a moment.');
+        }
+
+        return $lastStatus;
     }
 
     protected function resolveAccessToken(ProviderConnection $connection): string

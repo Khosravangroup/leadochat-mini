@@ -736,13 +736,65 @@
 
             .social-story-grid {
                 display: grid;
-                grid-template-columns: repeat(3, minmax(0, 1fr));
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+                gap: 12px;
+            }
+
+            .social-story-tray {
+                display: flex;
                 gap: 14px;
+                overflow-x: auto;
+                padding: 4px 2px 14px;
+                margin-bottom: 12px;
+            }
+
+            .social-story-ring {
+                width: 76px;
+                min-width: 76px;
+                display: grid;
+                gap: 6px;
+                justify-items: center;
+                color: #334155;
+                text-decoration: none;
+                font-size: 11px;
+                font-weight: 800;
+            }
+
+            .social-story-ring-media {
+                width: 64px;
+                height: 64px;
+                border-radius: 999px;
+                padding: 3px;
+                background: linear-gradient(135deg, #f43f5e, #f59e0b 45%, #7c3aed);
+            }
+
+            .social-story-ring-media-inner {
+                width: 100%;
+                height: 100%;
+                border: 3px solid #fff;
+                border-radius: 999px;
+                overflow: hidden;
+                background: #f8fafc;
+            }
+
+            .social-story-ring-media-inner img,
+            .social-story-ring-media-inner video {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+                display: block;
+            }
+
+            .social-story-composer-grid {
+                display: grid;
+                grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
+                gap: 18px;
+                align-items: start;
             }
 
             .social-story-card {
                 border: 1px solid #e2e8f0;
-                border-radius: 14px;
+                border-radius: 8px;
                 background: #fff;
                 overflow: hidden;
             }
@@ -752,17 +804,18 @@
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                min-height: 220px;
-                background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+                aspect-ratio: 9 / 16;
+                background: #0f172a;
                 border-bottom: 1px solid #e2e8f0;
             }
 
-            .social-story-image {
+            .social-story-image,
+            .social-story-video {
                 display: block;
                 width: 100%;
-                height: 220px;
+                height: 100%;
                 object-fit: cover;
-                background: #f8fafc;
+                background: #0f172a;
             }
 
             .social-story-fallback {
@@ -839,7 +892,7 @@
                 width: 100%;
                 min-height: 40px;
                 border: 1px solid #cbd5e1;
-                border-radius: 10px;
+                border-radius: 8px;
                 padding: 0 12px;
                 font-size: 13px;
                 color: #334155;
@@ -852,15 +905,17 @@
             }
 
             .social-story-preview-box {
-                border: 1px dashed #cbd5e1;
-                border-radius: 12px;
-                background: #f8fafc;
-                min-height: 240px;
+                border: 1px solid #cbd5e1;
+                border-radius: 8px;
+                background: #0f172a;
+                width: min(100%, 320px);
+                aspect-ratio: 9 / 16;
                 display: flex;
                 align-items: center;
                 justify-content: center;
                 overflow: hidden;
                 position: relative;
+                margin: 0 auto;
             }
 
             .social-story-preview-empty {
@@ -871,20 +926,63 @@
                 color: #64748b;
                 font-weight: 700;
             }
-            .social-story-preview-image,
-.social-story-preview-video {
-    display: block;
-    width: 100%;
-    max-height: 320px;
-    object-fit: cover;
-    background: #f8fafc;
-}
 
-.social-story-preview-image[hidden],
-.social-story-preview-video[hidden],
-.social-story-preview-empty[hidden] {
-    display: none !important;
-}
+            .social-story-preview-image,
+            .social-story-preview-video {
+                display: block;
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+                background: #0f172a;
+            }
+
+            .social-story-preview-image[hidden],
+            .social-story-preview-video[hidden],
+            .social-story-preview-empty[hidden] {
+                display: none !important;
+            }
+
+            .social-story-limits {
+                display: grid;
+                gap: 6px;
+                padding: 10px 12px;
+                border: 1px solid #e2e8f0;
+                border-radius: 8px;
+                background: #f8fafc;
+                font-size: 12px;
+                line-height: 1.6;
+                color: #475569;
+            }
+
+            .social-story-progress {
+                display: none;
+                gap: 8px;
+                margin-top: 4px;
+            }
+
+            .social-story-progress.is-visible {
+                display: grid;
+            }
+
+            .social-story-progress-track {
+                height: 8px;
+                border-radius: 999px;
+                background: #e2e8f0;
+                overflow: hidden;
+            }
+
+            .social-story-progress-bar {
+                width: 0%;
+                height: 100%;
+                border-radius: inherit;
+                background: linear-gradient(90deg, #2563eb, #16a34a);
+                transition: width .2s ease;
+            }
+
+            .social-story-progress-text {
+                font-size: 12px;
+                font-weight: 800;
+                color: #334155;
             }
 
             .social-story-help {
@@ -902,7 +1000,8 @@
 
             @media (max-width: 960px) {
                 .social-story-grid,
-                .social-story-form-grid {
+                .social-story-form-grid,
+                .social-story-composer-grid {
                     grid-template-columns: 1fr;
                 }
             }
@@ -953,6 +1052,10 @@
                         <span class="social-connection-badge">
                             <span data-social-comment-total>{{ $socialCounts['comments'] }}</span> comments
                         </span>
+
+                        <span class="social-connection-badge">
+                            {{ $socialCounts['stories'] }} stories
+                        </span>
                     @else
                         <span class="social-connection-badge missing">
                             Connect Instagram to load social content
@@ -973,6 +1076,7 @@
                                 <div class="social-account-meta">
                                     <span>{{ $accountTab['post_count'] }} posts</span>
                                     <span>{{ $accountTab['comment_count'] }} comments</span>
+                                    <span>{{ $accountTab['story_count'] ?? 0 }} stories</span>
                                     <span>Connected</span>
                                 </div>
                             </a>
@@ -1768,63 +1872,97 @@
                         @endif
                     </div>
                 @else
-                    <h3 class="social-section-title">Stories — {{ $socialCounts['stories'] }} stored stories</h3>
+                    <div id="social-stories-root">
+                        <h3 class="social-section-title">Stories — {{ $socialCounts['stories'] }} active stories</h3>
 
+                        @if (!empty($storySyncError))
+                            <div class="social-sync-banner error">
+                                Story sync failed: {{ $storySyncError }}
+                            </div>
+                        @endif
 
-
-                    @if (!empty($storySyncError))
-                        <div class="social-sync-banner error">
-                            Story sync failed: {{ $storySyncError }}
-                        </div>
-                    @endif
-
-                    <div class="social-placeholder-grid" style="margin-bottom:14px;">
-                        <div class="social-placeholder-box">
-                            <div class="social-placeholder-label">Publish Story</div>
-
-                            <form
-                                method="POST"
-                                action="{{ route('social.instagram.stories.publish') }}"
-                                class="social-story-form"
-                                enctype="multipart/form-data"
-                            >
-                                @csrf
-                                <input type="hidden" name="instagram_account" value="{{ $selectedInstagramAccountId }}">
-
-                                <div class="social-story-form-grid">
-                                    <div class="social-story-field">
-                                        <label class="social-story-label">Media type</label>
-                                        <select
-                                            name="media_type"
-                                            class="social-story-select"
-                                            {{ $storyPublishEnabled ? '' : 'disabled' }}
-                                        >
-                                            <option value="IMAGE" {{ old('media_type') === 'IMAGE' ? 'selected' : '' }}>IMAGE</option>
-                                            <option value="VIDEO" {{ old('media_type') === 'VIDEO' ? 'selected' : '' }}>VIDEO</option>
-                                        </select>
-                                        @error('media_type')
-                                            <div class="social-story-help" style="color:#b91c1c;">{{ $message }}</div>
-                                        @enderror
+                        @if (($stories ?? collect())->isNotEmpty())
+                            <div class="social-story-tray" aria-label="Instagram story tray">
+                                @foreach ($stories->take(16) as $story)
+                                    @php
+                                        $storyRaw = is_array($story->raw) ? $story->raw : [];
+                                        $storyMediaUrl = $story->thumbnail_url ?: $story->media_url;
+                                        $storyMediaType = strtoupper((string) ($storyRaw['media_type'] ?? $storyRaw['remote_story']['media_type'] ?? 'IMAGE'));
+                                    @endphp
+                                    <div class="social-story-ring">
+                                        <div class="social-story-ring-media">
+                                            <div class="social-story-ring-media-inner">
+                                                @if ($storyMediaUrl && $storyMediaType === 'VIDEO')
+                                                    <video muted playsinline preload="metadata" src="{{ $storyMediaUrl }}"></video>
+                                                @elseif ($storyMediaUrl)
+                                                    <img src="{{ $storyMediaUrl }}" alt="Story thumbnail">
+                                                @endif
+                                            </div>
+                                        </div>
+                                        <span>{{ $activeInstagramConnection?->provider_account_name ?: 'Story' }}</span>
                                     </div>
+                                @endforeach
+                            </div>
+                        @endif
 
-                                    <div class="social-story-field">
-                                        <label class="social-story-label">Story file</label>
-                                        <input
-                                            type="file"
-                                            name="story_file"
-                                            class="social-story-file"
-                                            accept="image/*,video/mp4,video/quicktime"
-                                            {{ $storyPublishEnabled ? '' : 'disabled' }}
-                                        >
-                                        @error('story_file')
-                                            <div class="social-story-help" style="color:#b91c1c;">{{ $message }}</div>
-                                        @enderror
+                        <div class="social-placeholder-box" style="margin-bottom:14px;">
+                            <div class="social-story-composer-grid">
+                                <div>
+                                    <label class="social-story-label">Story preview</label>
+                                    <div class="social-story-preview-box" id="story-preview-box">
+                                        <div class="social-story-preview-empty" id="story-preview-empty">
+                                            9:16 Instagram Story preview
+                                        </div>
+                                        <img id="story-preview-image" class="social-story-preview-image" alt="Story preview" hidden>
+                                        <video id="story-preview-video" class="social-story-preview-video" controls playsinline hidden></video>
                                     </div>
                                 </div>
 
-                                <div class="social-story-form-grid">
+                                <form
+                                    id="social-story-publish-form"
+                                    method="POST"
+                                    action="{{ route('social.instagram.stories.publish') }}"
+                                    class="social-story-form"
+                                    enctype="multipart/form-data"
+                                >
+                                    @csrf
+                                    <input type="hidden" name="instagram_account" value="{{ $selectedInstagramAccountId }}">
+
+                                    <div class="social-placeholder-label">Publish Story</div>
+
+                                    <div class="social-story-form-grid">
+                                        <div class="social-story-field">
+                                            <label class="social-story-label">Media type</label>
+                                            <select
+                                                name="media_type"
+                                                class="social-story-select"
+                                                {{ $storyPublishEnabled ? '' : 'disabled' }}
+                                            >
+                                                <option value="IMAGE" {{ old('media_type') === 'IMAGE' ? 'selected' : '' }}>Image story</option>
+                                                <option value="VIDEO" {{ old('media_type') === 'VIDEO' ? 'selected' : '' }}>Video story</option>
+                                            </select>
+                                            @error('media_type')
+                                                <div class="social-story-help" style="color:#b91c1c;">{{ $message }}</div>
+                                            @enderror
+                                        </div>
+
+                                        <div class="social-story-field">
+                                            <label class="social-story-label">Story file</label>
+                                            <input
+                                                type="file"
+                                                name="story_file"
+                                                class="social-story-file"
+                                                accept="image/jpeg,video/mp4,video/quicktime"
+                                                {{ $storyPublishEnabled ? '' : 'disabled' }}
+                                            >
+                                            @error('story_file')
+                                                <div class="social-story-help" style="color:#b91c1c;">{{ $message }}</div>
+                                            @enderror
+                                        </div>
+                                    </div>
+
                                     <div class="social-story-field">
-                                        <label class="social-story-label">Media URL (optional fallback)</label>
+                                        <label class="social-story-label">Media URL fallback</label>
                                         <input
                                             type="text"
                                             name="media_url"
@@ -1838,237 +1976,118 @@
                                         @enderror
                                     </div>
 
-                                    <div class="social-story-field">
-                                        <label class="social-story-label">Caption</label>
-                                        <input
-                                            type="text"
-                                            name="caption"
-                                            class="social-story-input"
-                                            placeholder="Optional caption"
-                                            value="{{ old('caption') }}"
-                                            {{ $storyPublishEnabled ? '' : 'disabled' }}
-                                        >
-                                        @error('caption')
-                                            <div class="social-story-help" style="color:#b91c1c;">{{ $message }}</div>
-                                        @enderror
+                                    <div class="social-story-limits">
+                                        <div>Use one media item only. Recommended size is 1080 × 1920, 9:16.</div>
+                                        <div>Image: JPEG, max 8 MB. Video: MP4 or MOV, 3-60 seconds, max 100 MB.</div>
+                                        <div>Instagram API publishing does not support Story text overlays, stickers, links, polls, music, or captions.</div>
                                     </div>
-                                </div>
 
-                                <div class="social-story-field">
-                                    <label class="social-story-label">Story preview</label>
-                                    <div class="social-story-preview-box" id="story-preview-box">
-                                        <div class="social-story-preview-empty" id="story-preview-empty">
-                                            Select an image/video file or provide a media URL to preview the story before publishing.
+                                    <div class="social-story-progress" id="social-story-progress">
+                                        <div class="social-story-progress-track">
+                                            <div class="social-story-progress-bar" id="social-story-progress-bar"></div>
                                         </div>
-                                        <img id="story-preview-image" class="social-story-preview-image" alt="Story preview" hidden>
-                                        <video id="story-preview-video" class="social-story-preview-video" controls playsinline hidden></video>
+                                        <div class="social-story-progress-text" id="social-story-progress-text">
+                                            Waiting for media
+                                        </div>
+                                    </div>
+
+                                    <div class="social-story-help" id="social-story-message">
+                                        Current status: {{ $storyPublishEnabled ? 'ready to publish' : 'Instagram connection required' }}.
+                                    </div>
+
+                                    <div class="social-story-actions">
+                                        <button type="submit" class="social-post-action-button" {{ $storyPublishEnabled ? '' : 'disabled' }}>
+                                            Publish story
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+
+                        @if (($stories ?? collect())->isEmpty())
+                            <div class="social-placeholder-grid">
+                                <div class="social-placeholder-box">
+                                    <div class="social-placeholder-label">No active stories yet</div>
+                                    <div class="social-placeholder-text">
+                                        Your connected account Stories will appear here after publishing or syncing. Instagram Stories expire after 24 hours.
                                     </div>
                                 </div>
 
-                                <div class="social-story-help">
-                                    Current status: {{ $storyPublishEnabled ? 'ready to publish' : 'Instagram connection required' }}.
-                                    First priority is uploaded file. If no file is selected, optional media URL is used.
-                                </div>
-
-                                <div class="social-story-actions">
-                                    <button type="submit" class="social-post-action-button" {{ $storyPublishEnabled ? '' : 'disabled' }}>
-                                        Publish story
-                                    </button>
-                                </div>
-                            </form>
-                            <script>
-                                (function () {
-                                    const fileInput = document.querySelector('input[name="story_file"]');
-                                    const mediaUrlInput = document.querySelector('input[name="media_url"]');
-                                    const mediaTypeInput = document.querySelector('select[name="media_type"]');
-                                    const emptyBox = document.getElementById('story-preview-empty');
-                                    const imagePreview = document.getElementById('story-preview-image');
-                                    const videoPreview = document.getElementById('story-preview-video');
-
-                                    if (!fileInput || !mediaUrlInput || !mediaTypeInput || !emptyBox || !imagePreview || !videoPreview) {
-                                        return;
-                                    }
-
-                                    const resetPreview = () => {
-                                        imagePreview.hidden = true;
-                                        imagePreview.removeAttribute('src');
-                                        videoPreview.hidden = true;
-                                        videoPreview.pause();
-                                        videoPreview.removeAttribute('src');
-                                        videoPreview.load();
-                                        emptyBox.hidden = false;
-                                    };
-                                    const showImage = (src) => {
-    if (!src) {
-        resetPreview();
-        return;
-    }
-
-    videoPreview.hidden = true;
-    videoPreview.pause();
-    videoPreview.removeAttribute('src');
-    videoPreview.load();
-
-    imagePreview.hidden = true;
-    imagePreview.removeAttribute('src');
-    imagePreview.src = src;
-    imagePreview.hidden = false;
-
-    emptyBox.hidden = true;
-};
-
-const showVideo = (src) => {
-    if (!src) {
-        resetPreview();
-        return;
-    }
-
-    imagePreview.hidden = true;
-    imagePreview.removeAttribute('src');
-
-    videoPreview.hidden = true;
-    videoPreview.removeAttribute('src');
-    videoPreview.src = src;
-    videoPreview.hidden = false;
-
-    emptyBox.hidden = true;
-};
-
-                                    const detectUrlKind = (url) => {
-                                        const cleanUrl = String(url || '').split('?')[0].toLowerCase();
-
-                                        if (/\.(jpg|jpeg|png|webp|gif)$/i.test(cleanUrl)) {
-                                            return 'IMAGE';
-                                        }
-
-                                        if (/\.(mp4|mov|m4v|webm)$/i.test(cleanUrl)) {
-                                            return 'VIDEO';
-                                        }
-
-                                        return null;
-                                    };
-
-                                    const updatePreview = () => {
-                                        const selectedFile = fileInput.files && fileInput.files[0] ? fileInput.files[0] : null;
-                                        const selectedMediaType = mediaTypeInput.value;
-                                        const mediaUrl = mediaUrlInput.value.trim();
-
-                                        if (selectedFile) {
-                                            const objectUrl = URL.createObjectURL(selectedFile);
-
-                                            if (String(selectedFile.type || '').startsWith('video/')) {
-                                                showVideo(objectUrl);
-                                            } else {
-                                                showImage(objectUrl);
-                                            }
-
-                                            return;
-                                        }
-
-                                        if (mediaUrl !== '') {
-                                            const urlKind = detectUrlKind(mediaUrl) || selectedMediaType;
-
-                                            if (urlKind === 'VIDEO') {
-                                                showVideo(mediaUrl);
-                                            } else {
-                                                showImage(mediaUrl);
-                                            }
-
-                                            return;
-                                        }
-
-                                        resetPreview();
-                                    };
-
-                                    fileInput.addEventListener('change', updatePreview);
-                                    mediaUrlInput.addEventListener('input', updatePreview);
-                                    mediaTypeInput.addEventListener('change', updatePreview);
-                                    updatePreview();
-                                })();
-                            </script>
-                        </div>
-
-                        <div class="social-placeholder-box">
-                            <div class="social-placeholder-label">Story status</div>
-                            <div class="social-placeholder-text">
-                                Stored stories are shown below. Publishing is {{ $storyPublishEnabled ? 'enabled for this workspace connection' : 'disabled until Instagram is connected' }}.
-                            </div>
-                        </div>
-                    </div>
-
-                    @if (($stories ?? collect())->isEmpty())
-                        <div class="social-placeholder-grid">
-                            <div class="social-placeholder-box">
-                                <div class="social-placeholder-label">No stories stored yet</div>
-                                <div class="social-placeholder-text">
-                                    Once stories are synced or published, they will appear here with posting time, expiry time, and status.
+                                <div class="social-placeholder-box">
+                                    <div class="social-placeholder-label">Follower Stories</div>
+                                    <div class="social-placeholder-text">
+                                        Instagram’s official API does not expose the full follower Story feed. This area stays focused on connected account Stories.
+                                    </div>
                                 </div>
                             </div>
+                        @else
+                            <div class="social-story-grid" id="social-story-grid">
+                                @foreach ($stories as $story)
+                                    @php
+                                        $storyRaw = is_array($story->raw) ? $story->raw : [];
+                                        $storyMediaUrl = $story->media_url ?: $story->thumbnail_url;
+                                        $storyMediaType = strtoupper((string) ($storyRaw['media_type'] ?? $storyRaw['remote_story']['media_type'] ?? 'IMAGE'));
+                                        $storyStatus = strtolower((string) ($story->status ?: 'draft'));
+                                    @endphp
+                                    <div class="social-story-card">
+                                        <div class="social-story-media">
+                                            @if ($storyMediaUrl && $storyMediaType === 'VIDEO')
+                                                <video
+                                                    src="{{ $storyMediaUrl }}"
+                                                    class="social-story-video"
+                                                    controls
+                                                    playsinline
+                                                    preload="metadata"
+                                                ></video>
+                                            @elseif ($storyMediaUrl)
+                                                <img
+                                                    src="{{ $storyMediaUrl }}"
+                                                    alt="Instagram story {{ $story->provider_story_id }}"
+                                                    class="social-story-image"
+                                                >
+                                            @else
+                                                <div class="social-story-fallback">
+                                                    Story preview is not available yet
+                                                </div>
+                                            @endif
+                                        </div>
 
-                            <div class="social-placeholder-box">
-                                <div class="social-placeholder-label">Next step</div>
-                                <div class="social-placeholder-text">
-                                    After this UI shell, the next step is wiring the real publish story action and storing the result in `social_stories`.
-                                </div>
-                            </div>
-                        </div>
-                    @else
-                        <div class="social-story-grid">
-                            @foreach ($stories as $story)
-                                @php
-                                    $storyMediaUrl = $story->media_url ?: $story->thumbnail_url;
-                                    $storyStatus = strtolower((string) ($story->status ?: 'draft'));
-                                @endphp
-                                <div class="social-story-card">
-                                    <div class="social-story-media">
-                                        @if ($storyMediaUrl)
-                                            <img
-                                                src="{{ $storyMediaUrl }}"
-                                                alt="Instagram story {{ $story->provider_story_id }}"
-                                                class="social-story-image"
-                                            >
-                                        @else
-                                            <div class="social-story-fallback">
-                                                Story preview is not available yet
+                                        <div class="social-story-body">
+                                            <div class="social-story-meta">
+                                                <span class="social-post-badge social-story-status-badge {{ $storyStatus }}">
+                                                    {{ ucfirst($storyStatus) }}
+                                                </span>
+                                                <span class="social-post-badge">{{ ucfirst(strtolower($storyMediaType)) }}</span>
                                             </div>
-                                        @endif
-                                    </div>
 
-                                    <div class="social-story-body">
-                                        <div class="social-story-meta">
-                                            <span class="social-post-badge social-story-status-badge {{ $storyStatus }}">
-                                                Status: {{ ucfirst($storyStatus) }}
-                                            </span>
-                                            <span class="social-post-badge">Instagram Story</span>
-                                        </div>
+                                            <div class="social-story-meta">
+                                                <span class="social-post-badge">
+                                                    Posted: {{ $story->posted_at ? $story->posted_at->format('Y-m-d H:i') : 'No publish time' }}
+                                                </span>
+                                            </div>
 
-                                        <div class="social-story-meta">
-                                            <span class="social-post-badge">
-                                                Posted: {{ $story->posted_at ? $story->posted_at->format('Y-m-d H:i') : 'No publish time' }}
-                                            </span>
-                                        </div>
+                                            <div class="social-story-meta">
+                                                <span class="social-post-badge">
+                                                    Expires: {{ $story->expires_at ? $story->expires_at->format('Y-m-d H:i') : 'No expiry time' }}
+                                                </span>
+                                            </div>
 
-                                        <div class="social-story-meta">
-                                            <span class="social-post-badge">
-                                                Expires: {{ $story->expires_at ? $story->expires_at->format('Y-m-d H:i') : 'No expiry time' }}
-                                            </span>
-                                        </div>
-
-                                        <div class="social-story-actions">
-                                            <form method="POST" action="{{ route('social.instagram.stories.delete', $story) }}">
-                                                @csrf
-                                                @method('DELETE')
-                                                <input type="hidden" name="instagram_account" value="{{ $selectedInstagramAccountId }}">
-                                                <button type="submit" class="social-post-action-button">
-                                                    Delete story
-                                                </button>
-                                            </form>
+                                            <div class="social-story-actions">
+                                                <form method="POST" action="{{ route('social.instagram.stories.delete', $story) }}">
+                                                    @csrf
+                                                    @method('DELETE')
+                                                    <input type="hidden" name="instagram_account" value="{{ $selectedInstagramAccountId }}">
+                                                    <button type="submit" class="social-post-action-button">
+                                                        Remove from list
+                                                    </button>
+                                                </form>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            @endforeach
-                        </div>
-                    @endif
+                                @endforeach
+                            </div>
+                        @endif
+                    </div>
                 @endif
 
                 <script>
@@ -2081,6 +2100,7 @@ const showVideo = (src) => {
                         let countersTimer = null;
                         let isRefreshing = false;
                         let refreshQueued = false;
+                        let storyPreviewObjectUrl = null;
 
                         const rememberSocialState = function () {
                             sessionStorage.setItem('social_posts_scroll_y', String(window.scrollY || window.pageYOffset || 0));
@@ -2099,7 +2119,7 @@ const showVideo = (src) => {
                         const replaceSocialRootFromHtml = function (html) {
                             const parser = new DOMParser();
                             const doc = parser.parseFromString(html, 'text/html');
-                            const selectors = ['.social-top-card', '#social-posts-root', '#social-comments-root'];
+                            const selectors = ['.social-top-card', '#social-posts-root', '#social-comments-root', '#social-stories-root'];
                             let replaced = false;
 
                             selectors.forEach(function (selector) {
@@ -2119,6 +2139,8 @@ const showVideo = (src) => {
                             if (typeof window.socialBindInlineCommentActions === 'function') {
                                 window.socialBindInlineCommentActions();
                             }
+
+                            bindStoryPublisher();
 
                             restoreSocialState();
                             return true;
@@ -2232,6 +2254,293 @@ const showVideo = (src) => {
                             countersTimer = setInterval(refreshPostCounters, 15000);
                             setTimeout(refreshPostCounters, 2500);
                         }
+
+                        const setStoryProgress = function (percent, text) {
+                            const progress = document.getElementById('social-story-progress');
+                            const bar = document.getElementById('social-story-progress-bar');
+                            const label = document.getElementById('social-story-progress-text');
+
+                            if (!progress || !bar || !label) {
+                                return;
+                            }
+
+                            progress.classList.add('is-visible');
+                            bar.style.width = `${Math.max(0, Math.min(percent, 100))}%`;
+                            label.textContent = text;
+                        };
+
+                        const setStoryMessage = function (message, isError = false) {
+                            const messageBox = document.getElementById('social-story-message');
+
+                            if (!messageBox) {
+                                return;
+                            }
+
+                            messageBox.textContent = message;
+                            messageBox.style.color = isError ? '#b91c1c' : '#64748b';
+                            messageBox.style.fontWeight = isError ? '800' : '400';
+                        };
+
+                        const resetStoryPreview = function () {
+                            const form = document.getElementById('social-story-publish-form');
+                            const emptyBox = document.getElementById('story-preview-empty');
+                            const imagePreview = document.getElementById('story-preview-image');
+                            const videoPreview = document.getElementById('story-preview-video');
+
+                            if (form) {
+                                form.dataset.storyVideoInvalid = '0';
+                            }
+
+                            if (storyPreviewObjectUrl) {
+                                URL.revokeObjectURL(storyPreviewObjectUrl);
+                                storyPreviewObjectUrl = null;
+                            }
+
+                            if (imagePreview) {
+                                imagePreview.hidden = true;
+                                imagePreview.removeAttribute('src');
+                            }
+
+                            if (videoPreview) {
+                                videoPreview.hidden = true;
+                                videoPreview.pause();
+                                videoPreview.removeAttribute('src');
+                                videoPreview.load();
+                            }
+
+                            if (emptyBox) {
+                                emptyBox.hidden = false;
+                            }
+                        };
+
+                        const showStoryImage = function (src) {
+                            const form = document.getElementById('social-story-publish-form');
+                            const emptyBox = document.getElementById('story-preview-empty');
+                            const imagePreview = document.getElementById('story-preview-image');
+                            const videoPreview = document.getElementById('story-preview-video');
+
+                            if (!src || !imagePreview || !videoPreview || !emptyBox) {
+                                resetStoryPreview();
+                                return;
+                            }
+
+                            videoPreview.hidden = true;
+                            videoPreview.pause();
+                            videoPreview.removeAttribute('src');
+                            videoPreview.load();
+                            videoPreview.onloadedmetadata = null;
+                            imagePreview.src = src;
+                            imagePreview.hidden = false;
+                            emptyBox.hidden = true;
+
+                            if (form) {
+                                form.dataset.storyVideoInvalid = '0';
+                            }
+                        };
+
+                        const showStoryVideo = function (src) {
+                            const form = document.getElementById('social-story-publish-form');
+                            const emptyBox = document.getElementById('story-preview-empty');
+                            const imagePreview = document.getElementById('story-preview-image');
+                            const videoPreview = document.getElementById('story-preview-video');
+
+                            if (!src || !imagePreview || !videoPreview || !emptyBox) {
+                                resetStoryPreview();
+                                return;
+                            }
+
+                            imagePreview.hidden = true;
+                            imagePreview.removeAttribute('src');
+                            videoPreview.src = src;
+                            videoPreview.hidden = false;
+                            videoPreview.onloadedmetadata = function () {
+                                if (!form || !Number.isFinite(videoPreview.duration)) {
+                                    return;
+                                }
+
+                                const invalidDuration = videoPreview.duration < 3 || videoPreview.duration > 60;
+                                form.dataset.storyVideoInvalid = invalidDuration ? '1' : '0';
+
+                                if (invalidDuration) {
+                                    setStoryMessage('Video Stories must be between 3 and 60 seconds.', true);
+                                }
+                            };
+                            emptyBox.hidden = true;
+                        };
+
+                        const detectStoryUrlKind = function (url) {
+                            const cleanUrl = String(url || '').split('?')[0].toLowerCase();
+
+                            if (/\.(jpg|jpeg)$/i.test(cleanUrl)) {
+                                return 'IMAGE';
+                            }
+
+                            if (/\.(mp4|mov)$/i.test(cleanUrl)) {
+                                return 'VIDEO';
+                            }
+
+                            return null;
+                        };
+
+                        const updateStoryPreview = function () {
+                            const form = document.getElementById('social-story-publish-form');
+                            const fileInput = form?.querySelector('input[name="story_file"]');
+                            const mediaUrlInput = form?.querySelector('input[name="media_url"]');
+                            const mediaTypeInput = form?.querySelector('select[name="media_type"]');
+                            const selectedFile = fileInput?.files && fileInput.files[0] ? fileInput.files[0] : null;
+                            const mediaUrl = mediaUrlInput ? mediaUrlInput.value.trim() : '';
+                            const selectedMediaType = mediaTypeInput ? mediaTypeInput.value : 'IMAGE';
+
+                            if (storyPreviewObjectUrl) {
+                                URL.revokeObjectURL(storyPreviewObjectUrl);
+                                storyPreviewObjectUrl = null;
+                            }
+
+                            if (selectedFile) {
+                                storyPreviewObjectUrl = URL.createObjectURL(selectedFile);
+
+                                if (String(selectedFile.type || '').startsWith('video/')) {
+                                    showStoryVideo(storyPreviewObjectUrl);
+                                } else {
+                                    showStoryImage(storyPreviewObjectUrl);
+                                }
+
+                                return;
+                            }
+
+                            if (mediaUrl !== '') {
+                                const urlKind = detectStoryUrlKind(mediaUrl) || selectedMediaType;
+
+                                if (urlKind === 'VIDEO') {
+                                    showStoryVideo(mediaUrl);
+                                } else {
+                                    showStoryImage(mediaUrl);
+                                }
+
+                                return;
+                            }
+
+                            resetStoryPreview();
+                        };
+
+                        const bindStoryPublisher = function () {
+                            const form = document.getElementById('social-story-publish-form');
+
+                            if (!form || form.dataset.bound === '1') {
+                                return;
+                            }
+
+                            form.dataset.bound = '1';
+                            const fileInput = form.querySelector('input[name="story_file"]');
+                            const mediaUrlInput = form.querySelector('input[name="media_url"]');
+                            const mediaTypeInput = form.querySelector('select[name="media_type"]');
+                            const submitButton = form.querySelector('button[type="submit"]');
+
+                            fileInput?.addEventListener('change', function () {
+                                const file = fileInput.files && fileInput.files[0] ? fileInput.files[0] : null;
+
+                                if (file && String(file.type || '').startsWith('image/')) {
+                                    mediaTypeInput.value = 'IMAGE';
+                                }
+
+                                if (file && String(file.type || '').startsWith('video/')) {
+                                    mediaTypeInput.value = 'VIDEO';
+                                }
+
+                                updateStoryPreview();
+                            });
+
+                            mediaUrlInput?.addEventListener('input', updateStoryPreview);
+                            mediaTypeInput?.addEventListener('change', updateStoryPreview);
+                            updateStoryPreview();
+
+                            form.addEventListener('submit', function (event) {
+                                event.preventDefault();
+
+                                const selectedFile = fileInput?.files && fileInput.files[0] ? fileInput.files[0] : null;
+
+                                if (selectedFile && mediaTypeInput?.value === 'IMAGE' && selectedFile.size > 8 * 1024 * 1024) {
+                                    setStoryMessage('Image Stories must be 8 MB or smaller.', true);
+                                    return;
+                                }
+
+                                if (selectedFile && mediaTypeInput?.value === 'VIDEO' && selectedFile.size > 100 * 1024 * 1024) {
+                                    setStoryMessage('Video Stories must be 100 MB or smaller.', true);
+                                    return;
+                                }
+
+                                if (form.dataset.storyVideoInvalid === '1') {
+                                    setStoryMessage('Video Stories must be between 3 and 60 seconds.', true);
+                                    return;
+                                }
+
+                                const xhr = new XMLHttpRequest();
+                                const formData = new FormData(form);
+
+                                if (submitButton) {
+                                    submitButton.disabled = true;
+                                }
+
+                                setStoryMessage('Uploading Story media...');
+                                setStoryProgress(5, 'Preparing upload');
+
+                                xhr.upload.addEventListener('progress', function (progressEvent) {
+                                    if (!progressEvent.lengthComputable) {
+                                        setStoryProgress(35, 'Uploading media');
+                                        return;
+                                    }
+
+                                    const uploadPercent = Math.round((progressEvent.loaded / progressEvent.total) * 60) + 5;
+                                    setStoryProgress(uploadPercent, `Uploading media ${Math.round((progressEvent.loaded / progressEvent.total) * 100)}%`);
+                                });
+
+                                xhr.addEventListener('load', function () {
+                                    let data = {};
+
+                                    try {
+                                        data = JSON.parse(xhr.responseText || '{}');
+                                    } catch (error) {
+                                        data = {};
+                                    }
+
+                                    if (xhr.status >= 200 && xhr.status < 300 && data.ok !== false) {
+                                        setStoryProgress(100, 'Story published');
+                                        setStoryMessage(data.message || 'Story published successfully.');
+                                        form.reset();
+                                        resetStoryPreview();
+                                        scheduleSocialRefresh({ delay: 500 });
+                                        return;
+                                    }
+
+                                    setStoryProgress(100, 'Publish failed');
+                                    setStoryMessage(data.message || 'Story publish failed.', true);
+                                });
+
+                                xhr.addEventListener('error', function () {
+                                    setStoryProgress(100, 'Publish failed');
+                                    setStoryMessage('Story publish failed. Please try again.', true);
+                                });
+
+                                xhr.addEventListener('loadend', function () {
+                                    if (submitButton) {
+                                        submitButton.disabled = false;
+                                    }
+                                });
+
+                                xhr.open('POST', form.getAttribute('action'));
+                                xhr.setRequestHeader('Accept', 'application/json');
+                                xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+                                xhr.send(formData);
+                                setTimeout(function () {
+                                    setStoryProgress(72, 'Creating Instagram Story container');
+                                }, 800);
+                                setTimeout(function () {
+                                    setStoryProgress(86, 'Publishing to Instagram');
+                                }, 2200);
+                            });
+                        };
+
+                        bindStoryPublisher();
 
                         if (!workspaceId || !window.Echo) {
                             return;

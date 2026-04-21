@@ -569,6 +569,15 @@ class InstagramService
         return $this->instagramStoryService->publishStory($connection, $payload);
     }
 
+    public function syncStories(
+        ProviderConnection $connection,
+        array $options = []
+    ): array {
+        $this->assertInstagramConnection($connection);
+
+        return $this->instagramStoryService->syncStories($connection, $options);
+    }
+
     public function handleWebhook(Request $request): array
     {
         return $this->dispatchWebhookAction('handle_webhook', [
