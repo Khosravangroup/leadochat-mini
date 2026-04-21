@@ -1,24 +1,51 @@
-<header class="border-b border-slate-200 bg-white">
-    <div class="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-        <a href="{{ route('home') }}" class="text-xl font-bold tracking-tight text-slate-900">
-            Leadochat Mini
-        </a>
+<header class="ud-header">
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-12">
+                <nav class="navbar navbar-expand-lg">
+                    <a class="navbar-brand d-flex align-items-center gap-2" href="{{ route('home') }}">
+                        <img src="{{ asset('leadochat-site/leadochatmini-logo.png') }}" alt="Leadochat logo" class="lc-logo-mark">
+                        <span class="lc-brand-text">Leadochat</span>
+                    </a>
 
-        <nav class="hidden items-center gap-6 text-sm font-medium text-slate-700 md:flex">
-            <a href="{{ route('features') }}" class="hover:text-slate-900">Features</a>
-            <a href="{{ route('about') }}" class="hover:text-slate-900">About</a>
-            <a href="{{ route('privacy-policy') }}" class="hover:text-slate-900">Privacy Policy</a>
-            <a href="{{ route('data-deletion') }}" class="hover:text-slate-900">Data Deletion</a>
-            <a href="{{ route('contact') }}" class="hover:text-slate-900">Contact</a>
-        </nav>
+                    <button class="navbar-toggler" type="button" aria-label="Toggle navigation">
+                        <span class="toggler-icon"></span>
+                        <span class="toggler-icon"></span>
+                        <span class="toggler-icon"></span>
+                    </button>
 
-        <div class="flex items-center gap-3">
-            <a href="{{ route('login') }}" class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
-                Login
-            </a>
-            <a href="{{ route('register') }}" class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">
-                Register
-            </a>
+                    <div class="navbar-collapse">
+                        <ul id="nav" class="navbar-nav mx-auto">
+                            <li class="nav-item">
+                                <a class="ud-menu-scroll" href="{{ route('home') }}">Home</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="ud-menu-scroll" href="{{ route('features') }}">Features</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="ud-menu-scroll" href="{{ route('public.omnichannel-inbox') }}">Inbox</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="ud-menu-scroll" href="{{ route('public.instagram-dm-automation') }}">Instagram</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="ud-menu-scroll" href="{{ route('public.whatsapp-business-automation') }}">WhatsApp</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="ud-menu-scroll" href="{{ route('pricing') }}">Pricing</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="ud-menu-scroll" href="{{ route('contact') }}">Contact</a>
+                            </li>
+                        </ul>
+                    </div>
+
+                    <div class="navbar-btn d-none d-sm-inline-block">
+                        <a href="{{ route('login') }}" class="ud-main-btn ud-login-btn">Sign In</a>
+                        <a href="{{ route('register') }}" class="ud-main-btn ud-white-btn">Start Free</a>
+                    </div>
+                </nav>
+            </div>
         </div>
     </div>
 </header>

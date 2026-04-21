@@ -12,6 +12,28 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', [PublicPageController::class, 'home'])->name('home');
 Route::get('/features', [PublicPageController::class, 'features'])->name('features');
 Route::get('/about', [PublicPageController::class, 'about'])->name('about');
+Route::get('/pricing', [PublicPageController::class, 'pricing'])->name('pricing');
+Route::get('/omnichannel-inbox', [PublicPageController::class, 'landingPage'])
+    ->defaults('slug', 'omnichannel-inbox')
+    ->name('public.omnichannel-inbox');
+Route::get('/instagram-dm-automation', [PublicPageController::class, 'landingPage'])
+    ->defaults('slug', 'instagram-dm-automation')
+    ->name('public.instagram-dm-automation');
+Route::get('/whatsapp-business-automation', [PublicPageController::class, 'landingPage'])
+    ->defaults('slug', 'whatsapp-business-automation')
+    ->name('public.whatsapp-business-automation');
+Route::get('/facebook-messenger-automation', [PublicPageController::class, 'landingPage'])
+    ->defaults('slug', 'facebook-messenger-automation')
+    ->name('public.facebook-messenger-automation');
+Route::get('/customer-analytics', [PublicPageController::class, 'landingPage'])
+    ->defaults('slug', 'customer-analytics')
+    ->name('public.customer-analytics');
+Route::get('/whatsapp-sales-funnel', [PublicPageController::class, 'landingPage'])
+    ->defaults('slug', 'whatsapp-sales-funnel')
+    ->name('public.whatsapp-sales-funnel');
+Route::get('/shared-inbox-customer-support', [PublicPageController::class, 'landingPage'])
+    ->defaults('slug', 'shared-inbox-customer-support')
+    ->name('public.shared-inbox-customer-support');
 Route::get('/privacy-policy', [PublicPageController::class, 'privacyPolicy'])->name('privacy-policy');
 Route::get('/data-deletion', [PublicPageController::class, 'dataDeletion'])->name('data-deletion');
 Route::get('/contact', [PublicPageController::class, 'contact'])->name('contact');
