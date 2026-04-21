@@ -2088,7 +2088,7 @@
                                 return new Promise(function (resolve) {
                                     const refs = ensureSocialActionConfirmModal();
                                     const openedAt = Date.now();
-                                    const confirmDelayMs = 250;
+                                    const confirmDelayMs = 900;
 
                                     if (!refs.modal || !refs.title || !refs.body || !refs.cancel || !refs.submit) {
                                         resolve(false);
@@ -2126,9 +2126,15 @@
                                     refs.title.textContent = options.title || 'Confirm action';
                                     refs.body.textContent = options.message || 'Please confirm this action.';
                                     refs.submit.textContent = options.submitText || 'Confirm';
-                                    refs.submit.disabled = false;
+                                    refs.submit.disabled = true;
                                     refs.modal.classList.add('is-open');
                                     refs.modal.setAttribute('aria-hidden', 'false');
+
+                                    setTimeout(function () {
+                                        if (!settled && refs.modal.classList.contains('is-open')) {
+                                            refs.submit.disabled = false;
+                                        }
+                                    }, confirmDelayMs);
 
                                     refs.cancel.onclick = function (event) {
                                         event.preventDefault();
@@ -3771,7 +3777,7 @@
                             const confirmBody = document.getElementById('social-story-confirm-body');
                             const confirmCancel = document.getElementById('social-story-confirm-cancel');
                             const confirmSubmit = document.getElementById('social-story-confirm-submit');
-                            const confirmDelayMs = 250;
+                            const confirmDelayMs = 900;
                             let confirmOpenedAt = 0;
 
                             const closeDeleteModal = function () {
@@ -3795,9 +3801,15 @@
                                 confirmTitle.textContent = form.getAttribute('data-confirm-title') || 'Remove Story';
                                 confirmBody.textContent = form.getAttribute('data-confirm-message') || 'Remove this Story from the Leadochat list?';
                                 confirmSubmit.textContent = form.getAttribute('data-confirm-submit') || 'Remove';
-                                confirmSubmit.disabled = false;
+                                confirmSubmit.disabled = true;
                                 confirmModal.classList.add('is-open');
                                 confirmModal.setAttribute('aria-hidden', 'false');
+
+                                setTimeout(function () {
+                                    if (confirmModal.pendingDeleteForm === form && confirmModal.classList.contains('is-open')) {
+                                        confirmSubmit.disabled = false;
+                                    }
+                                }, confirmDelayMs);
 
                                 requestAnimationFrame(function () {
                                     confirmCancel?.focus({ preventScroll: true });

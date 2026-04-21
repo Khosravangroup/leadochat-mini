@@ -2020,7 +2020,7 @@
                                         style="display:inline;"
                                     >
                                         @csrf
-                                        <button type="submit" class="lc-icon-btn restore" title="Restore" aria-label="Restore conversation">
+                                        <button type="button" class="lc-icon-btn restore" title="Restore" aria-label="Restore conversation" data-lc-confirm-trigger>
                                             <svg viewBox="0 0 24 24">
                                                 <path d="M9 14 4 9m0 0 5-5M4 9h8a7 7 0 1 1 0 14h-1"></path>
                                             </svg>
@@ -2037,7 +2037,7 @@
                                         style="display:inline;"
                                     >
                                         @csrf
-                                        <button type="submit" class="lc-icon-btn restore" title="Unarchive" aria-label="Unarchive conversation">
+                                        <button type="button" class="lc-icon-btn restore" title="Unarchive" aria-label="Unarchive conversation" data-lc-confirm-trigger>
                                             <svg viewBox="0 0 24 24">
                                                 <path d="M9 14 4 9m0 0 5-5M4 9h8a7 7 0 1 1 0 14h-1"></path>
                                             </svg>
@@ -2054,7 +2054,7 @@
                                         style="display:inline;"
                                     >
                                         @csrf
-                                        <button type="submit" class="lc-icon-btn trash" title="Trash" aria-label="Move conversation to trash">
+                                        <button type="button" class="lc-icon-btn trash" title="Trash" aria-label="Move conversation to trash" data-lc-confirm-trigger>
                                             <svg viewBox="0 0 24 24">
                                                 <path d="M3 6h18"></path>
                                                 <path d="M8 6V4.75A1.75 1.75 0 0 1 9.75 3h4.5A1.75 1.75 0 0 1 16 4.75V6"></path>
@@ -2074,7 +2074,7 @@
                                         style="display:inline;"
                                     >
                                         @csrf
-                                        <button type="submit" class="lc-icon-btn archive" title="Archive" aria-label="Archive conversation">
+                                        <button type="button" class="lc-icon-btn archive" title="Archive" aria-label="Archive conversation" data-lc-confirm-trigger>
                                             <svg viewBox="0 0 24 24">
                                                 <path d="M4 7.5h16"></path>
                                                 <path d="M5.75 4h12.5A1.75 1.75 0 0 1 20 5.75v2.5A1.75 1.75 0 0 1 18.25 10H5.75A1.75 1.75 0 0 1 4 8.25v-2.5A1.75 1.75 0 0 1 5.75 4Z"></path>
@@ -2094,7 +2094,7 @@
                                         style="display:inline;"
                                     >
                                         @csrf
-                                        <button type="submit" class="lc-icon-btn trash" title="Trash" aria-label="Move conversation to trash">
+                                        <button type="button" class="lc-icon-btn trash" title="Trash" aria-label="Move conversation to trash" data-lc-confirm-trigger>
                                             <svg viewBox="0 0 24 24">
                                                 <path d="M3 6h18"></path>
                                                 <path d="M8 6V4.75A1.75 1.75 0 0 1 9.75 3h4.5A1.75 1.75 0 0 1 16 4.75V6"></path>
@@ -3034,7 +3034,8 @@
             let pendingForm = null;
             let modalOpenedAt = 0;
             let openerElement = null;
-            const confirmDelayMs = 250;
+            let isSubmittingConfirmedAction = false;
+            const confirmDelayMs = 900;
 
             const closeModal = () => {
                 modal.classList.remove('is-open');
@@ -3050,21 +3051,95 @@
                 openerElement = null;
             };
 
+            const submitConfirmedForm = async (form) => {
+                if (!form || isSubmittingConfirmedAction) {
+                    return;
+                }
+
+                if (!form.matches('.lc-conversation-action-form')) {
+                    HTMLFormElement.prototype.submit.call(form);
+                    return;
+                }
+
+                isSubmittingConfirmedAction = true;
+                modalSubmit.disabled = true;
+
+                if (openerElement instanceof HTMLButtonElement) {
+                    openerElement.disabled = true;
+                }
+
+                try {
+                    const actionUrl = form.getAttribute('action') || form.action;
+                    const response = await fetch(actionUrl, {
+                        method: 'POST',
+                        body: new FormData(form),
+                        headers: {
+                            Accept: 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest',
+                        },
+                        credentials: 'same-origin',
+                    });
+
+                    const data = await response.json().catch(() => ({}));
+
+                    if (!response.ok || data.ok === false) {
+                        throw new Error(data.error || data.message || 'Action failed.');
+                    }
+
+                    window.location.assign(data.redirect_url || @json(route('inbox.index')));
+                } catch (error) {
+                    modalBody.textContent = error?.message || 'Action failed.';
+                    modalSubmit.disabled = false;
+
+                    if (openerElement instanceof HTMLButtonElement) {
+                        openerElement.disabled = false;
+                    }
+
+                    isSubmittingConfirmedAction = false;
+                }
+            };
+
             const openModal = (form, trigger = null) => {
                 pendingForm = form;
-                openerElement = trigger?.submitter || trigger?.target?.querySelector?.('button[type="submit"]') || document.activeElement;
+                openerElement = trigger?.submitter || trigger?.target?.closest?.('[data-lc-confirm-trigger]') || trigger?.target?.querySelector?.('[data-lc-confirm-trigger]') || document.activeElement;
                 modalOpenedAt = Date.now();
+                isSubmittingConfirmedAction = false;
                 modalTitle.textContent = form.getAttribute('data-confirm-title') || 'Confirm action';
                 modalBody.textContent = form.getAttribute('data-confirm-message') || 'Please confirm this action.';
                 modalSubmit.textContent = form.getAttribute('data-confirm-submit') || 'Confirm';
-                modalSubmit.disabled = false;
+                modalSubmit.disabled = true;
                 modal.classList.add('is-open');
                 modal.setAttribute('aria-hidden', 'false');
+
+                setTimeout(function () {
+                    if (pendingForm === form && modal.classList.contains('is-open') && !isSubmittingConfirmedAction) {
+                        modalSubmit.disabled = false;
+                    }
+                }, confirmDelayMs);
 
                 requestAnimationFrame(function () {
                     modalCancel.focus({ preventScroll: true });
                 });
             };
+
+            document.addEventListener('click', function (event) {
+                const trigger = event.target.closest('[data-lc-confirm-trigger]');
+
+                if (!trigger) {
+                    return;
+                }
+
+                const form = trigger.closest('form[data-confirm-title]');
+
+                if (!form) {
+                    return;
+                }
+
+                event.preventDefault();
+                event.stopPropagation();
+                event.stopImmediatePropagation();
+                openModal(form, event);
+            }, true);
 
             document.addEventListener('submit', function (event) {
                 const form = event.target.closest('form[data-confirm-title]');
@@ -3109,13 +3184,7 @@
                     return;
                 }
 
-                const form = pendingForm;
-                modalSubmit.disabled = true;
-                pendingForm = null;
-                modal.classList.remove('is-open');
-                modal.setAttribute('aria-hidden', 'true');
-
-                HTMLFormElement.prototype.submit.call(form);
+                submitConfirmedForm(pendingForm);
             });
 
             document.addEventListener('keydown', function (event) {
