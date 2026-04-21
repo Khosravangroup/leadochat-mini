@@ -13,6 +13,7 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Symfony\Component\Process\Process;
@@ -1132,9 +1133,29 @@ class SocialController extends Controller
         }
 
         try {
+            Log::info('Instagram story publish started.', [
+                'workspace_id' => $workspace->id,
+                'provider_connection_id' => $connection->id,
+                'media_type' => $requestedMediaType,
+                'has_uploaded_file' => $uploadedFile !== null,
+                'uploaded_file_size' => $uploadedFile?->getSize(),
+                'uploaded_file_mime' => $uploadedFile?->getMimeType(),
+                'stored_path' => $storedPath,
+            ]);
+
             $result = app(InstagramService::class)->publishStory($connection, [
                 'media_type' => $validated['media_type'],
                 'media_url' => $resolvedMediaUrl,
+            ]);
+
+            Log::info('Instagram story publish finished.', [
+                'workspace_id' => $workspace->id,
+                'provider_connection_id' => $connection->id,
+                'media_type' => $requestedMediaType,
+                'creation_id' => $result['creation_id'] ?? null,
+                'provider_story_id' => $result['id'] ?? null,
+                'container_status' => $result['container_status'] ?? null,
+                'container_status_attempts' => $result['container_status_attempts'] ?? null,
             ]);
 
             $providerStoryId = (string) ($result['id'] ?? '');
@@ -1192,6 +1213,17 @@ class SocialController extends Controller
             return $this->redirectToInstagramStories($request)
                 ->with('social_success', 'Story published successfully.');
         } catch (\Throwable $exception) {
+            Log::warning('Instagram story publish failed.', [
+                'workspace_id' => $workspace->id,
+                'provider_connection_id' => $connection->id,
+                'media_type' => $requestedMediaType,
+                'has_uploaded_file' => $uploadedFile !== null,
+                'uploaded_file_size' => $uploadedFile?->getSize(),
+                'uploaded_file_mime' => $uploadedFile?->getMimeType(),
+                'stored_path' => $storedPath,
+                'error' => $exception->getMessage(),
+            ]);
+
             $message = 'Publish story failed: ' . $exception->getMessage();
 
             if ($request->expectsJson()) {
