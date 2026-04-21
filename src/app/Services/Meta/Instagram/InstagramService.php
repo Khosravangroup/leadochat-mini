@@ -203,7 +203,14 @@ class InstagramService
             throw new RuntimeException('Instagram comment private reply did not return a recipient id.');
         }
 
-        $inboxResult = $this->persistCommentDmReplyInInbox($connection, $comment, $recipientId, $text, $sendResult);
+        $inboxResult = $this->persistCommentDmReplyInInbox(
+            $connection,
+            $comment,
+            $recipientId,
+            $text,
+            $sendResult,
+            is_array($options['agent_meta'] ?? null) ? $options['agent_meta'] : []
+        );
 
         return array_merge($sendResult, [
             'inbox' => $inboxResult,
@@ -243,16 +250,18 @@ class InstagramService
         SocialComment $comment,
         string $recipientId,
         string $text,
-        array $sendResult
+        array $sendResult,
+        array $agentMeta = []
     ): array {
         $comment->loadMissing('socialPost');
         $socialPost = $comment->socialPost;
         $sentAt = now();
 
-        return DB::transaction(function () use ($connection, $comment, $socialPost, $recipientId, $text, $sendResult, $sentAt) {
+        return DB::transaction(function () use ($connection, $comment, $socialPost, $recipientId, $text, $sendResult, $agentMeta, $sentAt) {
             $conversation = $this->resolveCommentDmConversation($connection, $comment, $recipientId, $sentAt);
             $participants = $this->syncCommentDmParticipants($conversation, $connection, $comment, $recipientId);
             $providerMessageId = $this->resolveSentProviderMessageId($sendResult);
+            $messageMeta = array_filter($agentMeta, fn ($value) => $value !== null);
 
             $message = Message::create([
                 'conversation_id' => $conversation->id,
@@ -271,7 +280,7 @@ class InstagramService
                 'read_at' => null,
                 'failed_at' => null,
                 'last_error' => null,
-                'meta' => [
+                'meta' => array_merge($messageMeta, [
                     'provider' => 'instagram',
                     'delivery_mode' => 'instagram_comment_reply_dm',
                     'send_result' => $sendResult,
@@ -288,7 +297,7 @@ class InstagramService
                     'post_caption' => $socialPost?->caption,
                     'post_permalink' => $socialPost?->permalink,
                     'post_media_type' => $socialPost?->media_type,
-                ],
+                ]),
             ]);
 
             $conversation->update([

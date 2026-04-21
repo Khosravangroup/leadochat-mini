@@ -431,6 +431,13 @@ class SocialController extends Controller
             'reply_actor_id' => $user?->id,
             'reply_actor_name' => $replyActorName,
             'reply_actor_email' => $user?->email,
+            'reply_actor_avatar_url' => $user?->avatar_url,
+            'agent_user' => $user?->id ? [
+                'id' => $user->id,
+                'name' => $replyActorName ?: 'Agent',
+                'email' => $user->email,
+                'avatar_url' => $user->avatar_url,
+            ] : null,
         ];
     }
 
@@ -862,6 +869,7 @@ class SocialController extends Controller
         try {
             $sendResult = app(InstagramService::class)->replyToCommentViaDm($connection, $comment, $replyText, [
                 'messaging_type' => 'RESPONSE',
+                'agent_meta' => $this->buildCommentReplyActorMeta($request),
             ]);
 
             $comment->replied_via_dm_at = now();

@@ -193,11 +193,11 @@ class InboxController extends Controller
                             ? $providerMessageId
                             : ('instagram-outbound-' . now()->timestamp . '-' . random_int(1000, 9999)),
                         'status' => 'sent',
-                        'meta' => [
+                        'meta' => $this->withAgentMeta($user, [
                             'provider' => 'instagram',
                             'delivery_mode' => 'instagram_service_text',
                             'send_result' => $sendResult,
-                        ],
+                        ]),
                     ]);
 
                     $this->updateConversationSnapshot(
@@ -215,11 +215,11 @@ class InboxController extends Controller
                         'status' => 'failed',
                         'failed_at' => now(),
                         'last_error' => $exception->getMessage(),
-                        'meta' => [
+                        'meta' => $this->withAgentMeta($user, [
                             'provider' => 'instagram',
                             'delivery_mode' => 'instagram_service_text',
                             'send_failed' => true,
-                        ],
+                        ]),
                     ]);
 
                     $this->updateConversationSnapshot(
@@ -252,10 +252,10 @@ class InboxController extends Controller
                 'reply_to_message_id' => $replyToMessageId,
                 'message_type' => 'text',
                 'text_body' => $messageText,
-                'meta' => [
+                'meta' => $this->withAgentMeta($user, [
                     'is_mock' => true,
                     'delivery_mode' => 'controller_mock_text',
-                ],
+                ]),
             ]);
 
             $this->updateConversationSnapshot(
@@ -287,7 +287,7 @@ class InboxController extends Controller
         $createdMessageIds = [];
 
         if ($conversation->provider === 'instagram') {
-            DB::transaction(function () use ($uploadedFiles, $messageText, $replyToMessageId, $conversation, $selfParticipant, &$lastPreview, &$createdMessageIds) {
+            DB::transaction(function () use ($uploadedFiles, $messageText, $replyToMessageId, $conversation, $selfParticipant, $user, &$lastPreview, &$createdMessageIds) {
                 foreach ($uploadedFiles as $index => $uploadedFile) {
                     $upload = $this->storeInstagramOutboundUpload($uploadedFile);
                     $messageType = $upload['message_type'];
@@ -314,12 +314,12 @@ class InboxController extends Controller
                                 ? $providerMessageId
                                 : ('instagram-outbound-attachment-' . now()->timestamp . '-' . random_int(1000, 9999)),
                             'status' => 'sent',
-                            'meta' => [
+                            'meta' => $this->withAgentMeta($user, [
                                 'provider' => 'instagram',
                                 'multi_upload' => true,
                                 'delivery_mode' => 'instagram_service_attachment',
                                 'send_result' => $sendResult,
-                            ],
+                            ]),
                         ]);
 
                         MessageAttachment::create([
@@ -350,12 +350,12 @@ class InboxController extends Controller
                             'status' => 'failed',
                             'failed_at' => now(),
                             'last_error' => $exception->getMessage(),
-                            'meta' => [
+                            'meta' => $this->withAgentMeta($user, [
                                 'provider' => 'instagram',
                                 'multi_upload' => true,
                                 'delivery_mode' => 'instagram_service_attachment',
                                 'send_failed' => true,
-                            ],
+                            ]),
                         ]);
 
                         MessageAttachment::create([
@@ -390,7 +390,7 @@ class InboxController extends Controller
                 }
             });
         } else {
-            DB::transaction(function () use ($uploadedFiles, $messageText, $replyToMessageId, $conversation, $selfParticipant, &$lastPreview, &$createdMessageIds) {
+            DB::transaction(function () use ($uploadedFiles, $messageText, $replyToMessageId, $conversation, $selfParticipant, $user, &$lastPreview, &$createdMessageIds) {
                 foreach ($uploadedFiles as $index => $uploadedFile) {
                     $mimeType = $uploadedFile->getMimeType() ?: 'application/octet-stream';
                     $isImage = str_starts_with($mimeType, 'image/');
@@ -403,11 +403,11 @@ class InboxController extends Controller
                         'reply_to_message_id' => $replyToMessageId,
                         'message_type' => $messageType,
                         'caption' => $caption,
-                        'meta' => [
+                        'meta' => $this->withAgentMeta($user, [
                             'is_mock' => true,
                             'multi_upload' => true,
                             'delivery_mode' => 'controller_mock_attachment',
-                        ],
+                        ]),
                     ]);
 
                     $this->createAttachmentFromUpload($message, $uploadedFile, [
@@ -505,7 +505,7 @@ class InboxController extends Controller
                 ?? ''
             );
 
-            DB::transaction(function () use ($conversation, $selfParticipant, $durationSeconds, $upload, $sendResult, $status, $failedAt, $lastError, $providerMessageId, &$message) {
+            DB::transaction(function () use ($conversation, $selfParticipant, $user, $durationSeconds, $upload, $sendResult, $status, $failedAt, $lastError, $providerMessageId, &$message) {
                 $message = $this->createOutboundMessage($conversation, $selfParticipant, [
                     'message_type' => 'voice',
                     'provider_message_id' => $providerMessageId !== ''
@@ -514,11 +514,11 @@ class InboxController extends Controller
                     'status' => $status,
                     'failed_at' => $failedAt,
                     'last_error' => $lastError,
-                    'meta' => [
+                    'meta' => $this->withAgentMeta($user, [
                         'provider' => 'instagram',
                         'delivery_mode' => 'instagram_service_audio',
                         'send_result' => $sendResult,
-                    ],
+                    ]),
                 ]);
 
                 MessageAttachment::create([
@@ -542,13 +542,13 @@ class InboxController extends Controller
                 ]);
             });
         } else {
-            DB::transaction(function () use ($conversation, $selfParticipant, $voiceFile, $durationSeconds, &$message) {
+            DB::transaction(function () use ($conversation, $selfParticipant, $user, $voiceFile, $durationSeconds, &$message) {
                 $message = $this->createOutboundMessage($conversation, $selfParticipant, [
                     'message_type' => 'voice',
-                    'meta' => [
+                    'meta' => $this->withAgentMeta($user, [
                         'is_mock' => true,
                         'delivery_mode' => 'controller_mock_voice',
-                    ],
+                    ]),
                 ]);
 
                 $this->createAttachmentFromUpload($message, $voiceFile, [
@@ -1059,6 +1059,29 @@ class InboxController extends Controller
         $providerUserId = (string) ($customerParticipant?->provider_user_id ?? '');
 
         return $providerUserId !== '' ? $providerUserId : null;
+    }
+
+    protected function withAgentMeta(?object $user, array $meta): array
+    {
+        if (! $user?->id) {
+            return $meta;
+        }
+
+        $agentName = trim((string) ($user->name ?? ''));
+        $agentEmail = trim((string) ($user->email ?? ''));
+
+        if ($agentName === '' && $agentEmail !== '') {
+            $agentName = strstr($agentEmail, '@', true) ?: $agentEmail;
+        }
+
+        $meta['agent_user'] = [
+            'id' => $user->id,
+            'name' => $agentName !== '' ? $agentName : 'Agent',
+            'email' => $agentEmail !== '' ? $agentEmail : null,
+            'avatar_url' => $user->avatar_url ?? null,
+        ];
+
+        return $meta;
     }
 
     protected function sendInstagramTextMessage(Conversation $conversation, string $text): array

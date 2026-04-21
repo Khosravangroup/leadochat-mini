@@ -651,7 +651,7 @@
             position: relative;
             display: flex;
             flex-direction: column;
-            gap: .3rem;
+            gap: .16rem;
         }
 
         .lc-message-name {
@@ -1188,7 +1188,7 @@
         }
 
         .lc-message-meta {
-            margin-top: .35rem;
+            margin-top: .05rem;
             display: flex;
             gap: .5rem;
             flex-wrap: wrap;
@@ -1204,16 +1204,23 @@
             display: flex;
             gap: .18rem;
             flex-wrap: wrap;
-            margin-top: -.35rem;
-            margin-left: .6rem;
-            min-height: 18px;
+            align-self: flex-end;
+            margin-top: 0;
+            margin-right: .55rem;
+            min-height: 0;
             position: relative;
             z-index: 2;
+            height: 0;
+            overflow: visible;
+        }
+
+        .lc-reaction-strip.has-reaction {
+            height: 22px;
+            margin-top: .12rem;
         }
 
         .lc-message-row.outbound .lc-reaction-strip {
             justify-content: flex-end;
-            margin-left: 0;
             margin-right: .6rem;
         }
 
@@ -2095,6 +2102,15 @@
                                         $reply = $message->replyToMessage;
                                         $sender = $message->senderParticipant;
                                         $messageMeta = is_array($message->meta) ? $message->meta : [];
+                                        $agentUserMeta = is_array($messageMeta['agent_user'] ?? null)
+                                            ? $messageMeta['agent_user']
+                                            : [];
+                                        $agentName = is_string($agentUserMeta['name'] ?? null) && trim($agentUserMeta['name']) !== ''
+                                            ? trim($agentUserMeta['name'])
+                                            : ($sender?->display_name ?? 'Agent');
+                                        $agentAvatarUrl = is_string($agentUserMeta['avatar_url'] ?? null) && trim($agentUserMeta['avatar_url']) !== ''
+                                            ? trim($agentUserMeta['avatar_url'])
+                                            : ($sender?->avatar_url ?? ('https://ui-avatars.com/api/?name=' . urlencode($agentName) . '&background=724cda&color=ffffff'));
                                         $isStoryReplyMessage = (bool) ($messageMeta['is_story_reply'] ?? false);
                                         $storyReplyContextType = is_string($messageMeta['message_context_type'] ?? null)
                                             ? $messageMeta['message_context_type']
@@ -2150,20 +2166,15 @@
                                         <div class="lc-message-wrap">
                                             <img
                                                 class="lc-message-avatar"
-                                                src="{{ $sender?->avatar_url ?? ($isOutbound ? 'https://ui-avatars.com/api/?name=LC&background=724cda&color=ffffff' : 'https://ui-avatars.com/api/?name=User&background=e2e8f0&color=334155') }}"
+                                                src="{{ $isOutbound ? $agentAvatarUrl : ($sender?->avatar_url ?? 'https://ui-avatars.com/api/?name=User&background=e2e8f0&color=334155') }}"
                                                 alt="Avatar"
                                             >
 
                                             <div class="lc-message-body">
                                                 @if ($isOutbound)
                                                     <div class="lc-message-agent">
-                                                        <img
-                                                            class="lc-message-agent-avatar"
-                                                            src="{{ $sender?->avatar_url ?? 'https://ui-avatars.com/api/?name=' . urlencode($sender?->display_name ?? 'LC') . '&background=724cda&color=ffffff' }}"
-                                                            alt="{{ $sender?->display_name ?? 'Agent' }}"
-                                                        >
                                                         <div class="lc-message-agent-name">
-                                                            {{ $sender?->display_name ?? 'Agent' }}
+                                                            {{ $agentName }}
                                                         </div>
                                                     </div>
                                                 @else
@@ -2244,6 +2255,19 @@
                                                                     </a>
                                                                 @endif
                                                             </div>
+                                                        </div>
+                                                        <div class="lc-bubble-footer">
+                                                            <span>{{ optional($message->created_at)->format('M d, Y H:i') }}</span>
+
+                                                            @if ($message->status === 'sent')
+                                                                <span class="lc-status-icon sent" aria-label="sent">✓</span>
+                                                            @elseif ($message->status === 'delivered')
+                                                                <span class="lc-status-icon delivered" aria-label="delivered">✓✓</span>
+                                                            @elseif ($message->status === 'read')
+                                                                <span class="lc-status-icon read" aria-label="read">✓✓</span>
+                                                            @elseif ($message->status === 'failed')
+                                                                <span class="lc-status-icon failed" aria-label="failed">!</span>
+                                                            @endif
                                                         </div>
                                                     </div>
                                                 @elseif ($isCommentReplyDmMessage)
@@ -2369,7 +2393,7 @@
                                                     </div>
                                                 @endunless
 
-                                                <div class="lc-reaction-strip" aria-live="polite">
+                                                <div class="lc-reaction-strip {{ $customerReactionEmoji || $agentReactionEmoji ? 'has-reaction' : '' }}" aria-live="polite">
                                                     <span
                                                         class="lc-reaction-pill customer"
                                                         title="Reaction"
@@ -2985,6 +3009,7 @@
                 }
 
                 event.preventDefault();
+                event.stopImmediatePropagation();
                 openModal(form);
             });
 
@@ -4458,6 +4483,15 @@
                     }
                 }
 
+                const reactionStrip = row.querySelector('.lc-reaction-strip');
+
+                if (reactionStrip) {
+                    const hasReaction = Array.from(reactionStrip.querySelectorAll('.lc-reaction-pill'))
+                        .some((reactionPill) => reactionPill.style.display !== 'none' && reactionPill.textContent.trim() !== '');
+
+                    reactionStrip.classList.toggle('has-reaction', hasReaction);
+                }
+
                 if (actor === 'agent') {
                     updateReactionTrigger(row.querySelector('.lc-reaction-form'), emoji);
                 }
@@ -4491,6 +4525,10 @@
             });
 
             document.addEventListener('submit', async function (event) {
+                if (event.defaultPrevented) {
+                    return;
+                }
+
                 const submittedForm = event.target instanceof HTMLFormElement ? event.target : null;
                 const actionForm = submittedForm && submittedForm.matches('.lc-conversation-action-form')
                     ? submittedForm
