@@ -241,7 +241,7 @@
             border-radius: 8px;
             padding: .55rem .65rem;
             display: grid;
-            gap: .28rem;
+            gap: .45rem;
         }
 
         .lc-story-reply-title {
@@ -256,6 +256,20 @@
             font-weight: 700;
             color: #0369a1;
             line-height: 1.2;
+        }
+
+        .lc-comment-reply-cover {
+            overflow: hidden;
+            border-radius: 8px;
+            background: #dbeafe;
+            border: 1px solid #bae6fd;
+        }
+
+        .lc-comment-reply-cover img {
+            display: block;
+            width: 100%;
+            max-height: 180px;
+            object-fit: cover;
         }
 
         .lc-story-reply-meta {
@@ -303,6 +317,16 @@
             line-height: 1.35;
             color: #075985;
             word-break: break-word;
+        }
+
+        .lc-comment-reply-label {
+            display: block;
+            margin-bottom: .18rem;
+            font-size: .66rem;
+            font-weight: 800;
+            color: #0c4a6e;
+            text-transform: uppercase;
+            letter-spacing: .02em;
         }
 
         .lc-main {
@@ -1717,14 +1741,8 @@
                                         $commentReplyPostCaption = is_string($messageMeta['post_caption'] ?? null)
                                             ? $messageMeta['post_caption']
                                             : null;
-                                        $commentReplyPermalink = is_string($messageMeta['post_permalink'] ?? null)
-                                            ? $messageMeta['post_permalink']
-                                            : null;
-                                        $commentReplyProviderCommentId = is_string($messageMeta['provider_comment_id'] ?? null)
-                                            ? $messageMeta['provider_comment_id']
-                                            : null;
-                                        $commentReplyProviderMediaId = is_string($messageMeta['provider_media_id'] ?? null)
-                                            ? $messageMeta['provider_media_id']
+                                        $commentReplyPostCoverUrl = is_string($messageMeta['post_cover_url'] ?? null)
+                                            ? $messageMeta['post_cover_url']
                                             : null;
                                         $agentReaction = is_array($messageMeta['agent_reaction'] ?? null)
                                             ? $messageMeta['agent_reaction']
@@ -1794,39 +1812,23 @@
                                                     </div>
 
                                                     <div class="lc-comment-reply-box">
-                                                        <div class="lc-comment-reply-title">Instagram comment context</div>
-
-                                                        <div class="lc-story-reply-meta">
-                                                            @if ($commentReplyAuthor)
-                                                                <span class="lc-comment-reply-pill">Author: {{ $commentReplyAuthor }}</span>
-                                                            @endif
-
-                                                            @if ($commentReplyProviderCommentId)
-                                                                <span class="lc-comment-reply-pill">Comment ID: {{ $commentReplyProviderCommentId }}</span>
-                                                            @endif
-
-                                                            @if ($commentReplyProviderMediaId)
-                                                                <span class="lc-comment-reply-pill">Post ID: {{ $commentReplyProviderMediaId }}</span>
-                                                            @endif
-                                                        </div>
+                                                        @if ($commentReplyPostCoverUrl)
+                                                            <div class="lc-comment-reply-cover">
+                                                                <img src="{{ $commentReplyPostCoverUrl }}" alt="Instagram post cover">
+                                                            </div>
+                                                        @endif
 
                                                         @if ($commentReplyText)
                                                             <div class="lc-comment-reply-text">
-                                                                Comment: {{ $commentReplyText }}
+                                                                <span class="lc-comment-reply-label">Comment</span>
+                                                                {{ $commentReplyText }}
                                                             </div>
                                                         @endif
 
                                                         @if ($commentReplyPostCaption)
                                                             <div class="lc-comment-reply-text">
-                                                                Post: {{ $commentReplyPostCaption }}
-                                                            </div>
-                                                        @endif
-
-                                                        @if ($commentReplyPermalink)
-                                                            <div class="lc-comment-reply-text">
-                                                                <a href="{{ $commentReplyPermalink }}" target="_blank" rel="noopener" style="color:#0369a1; font-weight:700; text-decoration:none;">
-                                                                    Open Instagram post
-                                                                </a>
+                                                                <span class="lc-comment-reply-label">Post caption</span>
+                                                                {{ $commentReplyPostCaption }}
                                                             </div>
                                                         @endif
                                                     </div>

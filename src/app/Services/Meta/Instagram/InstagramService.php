@@ -190,8 +190,14 @@ class InstagramService
             $text,
             $options
         );
-        $recipientId = $this->resolveSentRecipientId($sendResult)
-            ?? $this->resolveCommentDmRecipientId($comment);
+        $recipientId = $this->resolveCommentDmRecipientId($comment);
+
+        if ($recipientId === null) {
+            $resolvedSendRecipientId = $this->resolveSentRecipientId($sendResult);
+            if ($resolvedSendRecipientId !== null && ! $this->isInstagramSelfScopedUserId($connection, $resolvedSendRecipientId)) {
+                $recipientId = $resolvedSendRecipientId;
+            }
+        }
 
         if ($recipientId === null) {
             throw new RuntimeException('Instagram comment private reply did not return a recipient id.');
@@ -270,14 +276,15 @@ class InstagramService
                     'delivery_mode' => 'instagram_comment_reply_dm',
                     'send_result' => $sendResult,
                     'social_comment_reply' => true,
-                    'message_context_type' => 'comment_reply_dm',
-                    'social_comment_id' => $comment->id,
-                    'social_post_id' => $socialPost?->id,
-                    'provider_media_id' => $comment->provider_media_id,
-                    'provider_comment_id' => $comment->provider_comment_id,
-                    'comment_author' => $this->resolveCommentAuthorName($comment),
-                    'comment_text' => $comment->text,
-                    'post_caption' => $socialPost?->caption,
+                'message_context_type' => 'comment_reply_dm',
+                'social_comment_id' => $comment->id,
+                'social_post_id' => $socialPost?->id,
+                'post_cover_url' => $socialPost?->thumbnail_url ?: $socialPost?->media_url,
+                'provider_media_id' => $comment->provider_media_id,
+                'provider_comment_id' => $comment->provider_comment_id,
+                'comment_author' => $this->resolveCommentAuthorName($comment),
+                'comment_text' => $comment->text,
+                'post_caption' => $socialPost?->caption,
                     'post_permalink' => $socialPost?->permalink,
                     'post_media_type' => $socialPost?->media_type,
                 ],
@@ -303,6 +310,38 @@ class InstagramService
         string $recipientId,
         \Illuminate\Support\Carbon $sentAt
     ): Conversation {
+        $existingConversation = Conversation::query()
+            ->where('workspace_id', $connection->workspace_id)
+            ->where('provider_connection_id', $connection->id)
+            ->where('provider', 'instagram')
+            ->whereHas('participants', function ($query) use ($recipientId) {
+                $query->where('provider_user_id', $recipientId)
+                    ->where('is_self', false);
+            })
+            ->latest('last_message_at')
+            ->latest('id')
+            ->first();
+
+        if ($existingConversation) {
+            if (! $existingConversation->title) {
+                $existingConversation->title = $this->resolveCommentAuthorName($comment) ?: 'Instagram User';
+            }
+
+            if (! $existingConversation->type) {
+                $existingConversation->type = 'dm';
+            }
+
+            if (! $existingConversation->status || in_array($existingConversation->status, ['pending', 'trashed', 'archived'], true)) {
+                $existingConversation->status = 'active';
+            }
+
+            $existingConversation->is_archived = false;
+            $existingConversation->last_message_at = $sentAt;
+            $existingConversation->save();
+
+            return $existingConversation;
+        }
+
         $conversationKey = $this->buildCommentDmConversationKey($connection, $recipientId);
 
         $conversation = Conversation::query()->firstOrNew([
@@ -381,6 +420,7 @@ class InstagramService
         $customerParticipant->display_name = $customerParticipant->display_name
             ?: ($this->resolveCommentAuthorName($comment) ?: 'Instagram User');
         $customerParticipant->handle = $customerParticipant->handle ?: $comment->username;
+        $customerParticipant->avatar_url = $customerParticipant->avatar_url ?: $this->resolveCommentAuthorAvatarUrl($comment);
         $customerParticipant->role = 'participant';
         $customerParticipant->is_self = false;
         $customerParticipant->meta = array_merge(is_array($customerParticipant->meta) ? $customerParticipant->meta : [], [
@@ -389,6 +429,11 @@ class InstagramService
             'source_provider_comment_id' => $comment->provider_comment_id,
         ]);
         $customerParticipant->save();
+
+        if (! $conversation->avatar_url && $customerParticipant->avatar_url) {
+            $conversation->avatar_url = $customerParticipant->avatar_url;
+            $conversation->save();
+        }
 
         return [
             'self' => $selfParticipant,
@@ -435,6 +480,30 @@ class InstagramService
         return $recipientId !== '' ? $recipientId : null;
     }
 
+    protected function isInstagramSelfScopedUserId(ProviderConnection $connection, string $recipientId): bool
+    {
+        $recipientId = trim($recipientId);
+
+        if ($recipientId === '') {
+            return false;
+        }
+
+        $selfIds = collect([
+            $connection->provider_account_id,
+            $connection->external_oauth_user_id,
+            $connection->meta['identity_payload']['id'] ?? null,
+            $connection->meta['identity_payload']['user_id'] ?? null,
+            $connection->meta['exchange_payload']['short_lived']['user_id'] ?? null,
+        ])
+            ->filter(fn ($value) => filled($value))
+            ->map(fn ($value) => trim((string) $value))
+            ->unique()
+            ->values()
+            ->all();
+
+        return in_array($recipientId, $selfIds, true);
+    }
+
     protected function resolveCommentAuthorName(SocialComment $comment): ?string
     {
         $username = trim((string) ($comment->username ?? ''));
@@ -446,6 +515,19 @@ class InstagramService
         $rawUsername = trim((string) ($comment->raw['username'] ?? ($comment->raw['from']['username'] ?? '')));
 
         return $rawUsername !== '' ? $rawUsername : null;
+    }
+
+    protected function resolveCommentAuthorAvatarUrl(SocialComment $comment): ?string
+    {
+        $avatarUrl = trim((string) (
+            $comment->raw['profile_pic']
+            ?? $comment->raw['profile_picture_url']
+            ?? $comment->raw['from']['profile_pic']
+            ?? $comment->raw['from']['profile_picture_url']
+            ?? ''
+        ));
+
+        return $avatarUrl !== '' ? $avatarUrl : null;
     }
 
     protected function trimPreview(string $text): string
