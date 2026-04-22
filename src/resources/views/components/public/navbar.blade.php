@@ -4,7 +4,7 @@
             <div class="col-lg-12">
                 <nav class="navbar navbar-expand-lg">
                     <a class="navbar-brand d-flex align-items-center gap-2" href="{{ route('home') }}">
-                        <img src="{{ asset('leadochat-site/leadochatmini-logo.png') }}" alt="Leadochat logo" class="lc-logo-mark">
+                        <img src="{{ asset('leadochat-site/brand-mark.svg') }}" alt="Leadochat logo" class="lc-logo-mark">
                         <span class="lc-brand-text">Leadochat</span>
                     </a>
 

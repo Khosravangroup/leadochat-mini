@@ -14,7 +14,7 @@
                 </div>
                 <div class="col-lg-5">
                     <div class="lc-hero-panel">
-                        <img src="{{ asset('leadochat-site/leadochatmini-logo.png') }}" alt="Leadochat logo">
+                        <img src="{{ asset('leadochat-site/brand-mark.svg') }}" alt="Leadochat logo">
                     </div>
                 </div>
             </div>

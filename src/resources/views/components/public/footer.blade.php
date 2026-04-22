@@ -5,7 +5,7 @@
                 <div class="col-xl-4 col-lg-4 col-md-6">
                     <div class="ud-widget">
                         <a href="{{ route('home') }}" class="d-flex align-items-center gap-2 mb-3 text-decoration-none">
-                            <img src="{{ asset('leadochat-site/leadochatmini-logo.png') }}" alt="Leadochat logo" class="lc-footer-logo">
+                            <img src="{{ asset('leadochat-site/brand-mark.svg') }}" alt="Leadochat logo" class="lc-footer-logo">
                             <span class="fw-bold text-white fs-4">Leadochat</span>
                         </a>
                         <p class="ud-widget-desc">

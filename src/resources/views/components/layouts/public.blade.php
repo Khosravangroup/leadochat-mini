@@ -10,7 +10,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="{{ $meta }}">
     <title>{{ $title }}</title>
-    <link rel="shortcut icon" href="{{ asset('leadochat-site/assets/images/favicon.svg') }}" type="image/svg+xml">
+    <link rel="shortcut icon" href="{{ asset('leadochat-site/brand-mark.svg') }}" type="image/svg+xml">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     <link rel="stylesheet" href="{{ asset('leadochat-site/assets/css/bootstrap.min.css') }}">
     <link rel="stylesheet" href="{{ asset('leadochat-site/assets/css/animate.css') }}">
@@ -18,9 +18,12 @@
     <link rel="stylesheet" href="{{ asset('leadochat-site/assets/css/ud-styles.css') }}">
     <style>
         :root {
-            --leadochat-blue: #3056d3;
+            --leadochat-teal: #0f766e;
+            --leadochat-teal-dark: #134e4a;
+            --leadochat-gold: #ffd84d;
+            --leadochat-orange: #f97316;
             --leadochat-ink: #111827;
-            --leadochat-soft: #f7f9ff;
+            --leadochat-soft: #f7fbfa;
         }
 
         body {
@@ -28,7 +31,8 @@
         }
 
         .ud-header {
-            background: var(--leadochat-blue);
+            background: rgba(15, 118, 110, .98);
+            backdrop-filter: blur(14px);
         }
 
         .ud-header.sticky {
@@ -39,10 +43,7 @@
         .lc-logo-mark {
             width: 42px;
             height: 42px;
-            border-radius: 8px;
             object-fit: contain;
-            background: #fff;
-            padding: 4px;
         }
 
         .lc-logo-word {
@@ -64,6 +65,59 @@
             letter-spacing: 0;
         }
 
+        .navbar-nav .nav-item a {
+            font-weight: 700;
+        }
+
+        .ud-header .navbar-btn .ud-main-btn,
+        .ud-main-btn {
+            border-radius: 8px;
+            border: 0;
+            background: linear-gradient(135deg, var(--leadochat-gold), var(--leadochat-orange));
+            color: #134e4a;
+            box-shadow: 0 14px 34px rgba(249, 115, 22, .24);
+            font-weight: 900;
+            letter-spacing: 0;
+            text-decoration: none;
+        }
+
+        .ud-main-btn:hover {
+            color: #134e4a;
+            transform: translateY(-1px);
+            box-shadow: 0 18px 40px rgba(249, 115, 22, .28);
+        }
+
+        .ud-white-btn {
+            background: #fff8d7;
+            color: #134e4a;
+        }
+
+        .ud-link-btn {
+            background: transparent;
+            color: #fff;
+            box-shadow: none;
+            border: 1px solid rgba(255, 255, 255, .3);
+        }
+
+        .ud-link-btn:hover {
+            background: rgba(255, 255, 255, .12);
+            color: #fff;
+            box-shadow: none;
+        }
+
+        .ud-border-btn {
+            background: #fff;
+            color: #134e4a;
+            border: 1px solid rgba(15, 118, 110, .24);
+            box-shadow: none;
+        }
+
+        .ud-header.sticky .ud-link-btn,
+        .ud-header.sticky .ud-login-btn {
+            color: #134e4a;
+            border-color: rgba(15, 118, 110, .2);
+        }
+
         .lc-section-soft {
             background: var(--leadochat-soft);
         }
@@ -74,8 +128,8 @@
             min-height: 34px;
             border-radius: 8px;
             padding: 0 12px;
-            background: rgba(48, 86, 211, .1);
-            color: #2446b8;
+            background: rgba(15, 118, 110, .1);
+            color: var(--leadochat-teal);
             font-weight: 700;
             font-size: 13px;
         }
@@ -101,6 +155,24 @@
             color: #111827;
         }
 
+        .ud-feature-icon,
+        .ud-single-pricing.active,
+        .ud-popular-tag {
+            background: linear-gradient(135deg, var(--leadochat-gold), var(--leadochat-orange));
+            color: #134e4a;
+        }
+
+        .ud-feature-icon i,
+        .ud-single-pricing.active h3,
+        .ud-single-pricing.active h4,
+        .ud-single-pricing.active li {
+            color: #134e4a;
+        }
+
+        .ud-single-pricing {
+            border-radius: 8px;
+        }
+
         .lc-feature-card p,
         .lc-feature-card li {
             color: #5b6575;
@@ -109,8 +181,18 @@
 
         .lc-page-hero {
             padding: 150px 0 90px;
-            background: linear-gradient(180deg, #3056d3 0%, #2545ad 100%);
+            background:
+                radial-gradient(circle at 18% 8%, rgba(255, 216, 77, .22), transparent 24%),
+                radial-gradient(circle at 86% 18%, rgba(249, 115, 22, .18), transparent 26%),
+                linear-gradient(180deg, #0f766e 0%, #134e4a 100%);
             color: #fff;
+        }
+
+        .ud-hero {
+            background:
+                radial-gradient(circle at 20% 14%, rgba(255, 216, 77, .2), transparent 24%),
+                radial-gradient(circle at 83% 18%, rgba(249, 115, 22, .18), transparent 28%),
+                linear-gradient(180deg, #0f766e 0%, #134e4a 100%);
         }
 
         .lc-page-hero h1,
@@ -120,9 +202,9 @@
 
         .lc-hero-panel {
             border-radius: 8px;
-            background: #fff;
-            padding: 20px;
-            box-shadow: 0 25px 70px rgba(15, 23, 42, .18);
+            background: transparent;
+            padding: 0;
+            box-shadow: none;
         }
 
         .lc-hero-panel img {
@@ -136,7 +218,7 @@
             border-radius: 8px;
             border: 1px solid #dbe3ff;
             padding: 9px 12px;
-            color: #2446b8;
+            color: var(--leadochat-teal);
             font-weight: 700;
             text-decoration: none;
             background: #fff;
@@ -152,9 +234,17 @@
             width: 44px;
             height: 44px;
             object-fit: contain;
-            border-radius: 8px;
-            background: #fff;
-            padding: 4px;
+        }
+
+        .ud-footer {
+            background: #134e4a;
+        }
+
+        .ud-footer .ud-footer-widgets {
+            background:
+                radial-gradient(circle at 12% 12%, rgba(255, 216, 77, .14), transparent 25%),
+                radial-gradient(circle at 86% 24%, rgba(249, 115, 22, .12), transparent 25%),
+                #134e4a;
         }
 
         .navbar-toggler .toggler-icon {

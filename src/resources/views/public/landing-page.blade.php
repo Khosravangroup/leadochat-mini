@@ -18,7 +18,7 @@
 
                 <div class="col-lg-5">
                     <div class="lc-hero-panel wow fadeInUp" data-wow-delay=".2s">
-                        <img src="{{ asset('leadochat-site/leadochat-mini.png') }}" alt="{{ $page['eyebrow'] }}">
+                        <x-public.conversation-animation :label="$page['eyebrow'] . ' workflow'" />
                     </div>
                 </div>
             </div>
@@ -89,6 +89,26 @@
     </section>
 
     <section class="ud-faq">
+        @php
+            $sharedFaqs = [
+                [
+                    'q' => 'How long does setup usually take?',
+                    'a' => 'Most teams can start with one channel first, connect the core inbox, and then add automation and routing after the first workflows are confirmed.',
+                ],
+                [
+                    'q' => 'Can my team reply manually when automation is active?',
+                    'a' => 'Yes. Leadochat is built for automation plus human handoff, so agents can step in whenever a conversation needs personal attention.',
+                ],
+                [
+                    'q' => 'Does Leadochat keep the customer history in one place?',
+                    'a' => 'Yes. The goal is to keep channel context, customer profile details, notes, assignments, and past conversations visible to the team.',
+                ],
+                [
+                    'q' => 'Can I start with Instagram or WhatsApp only?',
+                    'a' => 'Yes. You can begin with the channel that matters most now and expand into other messaging, social, and analytics workflows later.',
+                ],
+            ];
+        @endphp
         <div class="shape">
             <img src="{{ asset('leadochat-site/assets/images/faq/shape.svg') }}" alt="shape">
         </div>
@@ -102,7 +122,7 @@
                 </div>
             </div>
             <div class="row g-4">
-                @foreach ($page['faq'] as $faq)
+                @foreach (array_merge($page['faq'], $sharedFaqs) as $faq)
                     <div class="col-lg-6">
                         <div class="lc-page-card p-4 h-100">
                             <h3 class="h5 fw-bold mb-3">{{ $faq['q'] }}</h3>

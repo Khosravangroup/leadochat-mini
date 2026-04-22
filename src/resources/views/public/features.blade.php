@@ -12,7 +12,7 @@
                 </div>
                 <div class="col-lg-5">
                     <div class="lc-hero-panel">
-                        <img src="{{ asset('leadochat-site/leadochat-mini.png') }}" alt="Leadochat feature overview">
+                        <x-public.conversation-animation label="One workflow for every channel" />
                     </div>
                 </div>
             </div>

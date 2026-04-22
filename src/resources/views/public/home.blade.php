@@ -28,7 +28,7 @@
 
                 <div class="col-lg-5">
                     <div class="lc-hero-panel wow fadeInUp" data-wow-delay=".2s">
-                        <img src="{{ asset('leadochat-site/leadochat-mini.png') }}" alt="Leadochat customer operations dashboard">
+                        <x-public.conversation-animation label="Messages become customers" />
                     </div>
                 </div>
             </div>
