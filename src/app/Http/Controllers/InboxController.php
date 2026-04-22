@@ -3,11 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Events\WorkspaceRealtimeUpdated;
+use App\Models\CatalogProduct;
 use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\MessageAttachment;
 use App\Models\WorkspaceTag;
 use App\Models\ConversationParticipant;
+use App\Models\ConversationProductShare;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -72,6 +74,7 @@ class InboxController extends Controller
         $workspaceTags = collect();
         $workspaceDepartments = collect();
         $workspaceMembers = collect();
+        $catalogProducts = collect();
 
         if ($workspace) {
             $query = Conversation::query()
@@ -126,6 +129,17 @@ class InboxController extends Controller
                 ->orderBy('users.name')
                 ->orderBy('users.email')
                 ->get();
+
+            $catalogProducts = CatalogProduct::query()
+                ->where('is_active', true)
+                ->whereHas('catalog', function ($query) use ($workspace) {
+                    $query
+                        ->where('workspace_id', $workspace->id)
+                        ->where('status', 'active');
+                })
+                ->with('catalog.providerConnection')
+                ->orderBy('title')
+                ->get();
         }
 
         $selectedConversation = null;
@@ -145,9 +159,125 @@ class InboxController extends Controller
             'workspaceTags' => $workspaceTags,
             'workspaceDepartments' => $workspaceDepartments,
             'workspaceMembers' => $workspaceMembers,
+            'catalogProducts' => $catalogProducts,
             'viewMode' => $viewMode,
             'showArchived' => $showArchived,
             'showTrashed' => $showTrashed,
+        ]);
+    }
+
+    public function sendCatalogProduct(Request $request, Conversation $conversation): RedirectResponse|JsonResponse
+    {
+        $user = $request->user();
+        $workspace = $user?->currentWorkspace();
+
+        $this->guardWorkspaceConversationAccess($conversation, $workspace);
+
+        $validated = $request->validate([
+            'catalog_product_id' => ['required', 'integer'],
+            'note' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $product = CatalogProduct::query()
+            ->whereKey((int) $validated['catalog_product_id'])
+            ->where('is_active', true)
+            ->whereHas('catalog', function ($query) use ($workspace, $conversation) {
+                $query
+                    ->where('workspace_id', $workspace->id)
+                    ->where('status', 'active')
+                    ->where(function ($catalogQuery) use ($conversation) {
+                        $catalogQuery
+                            ->whereNull('provider_connection_id')
+                            ->orWhere('provider_connection_id', $conversation->provider_connection_id);
+                    });
+            })
+            ->with('catalog')
+            ->firstOrFail();
+
+        $selfParticipant = $this->resolveSelfParticipant($conversation);
+        $snapshot = $this->buildProductSnapshot($product);
+        $note = trim((string) ($validated['note'] ?? ''));
+        $dmText = $this->buildProductMessageText($snapshot, $note);
+
+        $sendResult = null;
+        $providerMessageId = null;
+        $status = 'sent';
+        $failedAt = null;
+        $lastError = null;
+
+        if ($conversation->provider === 'instagram') {
+            try {
+                $sendResult = $this->sendInstagramTextMessage($conversation, $dmText);
+                $providerMessageId = (string) (
+                    $sendResult['message_id']
+                    ?? $sendResult['response']['message_id']
+                    ?? $sendResult['mock_response']['message_id']
+                    ?? ''
+                );
+            } catch (\Throwable $exception) {
+                $status = 'failed';
+                $failedAt = now();
+                $lastError = $exception->getMessage();
+                $sendResult = [
+                    'send_failed' => true,
+                    'error' => $lastError,
+                ];
+                report($exception);
+            }
+        }
+
+        $message = null;
+
+        DB::transaction(function () use ($conversation, $selfParticipant, $user, $product, $snapshot, $note, $dmText, $sendResult, $providerMessageId, $status, $failedAt, $lastError, &$message) {
+            $message = $this->createOutboundMessage($conversation, $selfParticipant, [
+                'message_type' => 'product_card',
+                'text_body' => $dmText,
+                'provider_message_id' => $providerMessageId !== null && $providerMessageId !== ''
+                    ? $providerMessageId
+                    : ('product-card-' . now()->timestamp . '-' . random_int(1000, 9999)),
+                'status' => $status,
+                'failed_at' => $failedAt,
+                'last_error' => $lastError,
+                'meta' => $this->withAgentMeta($user, [
+                    'delivery_mode' => $conversation->provider === 'instagram'
+                        ? 'instagram_service_catalog_product_text'
+                        : 'controller_catalog_product_mock',
+                    'product_card' => $snapshot,
+                    'product_note' => $note !== '' ? $note : null,
+                    'send_result' => $sendResult,
+                ]),
+            ]);
+
+            ConversationProductShare::create([
+                'conversation_id' => $conversation->id,
+                'message_id' => $message->id,
+                'catalog_product_id' => $product->id,
+                'agent_id' => $user?->id,
+                'product_snapshot' => $snapshot,
+            ]);
+        });
+
+        $this->updateConversationSnapshot(
+            $conversation,
+            'Product: ' . $product->title,
+            $message?->sent_at ?? now()
+        );
+
+        $this->broadcastInboxUpdate($workspace, $conversation, 'catalog_product_sent', $message);
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'ok' => $message?->status !== 'failed',
+                'conversation_id' => $conversation->id,
+                'message_id' => $message?->id,
+                'message_ids' => $message?->id ? [$message->id] : [],
+                'status' => $message?->status,
+                'error' => $message?->last_error,
+            ], $message?->status === 'failed' ? 422 : 200);
+        }
+
+        return redirect()->route('inbox.show', [
+            'conversation' => $conversation->id,
         ]);
     }
 
@@ -1170,6 +1300,49 @@ class InboxController extends Controller
             ->first();
 
         return $replyMessage?->id;
+    }
+
+    protected function buildProductSnapshot(CatalogProduct $product): array
+    {
+        return [
+            'id' => $product->id,
+            'catalog_id' => $product->catalog_id,
+            'catalog_name' => $product->catalog?->name,
+            'sku' => $product->sku,
+            'title' => $product->title,
+            'description' => $product->description,
+            'price' => $product->price !== null ? (float) $product->price : null,
+            'currency' => strtoupper((string) $product->currency),
+            'image_url' => $product->image_url,
+            'product_url' => $product->product_url,
+            'availability' => $product->availability,
+        ];
+    }
+
+    protected function buildProductMessageText(array $snapshot, string $note = ''): string
+    {
+        $lines = [
+            'Product recommendation',
+            (string) ($snapshot['title'] ?? 'Product'),
+        ];
+
+        if (($snapshot['price'] ?? null) !== null) {
+            $lines[] = strtoupper((string) ($snapshot['currency'] ?? 'USD')) . ' ' . number_format((float) $snapshot['price'], 2);
+        }
+
+        if (! blank($snapshot['description'] ?? null)) {
+            $lines[] = (string) $snapshot['description'];
+        }
+
+        if (! blank($snapshot['product_url'] ?? null)) {
+            $lines[] = 'View product: ' . $snapshot['product_url'];
+        }
+
+        if ($note !== '') {
+            $lines[] = 'Note: ' . $note;
+        }
+
+        return implode("\n", array_filter($lines, fn ($line) => trim((string) $line) !== ''));
     }
 
     protected function createOutboundMessage(

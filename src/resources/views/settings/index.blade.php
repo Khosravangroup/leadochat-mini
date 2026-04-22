@@ -191,6 +191,8 @@
                         Create and manage teammate accounts for this workspace. Every workspace member can manage their own profile details.
                     @elseif ($section === 'channels')
                         Manage connected channels for this workspace. Reuse the existing Instagram flow here and keep Facebook and WhatsApp ready for the next phases.
+                    @elseif ($section === 'catalogs')
+                        Manage product catalogs that agents can send inside Instagram direct messages.
                     @elseif (in_array($section, ['automation', 'ai', 'billing', 'security', 'advanced'], true))
                         This section will be added soon.
                     @else
@@ -1758,6 +1760,447 @@
                                 @empty
                                     <div class="ws-empty">
                                         No provider connections have been saved for this workspace yet.
+                                    </div>
+                                @endforelse
+                            </div>
+                        </div>
+                    </div>
+                @elseif ($section === 'catalogs')
+                    <style>
+                        .ws-catalog-shell {
+                            margin-top: 18px;
+                            display: grid;
+                            gap: 14px;
+                        }
+
+                        .ws-catalog-card {
+                            border: 1px solid #e2e8f0;
+                            border-radius: 14px;
+                            background: #fff;
+                            padding: 14px;
+                        }
+
+                        .ws-catalog-grid {
+                            display: grid;
+                            grid-template-columns: repeat(2, minmax(0, 1fr));
+                            gap: 12px;
+                        }
+
+                        .ws-catalog-form {
+                            display: grid;
+                            gap: 12px;
+                            margin-top: 12px;
+                        }
+
+                        .ws-catalog-form-grid {
+                            display: grid;
+                            grid-template-columns: repeat(3, minmax(0, 1fr));
+                            gap: 12px;
+                        }
+
+                        .ws-catalog-form-field {
+                            display: grid;
+                            gap: 6px;
+                        }
+
+                        .ws-catalog-form-field.full {
+                            grid-column: 1 / -1;
+                        }
+
+                        .ws-catalog-label {
+                            font-size: 12px;
+                            font-weight: 800;
+                            color: #334155;
+                        }
+
+                        .ws-catalog-input,
+                        .ws-catalog-select,
+                        .ws-catalog-textarea {
+                            width: 100%;
+                            border: 1px solid #cbd5e1;
+                            border-radius: 10px;
+                            background: #fff;
+                            color: #0f172a;
+                            font-size: 14px;
+                            outline: none;
+                        }
+
+                        .ws-catalog-input,
+                        .ws-catalog-select {
+                            height: 40px;
+                            padding: 0 11px;
+                        }
+
+                        .ws-catalog-textarea {
+                            min-height: 86px;
+                            padding: 10px 11px;
+                            resize: vertical;
+                        }
+
+                        .ws-catalog-input:focus,
+                        .ws-catalog-select:focus,
+                        .ws-catalog-textarea:focus {
+                            border-color: #0f766e;
+                            box-shadow: 0 0 0 3px rgba(15, 118, 110, .12);
+                        }
+
+                        .ws-catalog-submit,
+                        .ws-catalog-danger {
+                            display: inline-flex;
+                            align-items: center;
+                            justify-content: center;
+                            min-height: 38px;
+                            border-radius: 10px;
+                            padding: 0 13px;
+                            font-size: 13px;
+                            font-weight: 900;
+                            border: 0;
+                            cursor: pointer;
+                        }
+
+                        .ws-catalog-submit {
+                            background: #0f766e;
+                            color: #fff;
+                        }
+
+                        .ws-catalog-danger {
+                            background: #fef2f2;
+                            color: #b91c1c;
+                            border: 1px solid #fecaca;
+                        }
+
+                        .ws-catalog-help {
+                            color: #64748b;
+                            font-size: 12px;
+                            line-height: 1.55;
+                        }
+
+                        .ws-catalog-error {
+                            color: #dc2626;
+                            font-size: 12px;
+                            font-weight: 800;
+                        }
+
+                        .ws-catalog-success {
+                            border: 1px solid #bbf7d0;
+                            border-radius: 10px;
+                            background: #f0fdf4;
+                            padding: 10px 12px;
+                            font-size: 13px;
+                            font-weight: 800;
+                            color: #166534;
+                        }
+
+                        .ws-catalog-list {
+                            display: grid;
+                            gap: 12px;
+                            margin-top: 12px;
+                        }
+
+                        .ws-catalog-row {
+                            border: 1px solid #e2e8f0;
+                            border-radius: 14px;
+                            background: #fff;
+                            overflow: hidden;
+                        }
+
+                        .ws-catalog-row-head {
+                            display: flex;
+                            justify-content: space-between;
+                            gap: 12px;
+                            padding: 14px;
+                            border-bottom: 1px solid #e2e8f0;
+                            background: #f8fafc;
+                        }
+
+                        .ws-catalog-name {
+                            font-size: 15px;
+                            font-weight: 900;
+                            color: #0f172a;
+                        }
+
+                        .ws-catalog-meta {
+                            margin-top: 4px;
+                            color: #64748b;
+                            font-size: 12px;
+                            line-height: 1.55;
+                        }
+
+                        .ws-catalog-pill {
+                            display: inline-flex;
+                            align-items: center;
+                            min-height: 24px;
+                            border-radius: 999px;
+                            padding: 0 9px;
+                            background: #ecfdf5;
+                            border: 1px solid #86efac;
+                            color: #166534;
+                            font-size: 11px;
+                            font-weight: 900;
+                            white-space: nowrap;
+                        }
+
+                        .ws-product-list {
+                            display: grid;
+                            gap: 10px;
+                            padding: 14px;
+                        }
+
+                        .ws-product-row {
+                            display: grid;
+                            grid-template-columns: 64px minmax(0, 1fr) auto;
+                            align-items: center;
+                            gap: 12px;
+                            border: 1px solid #e2e8f0;
+                            border-radius: 12px;
+                            padding: 10px;
+                        }
+
+                        .ws-product-thumb {
+                            width: 64px;
+                            height: 64px;
+                            border-radius: 10px;
+                            background: #f1f5f9;
+                            border: 1px solid #e2e8f0;
+                            overflow: hidden;
+                            display: grid;
+                            place-items: center;
+                            color: #64748b;
+                            font-weight: 900;
+                            font-size: 11px;
+                        }
+
+                        .ws-product-thumb img {
+                            width: 100%;
+                            height: 100%;
+                            object-fit: cover;
+                        }
+
+                        .ws-product-title {
+                            font-size: 14px;
+                            font-weight: 900;
+                            color: #0f172a;
+                            line-height: 1.35;
+                        }
+
+                        .ws-product-meta {
+                            margin-top: 4px;
+                            color: #64748b;
+                            font-size: 12px;
+                            line-height: 1.55;
+                        }
+
+                        .ws-product-empty {
+                            padding: 14px;
+                            color: #64748b;
+                            font-size: 13px;
+                            line-height: 1.6;
+                        }
+
+                        @media (max-width: 1080px) {
+                            .ws-catalog-grid,
+                            .ws-catalog-form-grid {
+                                grid-template-columns: 1fr;
+                            }
+
+                            .ws-product-row {
+                                grid-template-columns: 56px minmax(0, 1fr);
+                            }
+
+                            .ws-product-row form {
+                                grid-column: 1 / -1;
+                            }
+                        }
+                    </style>
+
+                    <div class="ws-catalog-shell">
+                        @if (session('status'))
+                            <div class="ws-catalog-success">
+                                {{ session('status') }}
+                            </div>
+                        @endif
+
+                        <div class="ws-catalog-grid">
+                            <div class="ws-catalog-card">
+                                <h3 class="ws-section-title">Create catalog</h3>
+                                <div class="ws-section-subtitle">
+                                    Start with a Leadochat catalog, optionally tied to one connected Instagram account.
+                                </div>
+
+                                <form method="POST" action="{{ route('settings.catalogs.store') }}" class="ws-catalog-form">
+                                    @csrf
+
+                                    <div class="ws-catalog-form-field">
+                                        <label class="ws-catalog-label" for="catalogName">Catalog name</label>
+                                        <input
+                                            id="catalogName"
+                                            name="name"
+                                            class="ws-catalog-input"
+                                            type="text"
+                                            value="{{ old('name') }}"
+                                            placeholder="Instagram Shop Catalog"
+                                            required
+                                        >
+                                        @error('name')
+                                            <div class="ws-catalog-error">{{ $message }}</div>
+                                        @enderror
+                                    </div>
+
+                                    <div class="ws-catalog-form-field">
+                                        <label class="ws-catalog-label" for="catalogProviderConnection">Instagram account</label>
+                                        <select id="catalogProviderConnection" name="provider_connection_id" class="ws-catalog-select">
+                                            <option value="">All Instagram conversations</option>
+                                            @foreach (($catalogProviderConnections ?? collect()) as $connection)
+                                                <option value="{{ $connection->id }}" @selected((string) old('provider_connection_id') === (string) $connection->id)>
+                                                    {{ $connection->provider_account_name ?: $connection->provider_account_id }}
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                        <div class="ws-catalog-help">
+                                            Use account-specific catalogs when multiple Instagram accounts are connected.
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <button type="submit" class="ws-catalog-submit">Create catalog</button>
+                                    </div>
+                                </form>
+                            </div>
+
+                            <div class="ws-catalog-card">
+                                <h3 class="ws-section-title">Catalog sending</h3>
+                                <div class="ws-section-subtitle">
+                                    Agents will see active products in the inbox product picker and can send them as Instagram DM product cards.
+                                </div>
+                                <div class="ws-placeholder" style="margin-top:12px;">
+                                    Phase 1 stores products inside Leadochat and sends a clean product summary to Instagram DM. Meta Commerce Catalog sync can be added after this workflow is stable.
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="ws-catalog-card">
+                            <h3 class="ws-section-title">Catalogs and products</h3>
+
+                            <div class="ws-catalog-list">
+                                @forelse (($catalogs ?? collect()) as $catalog)
+                                    <div class="ws-catalog-row">
+                                        <div class="ws-catalog-row-head">
+                                            <div>
+                                                <div class="ws-catalog-name">{{ $catalog->name }}</div>
+                                                <div class="ws-catalog-meta">
+                                                    Source: {{ ucfirst($catalog->source) }}
+                                                    @if ($catalog->providerConnection)
+                                                        · Instagram: {{ $catalog->providerConnection->provider_account_name ?: $catalog->providerConnection->provider_account_id }}
+                                                    @else
+                                                        · Available for all connected Instagram accounts
+                                                    @endif
+                                                </div>
+                                            </div>
+
+                                            <span class="ws-catalog-pill">
+                                                {{ $catalog->products->count() }} products
+                                            </span>
+                                        </div>
+
+                                        <div class="ws-product-list">
+                                            @forelse ($catalog->products as $product)
+                                                <div class="ws-product-row">
+                                                    <div class="ws-product-thumb">
+                                                        @if ($product->image_url)
+                                                            <img src="{{ $product->image_url }}" alt="{{ $product->title }}">
+                                                        @else
+                                                            No image
+                                                        @endif
+                                                    </div>
+
+                                                    <div>
+                                                        <div class="ws-product-title">{{ $product->title }}</div>
+                                                        <div class="ws-product-meta">
+                                                            @if ($product->price !== null)
+                                                                {{ strtoupper($product->currency) }} {{ number_format((float) $product->price, 2) }}
+                                                            @else
+                                                                No price
+                                                            @endif
+                                                            · {{ str_replace('_', ' ', $product->availability) }}
+                                                            @if ($product->sku)
+                                                                · SKU: {{ $product->sku }}
+                                                            @endif
+                                                        </div>
+                                                        @if ($product->description)
+                                                            <div class="ws-product-meta">{{ $product->description }}</div>
+                                                        @endif
+                                                    </div>
+
+                                                    <form method="POST" action="{{ route('settings.catalogs.products.delete', $product) }}">
+                                                        @csrf
+                                                        @method('DELETE')
+                                                        <button type="submit" class="ws-catalog-danger">Delete</button>
+                                                    </form>
+                                                </div>
+                                            @empty
+                                                <div class="ws-product-empty">
+                                                    No products yet. Add the first product below.
+                                                </div>
+                                            @endforelse
+
+                                            <form method="POST" action="{{ route('settings.catalogs.products.store', $catalog) }}" class="ws-catalog-form">
+                                                @csrf
+
+                                                <div class="ws-catalog-form-grid">
+                                                    <div class="ws-catalog-form-field">
+                                                        <label class="ws-catalog-label" for="productTitle{{ $catalog->id }}">Product title</label>
+                                                        <input id="productTitle{{ $catalog->id }}" name="title" class="ws-catalog-input" type="text" required>
+                                                    </div>
+
+                                                    <div class="ws-catalog-form-field">
+                                                        <label class="ws-catalog-label" for="productSku{{ $catalog->id }}">SKU</label>
+                                                        <input id="productSku{{ $catalog->id }}" name="sku" class="ws-catalog-input" type="text">
+                                                    </div>
+
+                                                    <div class="ws-catalog-form-field">
+                                                        <label class="ws-catalog-label" for="productAvailability{{ $catalog->id }}">Availability</label>
+                                                        <select id="productAvailability{{ $catalog->id }}" name="availability" class="ws-catalog-select">
+                                                            <option value="in_stock">In stock</option>
+                                                            <option value="out_of_stock">Out of stock</option>
+                                                            <option value="preorder">Preorder</option>
+                                                        </select>
+                                                    </div>
+
+                                                    <div class="ws-catalog-form-field">
+                                                        <label class="ws-catalog-label" for="productPrice{{ $catalog->id }}">Price</label>
+                                                        <input id="productPrice{{ $catalog->id }}" name="price" class="ws-catalog-input" type="number" min="0" step="0.01">
+                                                    </div>
+
+                                                    <div class="ws-catalog-form-field">
+                                                        <label class="ws-catalog-label" for="productCurrency{{ $catalog->id }}">Currency</label>
+                                                        <input id="productCurrency{{ $catalog->id }}" name="currency" class="ws-catalog-input" type="text" value="USD" maxlength="3" required>
+                                                    </div>
+
+                                                    <div class="ws-catalog-form-field">
+                                                        <label class="ws-catalog-label" for="productUrl{{ $catalog->id }}">Product URL</label>
+                                                        <input id="productUrl{{ $catalog->id }}" name="product_url" class="ws-catalog-input" type="url" placeholder="https://...">
+                                                    </div>
+
+                                                    <div class="ws-catalog-form-field full">
+                                                        <label class="ws-catalog-label" for="productImage{{ $catalog->id }}">Image URL</label>
+                                                        <input id="productImage{{ $catalog->id }}" name="image_url" class="ws-catalog-input" type="url" placeholder="https://...">
+                                                    </div>
+
+                                                    <div class="ws-catalog-form-field full">
+                                                        <label class="ws-catalog-label" for="productDescription{{ $catalog->id }}">Description</label>
+                                                        <textarea id="productDescription{{ $catalog->id }}" name="description" class="ws-catalog-textarea" placeholder="Short product description for agents and DM context."></textarea>
+                                                    </div>
+                                                </div>
+
+                                                <div>
+                                                    <button type="submit" class="ws-catalog-submit">Add product</button>
+                                                </div>
+                                            </form>
+                                        </div>
+                                    </div>
+                                @empty
+                                    <div class="ws-empty">
+                                        No catalogs created yet.
                                     </div>
                                 @endforelse
                             </div>

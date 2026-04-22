@@ -49,4 +49,9 @@ class Workspace extends Model
             ->orderBy('sort_order')
             ->orderBy('name');
     }
+
+    public function catalogs(): HasMany
+    {
+        return $this->hasMany(Catalog::class)->orderBy('name');
+    }
 }

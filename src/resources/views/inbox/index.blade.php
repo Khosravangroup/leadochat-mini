@@ -9,6 +9,14 @@
         if ($selectedConversation && request()->filled('reply')) {
             $replyTarget = $messages->firstWhere('id', (int) request('reply'));
         }
+
+        $availableCatalogProducts = ($catalogProducts ?? collect())
+            ->filter(function ($product) use ($selectedConversation) {
+                $catalogConnectionId = $product->catalog?->provider_connection_id;
+
+                return !$catalogConnectionId || (int) $catalogConnectionId === (int) ($selectedConversation?->provider_connection_id ?? 0);
+            })
+            ->values();
     @endphp
 
     <style>
@@ -833,6 +841,84 @@
             flex: 1;
         }
 
+        .lc-product-card {
+            overflow: hidden;
+            border: 1px solid var(--lc-border);
+            border-radius: 14px;
+            background: var(--lc-panel);
+            min-width: 280px;
+            max-width: 360px;
+        }
+
+        .lc-product-card-media {
+            background: var(--lc-panel-soft);
+            aspect-ratio: 1.4 / 1;
+            display: grid;
+            place-items: center;
+            color: var(--lc-text-soft);
+            font-size: .82rem;
+            font-weight: 700;
+        }
+
+        .lc-product-card-media img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        .lc-product-card-body {
+            padding: .8rem;
+            display: grid;
+            gap: .45rem;
+        }
+
+        .lc-product-card-kicker {
+            display: inline-flex;
+            width: fit-content;
+            min-height: 22px;
+            align-items: center;
+            border-radius: 999px;
+            padding: 0 .5rem;
+            background: #ecfdf5;
+            border: 1px solid #bbf7d0;
+            color: #166534;
+            font-size: .68rem;
+            font-weight: 800;
+        }
+
+        .lc-product-card-title {
+            color: var(--lc-text);
+            font-size: .95rem;
+            line-height: 1.35;
+            font-weight: 800;
+        }
+
+        .lc-product-card-price {
+            color: #0f766e;
+            font-size: .9rem;
+            font-weight: 900;
+        }
+
+        .lc-product-card-desc {
+            color: var(--lc-text-soft);
+            font-size: .82rem;
+            line-height: 1.45;
+        }
+
+        .lc-product-card-link {
+            display: inline-flex;
+            justify-content: center;
+            min-height: 34px;
+            align-items: center;
+            border-radius: 10px;
+            background: var(--lc-primary);
+            color: #fff;
+            text-decoration: none;
+            font-size: .82rem;
+            font-weight: 800;
+        }
+
         .lc-file-name {
             font-size: .86rem;
             font-weight: 600;
@@ -1544,6 +1630,114 @@
             color: #fff;
         }
 
+        .lc-product-modal-card {
+            width: min(100%, 760px);
+        }
+
+        .lc-product-picker-search {
+            width: 100%;
+            height: 40px;
+            border: 1px solid #cbd5e1;
+            border-radius: 10px;
+            padding: 0 .8rem;
+            font-size: .9rem;
+            outline: none;
+        }
+
+        .lc-product-picker-search:focus {
+            border-color: var(--lc-primary);
+            box-shadow: 0 0 0 3px rgba(114, 76, 218, .12);
+        }
+
+        .lc-product-picker-list {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: .75rem;
+            max-height: 360px;
+            overflow: auto;
+            padding-right: .15rem;
+        }
+
+        .lc-product-picker-item {
+            display: grid;
+            grid-template-columns: 64px minmax(0, 1fr);
+            gap: .7rem;
+            align-items: center;
+            border: 1px solid #e2e8f0;
+            background: #fff;
+            border-radius: 12px;
+            padding: .65rem;
+            text-align: left;
+            cursor: pointer;
+        }
+
+        .lc-product-picker-item:hover,
+        .lc-product-picker-item.is-selected {
+            border-color: var(--lc-primary);
+            background: var(--lc-primary-soft);
+        }
+
+        .lc-product-picker-thumb {
+            width: 64px;
+            height: 64px;
+            border-radius: 10px;
+            overflow: hidden;
+            background: #f1f5f9;
+            border: 1px solid #e2e8f0;
+            display: grid;
+            place-items: center;
+            color: #64748b;
+            font-size: .7rem;
+            font-weight: 800;
+        }
+
+        .lc-product-picker-thumb img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        .lc-product-picker-title {
+            font-size: .88rem;
+            font-weight: 800;
+            color: #0f172a;
+            line-height: 1.35;
+        }
+
+        .lc-product-picker-meta {
+            margin-top: .2rem;
+            color: #64748b;
+            font-size: .75rem;
+            line-height: 1.4;
+        }
+
+        .lc-product-picker-note {
+            width: 100%;
+            min-height: 74px;
+            border: 1px solid #cbd5e1;
+            border-radius: 10px;
+            padding: .7rem;
+            resize: vertical;
+            font-size: .88rem;
+            outline: none;
+        }
+
+        .lc-product-picker-empty {
+            border: 1px dashed #cbd5e1;
+            border-radius: 12px;
+            padding: 1rem;
+            color: #64748b;
+            font-size: .9rem;
+            line-height: 1.55;
+        }
+
+        @media (max-width: 720px) {
+            .lc-product-picker-list {
+                grid-template-columns: 1fr;
+            }
+        }
+
         .lc-aside {
             width: 300px;
             min-width: 300px;
@@ -2193,6 +2387,9 @@
                                         $canReactFromInbox = ! $isOutbound
                                             && $selectedConversation?->provider === 'instagram'
                                             && filled($message->provider_message_id);
+                                        $productCard = is_array($messageMeta['product_card'] ?? null)
+                                            ? $messageMeta['product_card']
+                                            : null;
                                     @endphp
 
                                     <div
@@ -2359,7 +2556,41 @@
                                                                 </div>
                                                             @endif
 
-                                                            @if ($message->message_type === 'text')
+                                                            @if ($message->message_type === 'product_card' && $productCard)
+                                                                <div class="lc-product-card">
+                                                                    <div class="lc-product-card-media">
+                                                                        @if (!empty($productCard['image_url']))
+                                                                            <img src="{{ $productCard['image_url'] }}" alt="{{ $productCard['title'] ?? 'Product' }}">
+                                                                        @else
+                                                                            Product image
+                                                                        @endif
+                                                                    </div>
+                                                                    <div class="lc-product-card-body">
+                                                                        <span class="lc-product-card-kicker">Catalog product</span>
+                                                                        <div class="lc-product-card-title">{{ $productCard['title'] ?? 'Product' }}</div>
+
+                                                                        @if (($productCard['price'] ?? null) !== null)
+                                                                            <div class="lc-product-card-price">
+                                                                                {{ strtoupper($productCard['currency'] ?? 'USD') }} {{ number_format((float) $productCard['price'], 2) }}
+                                                                            </div>
+                                                                        @endif
+
+                                                                        @if (!empty($productCard['description']))
+                                                                            <div class="lc-product-card-desc">{{ $productCard['description'] }}</div>
+                                                                        @endif
+
+                                                                        @if (!empty($messageMeta['product_note']))
+                                                                            <div class="lc-product-card-desc">Note: {{ $messageMeta['product_note'] }}</div>
+                                                                        @endif
+
+                                                                        @if (!empty($productCard['product_url']))
+                                                                            <a href="{{ $productCard['product_url'] }}" target="_blank" rel="noopener noreferrer" class="lc-product-card-link">
+                                                                                View product
+                                                                            </a>
+                                                                        @endif
+                                                                    </div>
+                                                                </div>
+                                                            @elseif ($message->message_type === 'text')
                                                                 <div>{{ $message->text_body }}</div>
                                                             @endif
 
@@ -2517,6 +2748,7 @@
                                     <span class="lc-message-type-pill">Reply</span>
                                     <span class="lc-message-type-pill">Note</span>
                                     <span class="lc-message-type-pill">Update</span>
+                                    <span class="lc-message-type-pill">Catalog</span>
                                 </div>
 
                                 @if ($errors->has('message_text'))
@@ -2603,6 +2835,15 @@
                                                     >
                                                 </label>
                                                 <span class="lc-editor-icon">💬</span>
+                                                <button
+                                                    type="button"
+                                                    id="lcProductPickerBtn"
+                                                    class="lc-editor-icon"
+                                                    title="Send catalog product"
+                                                    style="border:0;background:transparent;padding:0;cursor:pointer;"
+                                                >
+                                                    🛍️
+                                                </button>
                                                 <button
                                                     type="button"
                                                     id="lcStartRecordingBtn"
@@ -3018,6 +3259,53 @@
             </div>
         </div>
     </div>
+
+    @if ($selectedConversation)
+        <div id="lcProductPickerModal" class="lc-modal" aria-hidden="true">
+            <div class="lc-modal-backdrop" data-product-picker-close></div>
+
+            <div class="lc-modal-card lc-product-modal-card" role="dialog" aria-modal="true" aria-labelledby="lcProductPickerTitle">
+                <div id="lcProductPickerTitle" class="lc-modal-title">Send catalog product</div>
+                <div class="lc-modal-body">
+                    Select a product to send in this direct message. Leadochat will save it as a product card and send the customer a clean product summary.
+                </div>
+
+                <form
+                    id="lcProductPickerForm"
+                    method="POST"
+                    action="{{ route('inbox.catalog-products.send', $selectedConversation) }}"
+                    style="display:grid; gap:.8rem;"
+                >
+                    @csrf
+                    <input type="hidden" name="catalog_product_id" id="lcProductPickerProductId">
+
+                    <input
+                        type="text"
+                        id="lcProductPickerSearch"
+                        class="lc-product-picker-search"
+                        placeholder="Search catalog products..."
+                    >
+
+                    <div id="lcProductPickerList" class="lc-product-picker-list"></div>
+                    <div id="lcProductPickerEmpty" class="lc-product-picker-empty" style="display:none;">
+                        No products are available for this conversation yet. Add products in Settings → Catalogs.
+                    </div>
+
+                    <textarea
+                        name="note"
+                        id="lcProductPickerNote"
+                        class="lc-product-picker-note"
+                        placeholder="Optional note for the customer..."
+                    ></textarea>
+
+                    <div class="lc-modal-actions">
+                        <button type="button" class="lc-modal-btn" data-product-picker-close>Cancel</button>
+                        <button type="submit" id="lcProductPickerSend" class="lc-modal-btn primary" disabled>Send product</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    @endif
 
     <script>
         document.addEventListener('DOMContentLoaded', function () {
@@ -4559,6 +4847,127 @@
                 });
             }
 
+            const catalogProducts = @json($availableCatalogProducts->map(fn ($product) => [
+                'id' => $product->id,
+                'catalog_name' => $product->catalog?->name,
+                'title' => $product->title,
+                'description' => $product->description,
+                'sku' => $product->sku,
+                'price' => $product->price !== null ? (float) $product->price : null,
+                'currency' => strtoupper((string) $product->currency),
+                'image_url' => $product->image_url,
+                'product_url' => $product->product_url,
+                'availability' => $product->availability,
+            ])->values());
+            const productPickerBtn = document.getElementById('lcProductPickerBtn');
+            const productPickerModal = document.getElementById('lcProductPickerModal');
+            const productPickerForm = document.getElementById('lcProductPickerForm');
+            const productPickerList = document.getElementById('lcProductPickerList');
+            const productPickerEmpty = document.getElementById('lcProductPickerEmpty');
+            const productPickerSearch = document.getElementById('lcProductPickerSearch');
+            const productPickerProductId = document.getElementById('lcProductPickerProductId');
+            const productPickerSend = document.getElementById('lcProductPickerSend');
+
+            const escapeHtml = function (value) {
+                const element = document.createElement('div');
+                element.textContent = value === null || value === undefined ? '' : String(value);
+
+                return element.innerHTML;
+            };
+
+            const formatProductPrice = function (product) {
+                if (product.price === null || product.price === undefined) {
+                    return 'No price';
+                }
+
+                return `${product.currency || 'USD'} ${Number(product.price).toFixed(2)}`;
+            };
+
+            const closeProductPicker = function () {
+                if (!productPickerModal) {
+                    return;
+                }
+
+                productPickerModal.classList.remove('is-open');
+                productPickerModal.setAttribute('aria-hidden', 'true');
+            };
+
+            const selectCatalogProduct = function (productId) {
+                if (!productPickerProductId || !productPickerSend) {
+                    return;
+                }
+
+                productPickerProductId.value = productId ? String(productId) : '';
+                productPickerSend.disabled = !productId;
+
+                productPickerList?.querySelectorAll('.lc-product-picker-item').forEach((item) => {
+                    item.classList.toggle('is-selected', item.dataset.productId === String(productId));
+                });
+            };
+
+            const renderCatalogProducts = function () {
+                if (!productPickerList || !productPickerEmpty) {
+                    return;
+                }
+
+                const term = (productPickerSearch?.value || '').trim().toLowerCase();
+                const filteredProducts = catalogProducts.filter((product) => {
+                    const haystack = [
+                        product.title,
+                        product.description,
+                        product.sku,
+                        product.catalog_name,
+                    ].filter(Boolean).join(' ').toLowerCase();
+
+                    return term === '' || haystack.includes(term);
+                });
+
+                productPickerList.innerHTML = '';
+                productPickerEmpty.style.display = filteredProducts.length ? 'none' : 'block';
+
+                filteredProducts.forEach((product) => {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = 'lc-product-picker-item';
+                    button.dataset.productId = String(product.id);
+                    const availability = (product.availability || 'in_stock').replace(/_/g, ' ');
+                    button.innerHTML = `
+                        <div class="lc-product-picker-thumb">
+                            ${product.image_url ? `<img src="${escapeHtml(product.image_url)}" alt="">` : 'No image'}
+                        </div>
+                        <div>
+                            <div class="lc-product-picker-title">${escapeHtml(product.title || 'Product')}</div>
+                            <div class="lc-product-picker-meta">${escapeHtml(formatProductPrice(product))} · ${escapeHtml(availability)}</div>
+                            <div class="lc-product-picker-meta">${escapeHtml(product.catalog_name || 'Catalog')}${product.sku ? ` · SKU: ${escapeHtml(product.sku)}` : ''}</div>
+                        </div>
+                    `;
+                    button.addEventListener('click', function () {
+                        selectCatalogProduct(product.id);
+                    });
+                    productPickerList.appendChild(button);
+                });
+
+                if (productPickerProductId?.value) {
+                    selectCatalogProduct(productPickerProductId.value);
+                }
+            };
+
+            if (productPickerBtn && productPickerModal) {
+                productPickerBtn.addEventListener('click', function () {
+                    renderCatalogProducts();
+                    selectCatalogProduct(null);
+                    productPickerModal.classList.add('is-open');
+                    productPickerModal.setAttribute('aria-hidden', 'false');
+                    productPickerSearch?.focus({ preventScroll: true });
+                });
+            }
+
+            document.querySelectorAll('[data-product-picker-close]').forEach((button) => {
+                button.addEventListener('click', closeProductPicker);
+            });
+
+            productPickerSearch?.addEventListener('input', renderCatalogProducts);
+
             const closeReactionPickers = function (except = null) {
                 document.querySelectorAll('.lc-reaction-form.is-open').forEach((form) => {
                     if (form === except) {
@@ -4675,6 +5084,7 @@
             document.addEventListener('keydown', function (event) {
                 if (event.key === 'Escape') {
                     closeReactionPickers();
+                    closeProductPicker();
                 }
             });
 
@@ -4786,6 +5196,60 @@
 
                         if (button) {
                             button.disabled = false;
+                        }
+                    }
+
+                    return;
+                }
+
+                const productForm = submittedForm && submittedForm.id === 'lcProductPickerForm'
+                    ? submittedForm
+                    : null;
+
+                if (productForm) {
+                    event.preventDefault();
+
+                    if (!productPickerProductId?.value) {
+                        window.alert('Select a product first.');
+                        return;
+                    }
+
+                    const button = productPickerSend || productForm.querySelector('button[type="submit"]');
+                    const originalText = button ? button.textContent : null;
+
+                    if (button) {
+                        button.disabled = true;
+                        button.textContent = 'Sending...';
+                    }
+
+                    try {
+                        const response = await fetch(productForm.action, {
+                            method: 'POST',
+                            body: new FormData(productForm),
+                            headers: {
+                                Accept: 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest',
+                            },
+                            credentials: 'same-origin',
+                        });
+
+                        const data = await response.json().catch(() => ({}));
+
+                        if (!response.ok || data.ok === false) {
+                            window.alert(data.error || data.message || 'Product send failed.');
+                            return;
+                        }
+
+                        productForm.reset();
+                        selectCatalogProduct(null);
+                        closeProductPicker();
+                        schedulePaneRefresh({ scrollToBottom: true, delay: 50 });
+                    } catch (error) {
+                        window.alert('Product send failed.');
+                    } finally {
+                        if (button) {
+                            button.disabled = false;
+                            button.textContent = originalText || 'Send product';
                         }
                     }
 

@@ -49,4 +49,9 @@ class ProviderConnection extends Model
     {
         return $this->hasMany(Conversation::class);
     }
+
+    public function catalogs(): HasMany
+    {
+        return $this->hasMany(Catalog::class);
+    }
 }

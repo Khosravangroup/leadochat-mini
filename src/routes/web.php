@@ -6,6 +6,7 @@ use App\Http\Controllers\InstagramConnectController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SocialController;
 use App\Http\Controllers\PublicPageController;
+use App\Http\Controllers\WorkspaceCatalogController;
 use App\Http\Controllers\WorkspaceSettingsController;
 use Illuminate\Support\Facades\Route;
 
@@ -103,11 +104,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('/settings/tags/{tag}', [WorkspaceSettingsController::class, 'deleteTag'])->name('settings.tags.delete');
     Route::post('/settings/departments', [WorkspaceSettingsController::class, 'createDepartment'])->name('settings.departments.create');
     Route::delete('/settings/departments/{department}', [WorkspaceSettingsController::class, 'deleteDepartment'])->name('settings.departments.delete');
+    Route::post('/settings/catalogs', [WorkspaceCatalogController::class, 'storeCatalog'])->name('settings.catalogs.store');
+    Route::post('/settings/catalogs/{catalog}/products', [WorkspaceCatalogController::class, 'storeProduct'])->name('settings.catalogs.products.store');
+    Route::delete('/settings/catalog-products/{product}', [WorkspaceCatalogController::class, 'deleteProduct'])->name('settings.catalogs.products.delete');
     Route::get('/inbox', [InboxController::class, 'index'])->name('inbox.index');
     Route::get('/inbox/realtime/snapshot', [InboxController::class, 'realtimeSnapshot'])->name('inbox.realtime.snapshot');
     Route::get('/inbox/{conversation}', [InboxController::class, 'index'])->name('inbox.show');
 
     Route::post('/inbox/{conversation}/messages', [InboxController::class, 'storeMessage'])->name('inbox.messages.store');
+    Route::post('/inbox/{conversation}/catalog-products', [InboxController::class, 'sendCatalogProduct'])->name('inbox.catalog-products.send');
     Route::post('/inbox/{conversation}/messages/{message}/reaction', [InboxController::class, 'storeReaction'])->name('inbox.messages.reaction');
     Route::post('/inbox/{conversation}/voice', [InboxController::class, 'storeVoice'])->name('inbox.messages.voice');
 

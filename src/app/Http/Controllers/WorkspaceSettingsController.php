@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Catalog;
 use App\Models\WorkspaceTag;
 use App\Models\ProviderConnection;
 use App\Models\User;
@@ -30,6 +31,7 @@ class WorkspaceSettingsController extends Controller
             'team' => 'Team',
             'inbox' => 'Inbox',
             'channels' => 'Channels',
+            'catalogs' => 'Catalogs',
             'automation' => 'Automation',
             'ai' => 'AI',
             'billing' => 'Billing',
@@ -46,6 +48,8 @@ class WorkspaceSettingsController extends Controller
         $workspaceMembers = collect();
         $providerConnections = collect();
         $providerCards = collect();
+        $catalogs = collect();
+        $catalogProviderConnections = collect();
 
         if ($workspace && $section === 'tags') {
             $workspaceTags = WorkspaceTag::query()
@@ -103,6 +107,26 @@ class WorkspaceSettingsController extends Controller
             ]);
         }
 
+        if ($workspace && $section === 'catalogs') {
+            $catalogs = Catalog::query()
+                ->where('workspace_id', $workspace->id)
+                ->with([
+                    'providerConnection',
+                    'products' => fn ($query) => $query
+                        ->orderByDesc('is_active')
+                        ->orderBy('title'),
+                ])
+                ->orderBy('name')
+                ->get();
+
+            $catalogProviderConnections = ProviderConnection::query()
+                ->where('workspace_id', $workspace->id)
+                ->where('provider', 'instagram')
+                ->where('status', 'connected')
+                ->orderBy('provider_account_name')
+                ->get();
+        }
+
         return view('settings.index', [
             'workspace' => $workspace,
             'section' => $section,
@@ -112,6 +136,8 @@ class WorkspaceSettingsController extends Controller
             'workspaceMembers' => $workspaceMembers,
             'providerConnections' => $providerConnections,
             'providerCards' => $providerCards,
+            'catalogs' => $catalogs,
+            'catalogProviderConnections' => $catalogProviderConnections,
             'canManageTeam' => (bool) ($workspace && $user),
         ]);
     }
