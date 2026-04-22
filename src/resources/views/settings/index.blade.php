@@ -1775,7 +1775,7 @@
 
                         .ws-catalog-card {
                             border: 1px solid #e2e8f0;
-                            border-radius: 14px;
+                            border-radius: 8px;
                             background: #fff;
                             padding: 14px;
                         }
@@ -1818,7 +1818,7 @@
                         .ws-catalog-textarea {
                             width: 100%;
                             border: 1px solid #cbd5e1;
-                            border-radius: 10px;
+                            border-radius: 8px;
                             background: #fff;
                             color: #0f172a;
                             font-size: 14px;
@@ -1845,12 +1845,13 @@
                         }
 
                         .ws-catalog-submit,
-                        .ws-catalog-danger {
+                        .ws-catalog-danger,
+                        .ws-catalog-secondary {
                             display: inline-flex;
                             align-items: center;
                             justify-content: center;
                             min-height: 38px;
-                            border-radius: 10px;
+                            border-radius: 8px;
                             padding: 0 13px;
                             font-size: 13px;
                             font-weight: 900;
@@ -1869,6 +1870,12 @@
                             border: 1px solid #fecaca;
                         }
 
+                        .ws-catalog-secondary {
+                            background: #f8fafc;
+                            color: #334155;
+                            border: 1px solid #cbd5e1;
+                        }
+
                         .ws-catalog-help {
                             color: #64748b;
                             font-size: 12px;
@@ -1883,7 +1890,7 @@
 
                         .ws-catalog-success {
                             border: 1px solid #bbf7d0;
-                            border-radius: 10px;
+                            border-radius: 8px;
                             background: #f0fdf4;
                             padding: 10px 12px;
                             font-size: 13px;
@@ -1899,7 +1906,7 @@
 
                         .ws-catalog-row {
                             border: 1px solid #e2e8f0;
-                            border-radius: 14px;
+                            border-radius: 8px;
                             background: #fff;
                             overflow: hidden;
                         }
@@ -1952,14 +1959,14 @@
                             align-items: center;
                             gap: 12px;
                             border: 1px solid #e2e8f0;
-                            border-radius: 12px;
+                            border-radius: 8px;
                             padding: 10px;
                         }
 
                         .ws-product-thumb {
                             width: 64px;
                             height: 64px;
-                            border-radius: 10px;
+                            border-radius: 8px;
                             background: #f1f5f9;
                             border: 1px solid #e2e8f0;
                             overflow: hidden;
@@ -1988,6 +1995,52 @@
                             color: #64748b;
                             font-size: 12px;
                             line-height: 1.55;
+                        }
+
+                        .ws-product-actions {
+                            display: flex;
+                            flex-wrap: wrap;
+                            justify-content: flex-end;
+                            gap: 8px;
+                        }
+
+                        .ws-product-status {
+                            display: inline-flex;
+                            align-items: center;
+                            min-height: 22px;
+                            border-radius: 999px;
+                            padding: 0 8px;
+                            font-size: 11px;
+                            font-weight: 900;
+                        }
+
+                        .ws-product-status.active {
+                            background: #ecfdf5;
+                            border: 1px solid #86efac;
+                            color: #166534;
+                        }
+
+                        .ws-product-status.inactive {
+                            background: #f1f5f9;
+                            border: 1px solid #cbd5e1;
+                            color: #475569;
+                        }
+
+                        .ws-product-edit {
+                            margin-top: 10px;
+                        }
+
+                        .ws-product-edit summary {
+                            color: #0f766e;
+                            cursor: pointer;
+                            font-size: 12px;
+                            font-weight: 900;
+                        }
+
+                        .ws-catalog-import {
+                            border-top: 1px solid #e2e8f0;
+                            padding: 14px;
+                            background: #f8fafc;
                         }
 
                         .ws-product-empty {
@@ -2073,7 +2126,7 @@
                                     Agents will see active products in the inbox product picker and can send them as Instagram DM product cards.
                                 </div>
                                 <div class="ws-placeholder" style="margin-top:12px;">
-                                    Phase 1 stores products inside Leadochat and sends a clean product summary to Instagram DM. Meta Commerce Catalog sync can be added after this workflow is stable.
+                                    Products now send to Instagram as native DM cards. Keep this list clean with SKU updates, active/inactive status, and CSV import when the catalog grows.
                                 </div>
                             </div>
                         </div>
@@ -2125,23 +2178,126 @@
                                                             @if ($product->sku)
                                                                 · SKU: {{ $product->sku }}
                                                             @endif
+                                                            ·
+                                                            <span class="ws-product-status {{ $product->is_active ? 'active' : 'inactive' }}">
+                                                                {{ $product->is_active ? 'Active' : 'Inactive' }}
+                                                            </span>
                                                         </div>
                                                         @if ($product->description)
                                                             <div class="ws-product-meta">{{ $product->description }}</div>
                                                         @endif
+
+                                                        <details class="ws-product-edit">
+                                                            <summary>Edit product</summary>
+
+                                                            <form method="POST" action="{{ route('settings.catalogs.products.update', $product) }}" class="ws-catalog-form">
+                                                                @csrf
+                                                                @method('PATCH')
+
+                                                                <div class="ws-catalog-form-grid">
+                                                                    <div class="ws-catalog-form-field">
+                                                                        <label class="ws-catalog-label" for="editProductTitle{{ $product->id }}">Product title</label>
+                                                                        <input id="editProductTitle{{ $product->id }}" name="title" class="ws-catalog-input" type="text" value="{{ $product->title }}" required>
+                                                                    </div>
+
+                                                                    <div class="ws-catalog-form-field">
+                                                                        <label class="ws-catalog-label" for="editProductSku{{ $product->id }}">SKU</label>
+                                                                        <input id="editProductSku{{ $product->id }}" name="sku" class="ws-catalog-input" type="text" value="{{ $product->sku }}">
+                                                                    </div>
+
+                                                                    <div class="ws-catalog-form-field">
+                                                                        <label class="ws-catalog-label" for="editProductAvailability{{ $product->id }}">Availability</label>
+                                                                        <select id="editProductAvailability{{ $product->id }}" name="availability" class="ws-catalog-select">
+                                                                            <option value="in_stock" @selected($product->availability === 'in_stock')>In stock</option>
+                                                                            <option value="out_of_stock" @selected($product->availability === 'out_of_stock')>Out of stock</option>
+                                                                            <option value="preorder" @selected($product->availability === 'preorder')>Preorder</option>
+                                                                        </select>
+                                                                    </div>
+
+                                                                    <div class="ws-catalog-form-field">
+                                                                        <label class="ws-catalog-label" for="editProductPrice{{ $product->id }}">Price</label>
+                                                                        <input id="editProductPrice{{ $product->id }}" name="price" class="ws-catalog-input" type="number" min="0" step="0.01" value="{{ $product->price }}">
+                                                                    </div>
+
+                                                                    <div class="ws-catalog-form-field">
+                                                                        <label class="ws-catalog-label" for="editProductCurrency{{ $product->id }}">Currency</label>
+                                                                        <input id="editProductCurrency{{ $product->id }}" name="currency" class="ws-catalog-input" type="text" value="{{ strtoupper($product->currency) }}" maxlength="3" required>
+                                                                    </div>
+
+                                                                    <div class="ws-catalog-form-field">
+                                                                        <label class="ws-catalog-label" for="editProductActive{{ $product->id }}">Inbox picker</label>
+                                                                        <select id="editProductActive{{ $product->id }}" name="is_active" class="ws-catalog-select">
+                                                                            <option value="1" @selected($product->is_active)>Active</option>
+                                                                            <option value="0" @selected(! $product->is_active)>Inactive</option>
+                                                                        </select>
+                                                                    </div>
+
+                                                                    <div class="ws-catalog-form-field full">
+                                                                        <label class="ws-catalog-label" for="editProductUrl{{ $product->id }}">Product URL</label>
+                                                                        <input id="editProductUrl{{ $product->id }}" name="product_url" class="ws-catalog-input" type="url" value="{{ $product->product_url }}" placeholder="https://...">
+                                                                    </div>
+
+                                                                    <div class="ws-catalog-form-field full">
+                                                                        <label class="ws-catalog-label" for="editProductImage{{ $product->id }}">Image URL</label>
+                                                                        <input id="editProductImage{{ $product->id }}" name="image_url" class="ws-catalog-input" type="url" value="{{ $product->image_url }}" placeholder="https://...">
+                                                                    </div>
+
+                                                                    <div class="ws-catalog-form-field full">
+                                                                        <label class="ws-catalog-label" for="editProductDescription{{ $product->id }}">Description</label>
+                                                                        <textarea id="editProductDescription{{ $product->id }}" name="description" class="ws-catalog-textarea">{{ $product->description }}</textarea>
+                                                                    </div>
+                                                                </div>
+
+                                                                <div>
+                                                                    <button type="submit" class="ws-catalog-submit">Save product</button>
+                                                                </div>
+                                                            </form>
+                                                        </details>
                                                     </div>
 
-                                                    <form method="POST" action="{{ route('settings.catalogs.products.delete', $product) }}">
-                                                        @csrf
-                                                        @method('DELETE')
-                                                        <button type="submit" class="ws-catalog-danger">Delete</button>
-                                                    </form>
+                                                    <div class="ws-product-actions">
+                                                        <form method="POST" action="{{ route('settings.catalogs.products.status', $product) }}">
+                                                            @csrf
+                                                            @method('PATCH')
+                                                            <button type="submit" class="ws-catalog-secondary">
+                                                                {{ $product->is_active ? 'Disable' : 'Enable' }}
+                                                            </button>
+                                                        </form>
+
+                                                        <form method="POST" action="{{ route('settings.catalogs.products.delete', $product) }}">
+                                                            @csrf
+                                                            @method('DELETE')
+                                                            <button type="submit" class="ws-catalog-danger">Delete</button>
+                                                        </form>
+                                                    </div>
                                                 </div>
                                             @empty
                                                 <div class="ws-product-empty">
                                                     No products yet. Add the first product below.
                                                 </div>
                                             @endforelse
+
+                                            <div class="ws-catalog-import">
+                                                <h4 class="ws-product-title">Bulk import products</h4>
+                                                <div class="ws-catalog-help">
+                                                    Upload a CSV with columns like title, sku, description, price, currency, image_url, product_url, availability, is_active. Existing SKUs will be updated.
+                                                </div>
+
+                                                <form method="POST" action="{{ route('settings.catalogs.products.import', $catalog) }}" enctype="multipart/form-data" class="ws-catalog-form">
+                                                    @csrf
+
+                                                    <div class="ws-catalog-form-grid">
+                                                        <div class="ws-catalog-form-field full">
+                                                            <label class="ws-catalog-label" for="productImport{{ $catalog->id }}">CSV file</label>
+                                                            <input id="productImport{{ $catalog->id }}" name="products_csv" class="ws-catalog-input" type="file" accept=".csv,text/csv,text/plain" required>
+                                                        </div>
+                                                    </div>
+
+                                                    <div>
+                                                        <button type="submit" class="ws-catalog-secondary">Import CSV</button>
+                                                    </div>
+                                                </form>
+                                            </div>
 
                                             <form method="POST" action="{{ route('settings.catalogs.products.store', $catalog) }}" class="ws-catalog-form">
                                                 @csrf

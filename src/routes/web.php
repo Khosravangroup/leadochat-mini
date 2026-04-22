@@ -106,6 +106,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('/settings/departments/{department}', [WorkspaceSettingsController::class, 'deleteDepartment'])->name('settings.departments.delete');
     Route::post('/settings/catalogs', [WorkspaceCatalogController::class, 'storeCatalog'])->name('settings.catalogs.store');
     Route::post('/settings/catalogs/{catalog}/products', [WorkspaceCatalogController::class, 'storeProduct'])->name('settings.catalogs.products.store');
+    Route::post('/settings/catalogs/{catalog}/products/import', [WorkspaceCatalogController::class, 'importProducts'])->name('settings.catalogs.products.import');
+    Route::patch('/settings/catalog-products/{product}', [WorkspaceCatalogController::class, 'updateProduct'])->name('settings.catalogs.products.update');
+    Route::patch('/settings/catalog-products/{product}/status', [WorkspaceCatalogController::class, 'toggleProductStatus'])->name('settings.catalogs.products.status');
     Route::delete('/settings/catalog-products/{product}', [WorkspaceCatalogController::class, 'deleteProduct'])->name('settings.catalogs.products.delete');
     Route::get('/inbox', [InboxController::class, 'index'])->name('inbox.index');
     Route::get('/inbox/realtime/snapshot', [InboxController::class, 'realtimeSnapshot'])->name('inbox.realtime.snapshot');
