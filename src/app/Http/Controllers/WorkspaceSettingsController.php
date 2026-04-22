@@ -53,6 +53,7 @@ class WorkspaceSettingsController extends Controller
         $catalogProviderConnections = collect();
         $commerceConnections = collect();
         $metaCommerceCatalogs = collect();
+        $commerceSourceCatalogs = collect();
 
         if ($workspace && $section === 'tags') {
             $workspaceTags = WorkspaceTag::query()
@@ -147,6 +148,14 @@ class WorkspaceSettingsController extends Controller
                 ->with('providerConnection')
                 ->orderBy('name')
                 ->get();
+
+            $commerceSourceCatalogs = Catalog::query()
+                ->where('workspace_id', $workspace->id)
+                ->where('status', 'active')
+                ->where('source', '!=', 'meta')
+                ->withCount(['products' => fn ($query) => $query->where('is_active', true)])
+                ->orderBy('name')
+                ->get();
         }
 
         return view('settings.index', [
@@ -162,6 +171,7 @@ class WorkspaceSettingsController extends Controller
             'catalogProviderConnections' => $catalogProviderConnections,
             'commerceConnections' => $commerceConnections,
             'metaCommerceCatalogs' => $metaCommerceCatalogs,
+            'commerceSourceCatalogs' => $commerceSourceCatalogs,
             'canManageTeam' => (bool) ($workspace && $user),
         ]);
     }

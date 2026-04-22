@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Catalog;
 use App\Models\ProviderConnection;
+use App\Services\Meta\Commerce\MetaCatalogProductSyncService;
 use App\Services\Meta\Commerce\MetaCommerceDiscoveryService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -70,5 +71,41 @@ class WorkspaceMetaCommerceController extends Controller
         return redirect()
             ->route('settings.index', ['section' => 'commerce'])
             ->with('status', 'Meta Commerce discovery finished. Found ' . count($discovery['catalogs'] ?? []) . ' catalog(s).');
+    }
+
+    public function syncProducts(
+        Request $request,
+        Catalog $catalog,
+        MetaCatalogProductSyncService $syncService
+    ): RedirectResponse {
+        $workspace = $request->user()?->currentWorkspace();
+
+        abort_unless(
+            $workspace
+            && $catalog->workspace_id === $workspace->id
+            && $catalog->source === 'meta',
+            404
+        );
+
+        $validated = $request->validate([
+            'source_catalog_id' => ['required', 'integer'],
+        ]);
+
+        $sourceCatalog = Catalog::query()
+            ->where('workspace_id', $workspace->id)
+            ->whereKey((int) $validated['source_catalog_id'])
+            ->with('products')
+            ->firstOrFail();
+
+        $result = $syncService->syncProducts($sourceCatalog, $catalog);
+
+        return redirect()
+            ->route('settings.index', ['section' => 'commerce'])
+            ->with(
+                'status',
+                $result['ok']
+                    ? "Meta product sync queued for {$result['product_count']} product(s)."
+                    : "Meta product sync failed for {$result['product_count']} product(s)."
+            );
     }
 }

@@ -112,6 +112,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::patch('/settings/catalog-products/{product}/status', [WorkspaceCatalogController::class, 'toggleProductStatus'])->name('settings.catalogs.products.status');
     Route::delete('/settings/catalog-products/{product}', [WorkspaceCatalogController::class, 'deleteProduct'])->name('settings.catalogs.products.delete');
     Route::post('/settings/commerce/connections/{connection}/sync', [WorkspaceMetaCommerceController::class, 'sync'])->name('settings.commerce.sync');
+    Route::post('/settings/commerce/catalogs/{catalog}/products/sync', [WorkspaceMetaCommerceController::class, 'syncProducts'])->name('settings.commerce.catalogs.products.sync');
     Route::get('/inbox', [InboxController::class, 'index'])->name('inbox.index');
     Route::get('/inbox/realtime/snapshot', [InboxController::class, 'realtimeSnapshot'])->name('inbox.realtime.snapshot');
     Route::get('/inbox/{conversation}', [InboxController::class, 'index'])->name('inbox.show');

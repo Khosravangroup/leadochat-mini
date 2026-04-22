@@ -2455,6 +2455,25 @@
                             font-weight: 900;
                         }
 
+                        .ws-commerce-select {
+                            min-height: 38px;
+                            border: 1px solid #cbd5e1;
+                            border-radius: 8px;
+                            background: #fff;
+                            color: #0f172a;
+                            padding: 0 10px;
+                            font-size: 13px;
+                            outline: none;
+                        }
+
+                        .ws-commerce-sync-form {
+                            display: flex;
+                            flex-wrap: wrap;
+                            align-items: center;
+                            gap: 8px;
+                            margin-top: 10px;
+                        }
+
                         .ws-commerce-list {
                             display: grid;
                             gap: 8px;
@@ -2516,7 +2535,7 @@
                                     <span class="ws-commerce-pill ok">Business discovery</span>
                                     <span class="ws-commerce-pill ok">Catalog discovery</span>
                                     <span class="ws-commerce-pill">Product tag diagnostics</span>
-                                    <span class="ws-commerce-pill">Product sync next</span>
+                                    <span class="ws-commerce-pill ok">Product sync foundation</span>
                                 </div>
                             </div>
                         </div>
@@ -2609,6 +2628,32 @@
                                                 · {{ $catalog->meta_synced_at->format('M d, Y H:i') }}
                                             @endif
                                         </div>
+                                        @php
+                                            $lastProductSync = is_array($catalog->meta ?? null) ? ($catalog->meta['last_product_sync'] ?? null) : null;
+                                        @endphp
+                                        @if (is_array($lastProductSync))
+                                            <div class="ws-commerce-meta">
+                                                Last product sync:
+                                                {{ $lastProductSync['product_count'] ?? 0 }} product(s)
+                                                · {{ $lastProductSync['status'] ?? 'unknown' }}
+                                                @if (!empty($lastProductSync['batch_handle']))
+                                                    <span class="ws-commerce-code">Batch handle: {{ $lastProductSync['batch_handle'] }}</span>
+                                                @endif
+                                            </div>
+                                        @endif
+
+                                        <form method="POST" action="{{ route('settings.commerce.catalogs.products.sync', $catalog) }}" class="ws-commerce-sync-form">
+                                            @csrf
+                                            <select name="source_catalog_id" class="ws-commerce-select" required>
+                                                <option value="">Choose Leadochat source catalog</option>
+                                                @foreach (($commerceSourceCatalogs ?? collect()) as $sourceCatalog)
+                                                    <option value="{{ $sourceCatalog->id }}">
+                                                        {{ $sourceCatalog->name }} · {{ $sourceCatalog->products_count }} active products
+                                                    </option>
+                                                @endforeach
+                                            </select>
+                                            <button type="submit" class="ws-commerce-button">Sync products to Meta</button>
+                                        </form>
                                     </div>
                                 @empty
                                     <div class="ws-empty">

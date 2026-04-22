@@ -20,6 +20,9 @@ class CatalogProduct extends Model
         'product_url',
         'availability',
         'is_active',
+        'meta_sync_status',
+        'meta_sync_error',
+        'meta_synced_at',
         'metadata',
     ];
 
@@ -28,6 +31,7 @@ class CatalogProduct extends Model
         return [
             'price' => 'decimal:2',
             'is_active' => 'boolean',
+            'meta_synced_at' => 'datetime',
             'metadata' => 'array',
         ];
     }
