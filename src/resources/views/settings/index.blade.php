@@ -193,6 +193,8 @@
                         Manage connected channels for this workspace. Reuse the existing Instagram flow here and keep Facebook and WhatsApp ready for the next phases.
                     @elseif ($section === 'catalogs')
                         Manage product catalogs that agents can send inside Instagram direct messages.
+                    @elseif ($section === 'commerce')
+                        Discover real Meta Commerce assets, catalog access, and product-tag readiness for App Review.
                     @elseif (in_array($section, ['automation', 'ai', 'billing', 'security', 'advanced'], true))
                         This section will be added soon.
                     @else
@@ -2357,6 +2359,260 @@
                                 @empty
                                     <div class="ws-empty">
                                         No catalogs created yet.
+                                    </div>
+                                @endforelse
+                            </div>
+                        </div>
+                    </div>
+                @elseif ($section === 'commerce')
+                    <style>
+                        .ws-commerce-shell {
+                            margin-top: 18px;
+                            display: grid;
+                            gap: 14px;
+                        }
+
+                        .ws-commerce-grid {
+                            display: grid;
+                            grid-template-columns: repeat(2, minmax(0, 1fr));
+                            gap: 14px;
+                        }
+
+                        .ws-commerce-card {
+                            border: 1px solid #e2e8f0;
+                            border-radius: 8px;
+                            background: #fff;
+                            padding: 14px;
+                        }
+
+                        .ws-commerce-account {
+                            display: grid;
+                            gap: 10px;
+                            border: 1px solid #e2e8f0;
+                            border-radius: 8px;
+                            padding: 12px;
+                            background: #fff;
+                        }
+
+                        .ws-commerce-head {
+                            display: flex;
+                            justify-content: space-between;
+                            gap: 12px;
+                            align-items: flex-start;
+                        }
+
+                        .ws-commerce-title {
+                            font-size: 15px;
+                            font-weight: 900;
+                            color: #0f172a;
+                        }
+
+                        .ws-commerce-meta,
+                        .ws-commerce-check {
+                            color: #64748b;
+                            font-size: 12px;
+                            line-height: 1.55;
+                        }
+
+                        .ws-commerce-pill {
+                            display: inline-flex;
+                            align-items: center;
+                            min-height: 24px;
+                            border-radius: 999px;
+                            padding: 0 9px;
+                            background: #f8fafc;
+                            border: 1px solid #cbd5e1;
+                            color: #334155;
+                            font-size: 11px;
+                            font-weight: 900;
+                            white-space: nowrap;
+                        }
+
+                        .ws-commerce-pill.ok {
+                            background: #ecfdf5;
+                            border-color: #86efac;
+                            color: #166534;
+                        }
+
+                        .ws-commerce-pill.fail {
+                            background: #fef2f2;
+                            border-color: #fecaca;
+                            color: #b91c1c;
+                        }
+
+                        .ws-commerce-button {
+                            display: inline-flex;
+                            align-items: center;
+                            justify-content: center;
+                            min-height: 38px;
+                            border-radius: 8px;
+                            padding: 0 13px;
+                            border: 0;
+                            background: #0f766e;
+                            color: #fff;
+                            cursor: pointer;
+                            font-size: 13px;
+                            font-weight: 900;
+                        }
+
+                        .ws-commerce-list {
+                            display: grid;
+                            gap: 8px;
+                            margin-top: 10px;
+                        }
+
+                        .ws-commerce-catalog {
+                            border: 1px solid #e2e8f0;
+                            border-radius: 8px;
+                            padding: 10px;
+                            background: #f8fafc;
+                        }
+
+                        .ws-commerce-code {
+                            display: block;
+                            margin-top: 6px;
+                            color: #475569;
+                            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+                            font-size: 11px;
+                            overflow-wrap: anywhere;
+                        }
+
+                        @media (max-width: 1080px) {
+                            .ws-commerce-grid {
+                                grid-template-columns: 1fr;
+                            }
+                        }
+                    </style>
+
+                    <div class="ws-commerce-shell">
+                        @if (session('status'))
+                            <div class="ws-catalog-success">
+                                {{ session('status') }}
+                            </div>
+                        @endif
+
+                        <div class="ws-commerce-grid">
+                            <div class="ws-commerce-card">
+                                <h3 class="ws-section-title">App Review readiness</h3>
+                                <div class="ws-section-subtitle">
+                                    Use this panel to prove that Leadochat reads real Meta business and commerce assets.
+                                </div>
+                                <div class="ws-commerce-list">
+                                    @foreach ((array) config('services.meta.commerce_review_scopes', '') ? array_filter(array_map('trim', explode(',', config('services.meta.commerce_review_scopes')))) : [] as $scope)
+                                        <span class="ws-commerce-pill">{{ $scope }}</span>
+                                    @endforeach
+                                </div>
+                                <div class="ws-commerce-meta" style="margin-top:10px;">
+                                    Discovery uses Meta Graph API and stores successful catalogs as Leadochat catalogs with source Meta.
+                                </div>
+                            </div>
+
+                            <div class="ws-commerce-card">
+                                <h3 class="ws-section-title">Phase 1 scope</h3>
+                                <div class="ws-section-subtitle">
+                                    Connect the account, discover business IDs, find usable product catalogs, and capture permission errors for review evidence.
+                                </div>
+                                <div class="ws-commerce-list">
+                                    <span class="ws-commerce-pill ok">Business discovery</span>
+                                    <span class="ws-commerce-pill ok">Catalog discovery</span>
+                                    <span class="ws-commerce-pill">Product tag diagnostics</span>
+                                    <span class="ws-commerce-pill">Product sync next</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="ws-commerce-card">
+                            <h3 class="ws-section-title">Connected Instagram accounts</h3>
+
+                            <div class="ws-commerce-list">
+                                @forelse (($commerceConnections ?? collect()) as $connection)
+                                    @php
+                                        $commerceMeta = is_array($connection->meta ?? null) ? ($connection->meta['meta_commerce'] ?? []) : [];
+                                        $discovery = is_array($connection->meta ?? null) ? ($connection->meta['meta_commerce_discovery'] ?? []) : [];
+                                        $checks = is_array($discovery['checks'] ?? null) ? $discovery['checks'] : [];
+                                    @endphp
+
+                                    <div class="ws-commerce-account">
+                                        <div class="ws-commerce-head">
+                                            <div>
+                                                <div class="ws-commerce-title">
+                                                    {{ $connection->provider_account_name ?: $connection->provider_account_id }}
+                                                </div>
+                                                <div class="ws-commerce-meta">
+                                                    Instagram account ID: {{ $connection->provider_account_id }}
+                                                    @if (!empty($commerceMeta['last_discovered_at']))
+                                                        · Last discovery: {{ $commerceMeta['last_discovered_at'] }}
+                                                    @endif
+                                                </div>
+                                            </div>
+
+                                            <form method="POST" action="{{ route('settings.commerce.sync', $connection) }}">
+                                                @csrf
+                                                <button type="submit" class="ws-commerce-button">Run discovery</button>
+                                            </form>
+                                        </div>
+
+                                        <div class="ws-commerce-list">
+                                            <div>
+                                                <span class="ws-commerce-pill {{ (int) ($commerceMeta['catalog_count'] ?? 0) > 0 ? 'ok' : '' }}">
+                                                    {{ (int) ($commerceMeta['catalog_count'] ?? 0) }} Meta catalogs
+                                                </span>
+                                            </div>
+
+                                            @if (!empty($commerceMeta['business_ids']))
+                                                <div class="ws-commerce-meta">
+                                                    Business IDs:
+                                                    <span class="ws-commerce-code">{{ implode(', ', (array) $commerceMeta['business_ids']) }}</span>
+                                                </div>
+                                            @endif
+
+                                            @foreach ($checks as $key => $check)
+                                                <div class="ws-commerce-check">
+                                                    <span class="ws-commerce-pill {{ !empty($check['ok']) ? 'ok' : 'fail' }}">
+                                                        {{ !empty($check['ok']) ? 'OK' : 'Needs access' }}
+                                                    </span>
+                                                    {{ $key }}
+                                                    @if (empty($check['ok']) && !empty($check['error']))
+                                                        <span class="ws-commerce-code">{{ $check['error'] }}</span>
+                                                    @endif
+                                                </div>
+                                            @endforeach
+                                        </div>
+                                    </div>
+                                @empty
+                                    <div class="ws-empty">
+                                        Connect an Instagram account first, then return here to discover Meta Commerce assets.
+                                    </div>
+                                @endforelse
+                            </div>
+                        </div>
+
+                        <div class="ws-commerce-card">
+                            <h3 class="ws-section-title">Discovered Meta catalogs</h3>
+
+                            <div class="ws-commerce-list">
+                                @forelse (($metaCommerceCatalogs ?? collect()) as $catalog)
+                                    <div class="ws-commerce-catalog">
+                                        <div class="ws-commerce-title">{{ $catalog->name }}</div>
+                                        <div class="ws-commerce-meta">
+                                            Catalog ID: {{ $catalog->external_catalog_id ?: '-' }}
+                                            @if ($catalog->external_business_id)
+                                                · Business ID: {{ $catalog->external_business_id }}
+                                            @endif
+                                            @if ($catalog->providerConnection)
+                                                · Instagram: {{ $catalog->providerConnection->provider_account_name ?: $catalog->providerConnection->provider_account_id }}
+                                            @endif
+                                        </div>
+                                        <div class="ws-commerce-meta">
+                                            Sync status: {{ str_replace('_', ' ', $catalog->meta_sync_status ?: 'not synced') }}
+                                            @if ($catalog->meta_synced_at)
+                                                · {{ $catalog->meta_synced_at->format('M d, Y H:i') }}
+                                            @endif
+                                        </div>
+                                    </div>
+                                @empty
+                                    <div class="ws-empty">
+                                        No Meta catalogs discovered yet.
                                     </div>
                                 @endforelse
                             </div>

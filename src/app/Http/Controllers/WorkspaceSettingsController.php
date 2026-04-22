@@ -32,6 +32,7 @@ class WorkspaceSettingsController extends Controller
             'inbox' => 'Inbox',
             'channels' => 'Channels',
             'catalogs' => 'Catalogs',
+            'commerce' => 'Commerce',
             'automation' => 'Automation',
             'ai' => 'AI',
             'billing' => 'Billing',
@@ -50,6 +51,8 @@ class WorkspaceSettingsController extends Controller
         $providerCards = collect();
         $catalogs = collect();
         $catalogProviderConnections = collect();
+        $commerceConnections = collect();
+        $metaCommerceCatalogs = collect();
 
         if ($workspace && $section === 'tags') {
             $workspaceTags = WorkspaceTag::query()
@@ -127,6 +130,25 @@ class WorkspaceSettingsController extends Controller
                 ->get();
         }
 
+        if ($workspace && $section === 'commerce') {
+            $commerceConnections = ProviderConnection::query()
+                ->where('workspace_id', $workspace->id)
+                ->where('provider', 'instagram')
+                ->where('status', 'connected')
+                ->with(['catalogs' => fn ($query) => $query
+                    ->where('source', 'meta')
+                    ->orderBy('name')])
+                ->orderBy('provider_account_name')
+                ->get();
+
+            $metaCommerceCatalogs = Catalog::query()
+                ->where('workspace_id', $workspace->id)
+                ->where('source', 'meta')
+                ->with('providerConnection')
+                ->orderBy('name')
+                ->get();
+        }
+
         return view('settings.index', [
             'workspace' => $workspace,
             'section' => $section,
@@ -138,6 +160,8 @@ class WorkspaceSettingsController extends Controller
             'providerCards' => $providerCards,
             'catalogs' => $catalogs,
             'catalogProviderConnections' => $catalogProviderConnections,
+            'commerceConnections' => $commerceConnections,
+            'metaCommerceCatalogs' => $metaCommerceCatalogs,
             'canManageTeam' => (bool) ($workspace && $user),
         ]);
     }

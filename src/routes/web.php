@@ -7,6 +7,7 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SocialController;
 use App\Http\Controllers\PublicPageController;
 use App\Http\Controllers\WorkspaceCatalogController;
+use App\Http\Controllers\WorkspaceMetaCommerceController;
 use App\Http\Controllers\WorkspaceSettingsController;
 use Illuminate\Support\Facades\Route;
 
@@ -110,6 +111,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::patch('/settings/catalog-products/{product}', [WorkspaceCatalogController::class, 'updateProduct'])->name('settings.catalogs.products.update');
     Route::patch('/settings/catalog-products/{product}/status', [WorkspaceCatalogController::class, 'toggleProductStatus'])->name('settings.catalogs.products.status');
     Route::delete('/settings/catalog-products/{product}', [WorkspaceCatalogController::class, 'deleteProduct'])->name('settings.catalogs.products.delete');
+    Route::post('/settings/commerce/connections/{connection}/sync', [WorkspaceMetaCommerceController::class, 'sync'])->name('settings.commerce.sync');
     Route::get('/inbox', [InboxController::class, 'index'])->name('inbox.index');
     Route::get('/inbox/realtime/snapshot', [InboxController::class, 'realtimeSnapshot'])->name('inbox.realtime.snapshot');
     Route::get('/inbox/{conversation}', [InboxController::class, 'index'])->name('inbox.show');

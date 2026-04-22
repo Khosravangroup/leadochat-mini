@@ -39,4 +39,9 @@ return [
         'webhook_verify_token' => env('INSTAGRAM_WEBHOOK_VERIFY_TOKEN', 'leadochat-mini-instagram-verify-token'),
     ],
 
+    'meta' => [
+        'graph_version' => env('META_GRAPH_VERSION', env('INSTAGRAM_GRAPH_VERSION', 'v25.0')),
+        'commerce_review_scopes' => env('META_COMMERCE_REVIEW_SCOPES', 'business_management,catalog_management,ads_read,ads_management'),
+    ],
+
 ];

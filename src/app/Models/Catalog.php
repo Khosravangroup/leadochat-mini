@@ -13,9 +13,14 @@ class Catalog extends Model
         'provider_connection_id',
         'source',
         'external_catalog_id',
+        'external_business_id',
+        'external_commerce_account_id',
         'name',
         'status',
+        'meta_sync_status',
+        'meta_sync_error',
         'last_synced_at',
+        'meta_synced_at',
         'meta',
     ];
 
@@ -23,6 +28,7 @@ class Catalog extends Model
     {
         return [
             'last_synced_at' => 'datetime',
+            'meta_synced_at' => 'datetime',
             'meta' => 'array',
         ];
     }
