@@ -9,6 +9,7 @@ use App\Models\ProviderConnection;
 use App\Models\User;
 use App\Models\Workspace;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class MetaCatalogProductSyncTest extends TestCase
@@ -19,6 +20,12 @@ class MetaCatalogProductSyncTest extends TestCase
     {
         config([
             'services.meta.graph_version' => 'v25.0',
+        ]);
+
+        Http::fake([
+            'https://graph.facebook.com/v25.0/meta-catalog-123/batch' => Http::response([
+                'handles' => ['test-meta-catalog-batch-handle'],
+            ], 200),
         ]);
 
         $user = User::factory()->create();
@@ -103,7 +110,7 @@ class MetaCatalogProductSyncTest extends TestCase
         $requests = json_decode($syncResult['payload']['requests'] ?? '[]', true);
         $first = $requests[0] ?? [];
 
-        $this->assertStringStartsWith('local-debug-meta-catalog-batch-', $targetCatalog->meta['last_product_sync']['batch_handle']);
+        $this->assertSame('test-meta-catalog-batch-handle', $targetCatalog->meta['last_product_sync']['batch_handle']);
         $this->assertSame('https://graph.facebook.com/v25.0/meta-catalog-123/batch', $syncResult['endpoint']);
         $this->assertSame('UPDATE', $first['method']);
         $this->assertSame('SKU-123', $first['retailer_id']);

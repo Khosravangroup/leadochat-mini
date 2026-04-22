@@ -175,6 +175,7 @@ class InstagramContentService
         $mediaUrl = trim((string) ($payload['media_url'] ?? ''));
         $caption = trim((string) ($payload['caption'] ?? ''));
         $altText = trim((string) ($payload['alt_text'] ?? ''));
+        $productTags = $this->normalizeProductTags($payload['product_tags'] ?? [], $mediaType);
 
         if (! in_array($mediaType, ['IMAGE', 'VIDEO'], true)) {
             throw new RuntimeException('Instagram post media_type must be IMAGE or VIDEO.');
@@ -206,6 +207,10 @@ class InstagramContentService
             }
         }
 
+        if ($productTags !== []) {
+            $containerPayload['product_tags'] = json_encode($productTags, JSON_THROW_ON_ERROR);
+        }
+
         if (app()->environment('local')) {
             $providerMediaId = 'local-debug-post-' . now()->timestamp;
             $localPost = $this->upsertSocialPostWithMedia($connection, [
@@ -221,6 +226,7 @@ class InstagramContentService
                 'raw' => [
                     'mode' => 'local_debug',
                     'media_url' => $mediaUrl,
+                    'product_tags' => $productTags,
                 ],
             ]);
 
@@ -229,6 +235,8 @@ class InstagramContentService
                 'creation_id' => 'local-debug-container-' . now()->timestamp,
                 'id' => $providerMediaId,
                 'container_status' => 'FINISHED',
+                'container_payload' => $containerPayload,
+                'product_tags' => $productTags,
                 'post' => $localPost,
             ];
         }
@@ -291,6 +299,7 @@ class InstagramContentService
             'creation_id' => $creationId,
             'container_status' => $containerStatus,
             'resolved_media_url' => $mediaUrl,
+            'product_tags' => $productTags,
         ]);
 
         $post = $this->upsertSocialPostWithMedia($connection, $postPayload);
@@ -300,6 +309,8 @@ class InstagramContentService
             'container_status' => $containerStatus['status_code'] ?? null,
             'container_status_attempts' => $containerStatus['attempts'] ?? null,
             'container_status_response' => $containerStatus['response'] ?? null,
+            'container_payload' => $containerPayload,
+            'product_tags' => $productTags,
             'post' => $post,
         ]);
     }
@@ -580,6 +591,53 @@ class InstagramContentService
         }
 
         throw new RuntimeException('Instagram post video is still processing after ' . $attempts . ' checks. Last status: ' . ($lastStatus ?: 'unknown') . '.');
+    }
+
+    protected function normalizeProductTags(mixed $productTags, string $mediaType): array
+    {
+        if (! is_array($productTags)) {
+            return [];
+        }
+
+        $normalized = [];
+        $seen = [];
+
+        foreach ($productTags as $tag) {
+            if (! is_array($tag)) {
+                continue;
+            }
+
+            $productId = trim((string) ($tag['product_id'] ?? ''));
+
+            if ($productId === '' || isset($seen[$productId])) {
+                continue;
+            }
+
+            $item = [
+                'product_id' => $productId,
+            ];
+
+            if ($mediaType === 'IMAGE') {
+                $item['x'] = $this->normalizeProductTagCoordinate($tag['x'] ?? 0.5);
+                $item['y'] = $this->normalizeProductTagCoordinate($tag['y'] ?? 0.5);
+            }
+
+            $normalized[] = $item;
+            $seen[$productId] = true;
+
+            if (count($normalized) >= 5) {
+                break;
+            }
+        }
+
+        return $normalized;
+    }
+
+    protected function normalizeProductTagCoordinate(mixed $value): float
+    {
+        $coordinate = is_numeric($value) ? (float) $value : 0.5;
+
+        return max(0.0, min(1.0, $coordinate));
     }
 
     protected function resolveAccessToken(ProviderConnection $connection): string

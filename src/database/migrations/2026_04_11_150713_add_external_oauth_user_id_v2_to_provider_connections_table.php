@@ -15,14 +15,7 @@ return new class extends Migration
             });
         }
 
-        $indexExists = DB::selectOne("
-            SELECT 1
-            FROM pg_indexes
-            WHERE schemaname = 'public'
-              AND tablename = 'provider_connections'
-              AND indexname = 'provider_connections_provider_external_oauth_user_id_index'
-            LIMIT 1
-        ");
+        $indexExists = $this->providerConnectionsIndexExists();
 
         if (!$indexExists) {
             Schema::table('provider_connections', function (Blueprint $table) {
@@ -36,14 +29,7 @@ return new class extends Migration
 
     public function down(): void
     {
-        $indexExists = DB::selectOne("
-            SELECT 1
-            FROM pg_indexes
-            WHERE schemaname = 'public'
-              AND tablename = 'provider_connections'
-              AND indexname = 'provider_connections_provider_external_oauth_user_id_index'
-            LIMIT 1
-        ");
+        $indexExists = $this->providerConnectionsIndexExists();
 
         if ($indexExists) {
             Schema::table('provider_connections', function (Blueprint $table) {
@@ -51,4 +37,37 @@ return new class extends Migration
             });
         }
     }
-};;
+
+    protected function providerConnectionsIndexExists(): bool
+    {
+        $indexName = 'provider_connections_provider_external_oauth_user_id_index';
+        $driver = Schema::getConnection()->getDriverName();
+
+        if ($driver === 'pgsql') {
+            return (bool) DB::selectOne("
+                SELECT 1
+                FROM pg_indexes
+                WHERE schemaname = 'public'
+                  AND tablename = 'provider_connections'
+                  AND indexname = ?
+                LIMIT 1
+            ", [$indexName]);
+        }
+
+        if ($driver === 'sqlite') {
+            foreach (DB::select("PRAGMA index_list('provider_connections')") as $index) {
+                if (($index->name ?? null) === $indexName) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        try {
+            return Schema::hasIndex('provider_connections', $indexName);
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+};

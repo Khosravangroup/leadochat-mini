@@ -946,6 +946,11 @@
                 padding: 8px 12px;
             }
 
+            .social-story-select.is-multiple {
+                min-height: 112px;
+                padding: 8px 10px;
+            }
+
             textarea.social-story-input {
                 padding: 10px 12px;
                 line-height: 1.6;
@@ -1499,6 +1504,49 @@
                                             value="{{ old('post_alt_text') }}"
                                             {{ $postPublishEnabled ? '' : 'disabled' }}
                                         >
+                                    </div>
+
+                                    <div class="social-story-field">
+                                        <label class="social-story-label">Product tags</label>
+                                        @php
+                                            $selectedPostProductTags = array_map('intval', old('post_product_tags', []));
+                                        @endphp
+
+                                        @if (($postTagProducts ?? collect())->isNotEmpty())
+                                            <select
+                                                name="post_product_tags[]"
+                                                class="social-story-select is-multiple"
+                                                multiple
+                                                size="5"
+                                                {{ $postPublishEnabled ? '' : 'disabled' }}
+                                            >
+                                                @foreach ($postTagProducts as $tagProduct)
+                                                    @php
+                                                        $tagProductId = trim((string) ($tagProduct->external_product_id ?: $tagProduct->sku));
+                                                        $tagProductPrice = $tagProduct->price !== null
+                                                            ? number_format((float) $tagProduct->price, 2) . ' ' . strtoupper((string) $tagProduct->currency)
+                                                            : 'No price';
+                                                    @endphp
+                                                    <option
+                                                        value="{{ $tagProduct->id }}"
+                                                        {{ in_array((int) $tagProduct->id, $selectedPostProductTags, true) ? 'selected' : '' }}
+                                                    >
+                                                        {{ $tagProduct->title }} · {{ $tagProductId }} · {{ $tagProductPrice }}
+                                                    </option>
+                                                @endforeach
+                                            </select>
+                                            <div class="social-story-help">
+                                                Select up to 5 synced catalog products. Image tags are placed in the center until the visual tag picker is added.
+                                            </div>
+                                        @else
+                                            <div class="social-story-help">
+                                                No synced Meta catalog products are ready for this Instagram account yet.
+                                            </div>
+                                        @endif
+
+                                        @error('post_product_tags')
+                                            <div class="social-story-help" style="color:#b91c1c;">{{ $message }}</div>
+                                        @enderror
                                     </div>
 
                                     <label class="social-story-confirm">

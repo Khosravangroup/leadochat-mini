@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Events\WorkspaceRealtimeUpdated;
+use App\Models\CatalogProduct;
 use App\Models\ProviderConnection;
 use App\Models\Message;
 use App\Models\SocialComment;
@@ -85,6 +86,30 @@ class SocialController extends Controller
             ];
         })->values();
 
+        $postTagProducts = collect();
+
+        if ($activeConnection) {
+            $postTagProducts = CatalogProduct::query()
+                ->where('is_active', true)
+                ->whereIn('meta_sync_status', ['queued', 'synced'])
+                ->where(function ($query) {
+                    $query->whereNotNull('external_product_id')
+                        ->orWhereNotNull('sku');
+                })
+                ->whereHas('catalog', function ($query) use ($workspace, $activeConnection) {
+                    $query->where('workspace_id', $workspace->id)
+                        ->where('status', 'active')
+                        ->where(function ($catalogQuery) use ($activeConnection) {
+                            $catalogQuery->whereNull('provider_connection_id')
+                                ->orWhere('provider_connection_id', $activeConnection->id);
+                        });
+                })
+                ->with('catalog')
+                ->orderBy('title')
+                ->limit(100)
+                ->get();
+        }
+
         $totalConnectedPosts = SocialPost::query()
             ->where('workspace_id', $workspace->id)
             ->where('provider', 'instagram')
@@ -102,6 +127,7 @@ class SocialController extends Controller
             'activeInstagramConnection' => $activeConnection,
             'selectedInstagramAccountId' => $activeConnection?->id,
             'totalConnectedInstagramPosts' => $totalConnectedPosts,
+            'postTagProducts' => $postTagProducts,
             'socialCounts' => [
                 'posts' => $postCountQuery->count(),
                 'comments' => $commentCountQuery->where('status', '!=', 'deleted')->count(),
@@ -1310,6 +1336,8 @@ class SocialController extends Controller
             'post_zoom' => ['nullable', 'numeric', 'min:0.5', 'max:2.5'],
             'post_offset_x' => ['nullable', 'numeric', 'min:-100', 'max:100'],
             'post_offset_y' => ['nullable', 'numeric', 'min:-100', 'max:100'],
+            'post_product_tags' => ['nullable', 'array', 'max:5'],
+            'post_product_tags.*' => ['integer'],
             'post_confirmed' => ['accepted'],
         ]);
 
@@ -1326,6 +1354,10 @@ class SocialController extends Controller
         $postZoom = (float) ($validated['post_zoom'] ?? 1);
         $postOffsetX = (float) ($validated['post_offset_x'] ?? 0);
         $postOffsetY = (float) ($validated['post_offset_y'] ?? 0);
+        $selectedProductIds = array_values(array_unique(array_map(
+            'intval',
+            $validated['post_product_tags'] ?? []
+        )));
 
         if (! $uploadedFile && empty($validated['post_media_url'])) {
             if ($request->expectsJson()) {
@@ -1421,6 +1453,25 @@ class SocialController extends Controller
                 ->withInput();
         }
 
+        $productTags = $this->resolvePostProductTags(
+            (int) $workspace->id,
+            (int) $connection->id,
+            $selectedProductIds,
+            $requestedMediaType
+        );
+
+        if ($selectedProductIds !== [] && $productTags === []) {
+            $message = 'Selected products are not ready for Meta product tagging yet.';
+
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => $message], 422);
+            }
+
+            return redirect()->route('social.instagram.posts', ['instagram_account' => $connection->id])
+                ->with('social_error', $message)
+                ->withInput();
+        }
+
         try {
             Log::info('Instagram post publish started.', [
                 'workspace_id' => $workspace->id,
@@ -1430,6 +1481,7 @@ class SocialController extends Controller
                 'uploaded_file_size' => $uploadedFile?->getSize(),
                 'uploaded_file_mime' => $uploadedFile?->getMimeType(),
                 'stored_path' => $storedPath,
+                'product_tag_count' => count($productTags),
             ]);
 
             $result = app(InstagramService::class)->publishPost($connection, [
@@ -1437,6 +1489,7 @@ class SocialController extends Controller
                 'media_url' => $resolvedMediaUrl,
                 'caption' => $caption,
                 'alt_text' => $requestedMediaType === 'IMAGE' ? $altText : '',
+                'product_tags' => $productTags,
             ]);
 
             Log::info('Instagram post publish finished.', [
@@ -1447,6 +1500,7 @@ class SocialController extends Controller
                 'provider_media_id' => $result['id'] ?? null,
                 'container_status' => $result['container_status'] ?? null,
                 'container_status_attempts' => $result['container_status_attempts'] ?? null,
+                'product_tag_count' => count($result['product_tags'] ?? []),
             ]);
 
             $this->broadcastSocialUpdate($request, 'instagram_post_published', [
@@ -1463,6 +1517,7 @@ class SocialController extends Controller
                         'container_id' => $result['creation_id'] ?? null,
                         'container_status' => $result['container_status'] ?? null,
                         'provider_media_id' => $result['id'] ?? null,
+                        'product_tags' => $result['product_tags'] ?? [],
                     ],
                 ]);
             }
@@ -1478,6 +1533,7 @@ class SocialController extends Controller
                 'uploaded_file_size' => $uploadedFile?->getSize(),
                 'uploaded_file_mime' => $uploadedFile?->getMimeType(),
                 'stored_path' => $storedPath,
+                'product_tag_count' => count($productTags),
                 'error' => $exception->getMessage(),
             ]);
 
@@ -1491,6 +1547,59 @@ class SocialController extends Controller
                 ->with('social_error', $message)
                 ->withInput();
         }
+    }
+
+    protected function resolvePostProductTags(int $workspaceId, int $connectionId, array $productIds, string $mediaType): array
+    {
+        if ($productIds === []) {
+            return [];
+        }
+
+        $products = CatalogProduct::query()
+            ->whereIn('id', array_slice($productIds, 0, 5))
+            ->where('is_active', true)
+            ->whereIn('meta_sync_status', ['queued', 'synced'])
+            ->whereHas('catalog', function ($query) use ($workspaceId, $connectionId) {
+                $query->where('workspace_id', $workspaceId)
+                    ->where('status', 'active')
+                    ->where(function ($catalogQuery) use ($connectionId) {
+                        $catalogQuery->whereNull('provider_connection_id')
+                            ->orWhere('provider_connection_id', $connectionId);
+                    });
+            })
+            ->get()
+            ->keyBy('id');
+
+        $tags = [];
+        $seenProductIds = [];
+
+        foreach (array_slice($productIds, 0, 5) as $productId) {
+            $product = $products->get($productId);
+
+            if (! $product) {
+                continue;
+            }
+
+            $metaProductId = trim((string) ($product->external_product_id ?: $product->sku));
+
+            if ($metaProductId === '' || isset($seenProductIds[$metaProductId])) {
+                continue;
+            }
+
+            $tag = [
+                'product_id' => $metaProductId,
+            ];
+
+            if (strtoupper($mediaType) === 'IMAGE') {
+                $tag['x'] = 0.5;
+                $tag['y'] = 0.5;
+            }
+
+            $tags[] = $tag;
+            $seenProductIds[$metaProductId] = true;
+        }
+
+        return $tags;
     }
 
     public function publishInstagramStory(Request $request): RedirectResponse|JsonResponse
