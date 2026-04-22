@@ -276,6 +276,8 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
                 'url' => Arr::get($payload, 'url'),
                 'title' => Arr::get($payload, 'title'),
                 'mime_type' => Arr::get($payload, 'mime_type'),
+                'template_type' => Arr::get($payload, 'template_type'),
+                'elements' => Arr::get($payload, 'elements', []),
                 'raw' => is_array($attachment) ? $attachment : [],
             ];
         })->values()->all();
@@ -720,6 +722,8 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
             $messageContextType = is_string($normalized['message_context_type'] ?? null)
                 ? $normalized['message_context_type']
                 : null;
+            $isProductCard = $messageType === 'product_card';
+            $productCard = $isProductCard ? $this->extractProductCardFromTemplateAttachments($attachments) : null;
             $isStoryReply = (bool) ($normalized['is_story_reply'] ?? false);
             $storyId = is_string($normalized['story_id'] ?? null) && $normalized['story_id'] !== ''
                 ? $normalized['story_id']
@@ -745,12 +749,16 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
             $message->provider = 'instagram';
             $message->direction = $direction === 'outbound_or_echo' ? 'outbound' : 'inbound';
             $message->message_type = $messageType;
-            $message->text_body = $messageType === 'text' && $textBody !== '' ? $textBody : null;
-            $message->caption = $messageType !== 'text' && $textBody !== '' ? $textBody : null;
+            $message->text_body = match (true) {
+                $messageType === 'text' && $textBody !== '' => $textBody,
+                $isProductCard => $message->text_body ?: ($textBody !== '' ? $textBody : null),
+                default => null,
+            };
+            $message->caption = ! in_array($messageType, ['text', 'product_card'], true) && $textBody !== '' ? $textBody : null;
             $message->status = $direction === 'outbound_or_echo' ? 'sent' : 'delivered';
             $message->sent_at = $normalizedSentAt;
             $message->received_at = $direction === 'inbound' ? ($normalizedSentAt ?? now()) : null;
-            $message->meta = array_merge(is_array($message->meta) ? $message->meta : [], [
+            $messageMeta = array_merge(is_array($message->meta) ? $message->meta : [], [
                 'provider' => 'instagram',
                 'normalized_kind' => $normalized['kind'] ?? 'message',
                 'normalized_direction' => $direction,
@@ -764,11 +772,21 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
                 'story_context' => is_array($normalized['story_context'] ?? null) ? $normalized['story_context'] : [],
                 'story_preview' => $storyPreview,
             ]);
+
+            if ($productCard && ! is_array($messageMeta['product_card'] ?? null)) {
+                $messageMeta['product_card'] = $productCard;
+            }
+
+            $message->meta = $messageMeta;
             $message->save();
 
             $savedAttachmentIds = [];
 
             foreach ($attachments as $index => $attachment) {
+                if ($isProductCard && $this->isGenericTemplateAttachment($attachment)) {
+                    continue;
+                }
+
                 $raw = is_array($attachment['raw'] ?? null) ? $attachment['raw'] : [];
                 $attachmentMeta = [
                     'provider' => 'instagram',
@@ -917,7 +935,7 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
         $type = Str::lower(trim($type));
 
         return match ($type) {
-            'image', 'video', 'audio', 'file' => $type,
+            'image', 'video', 'audio', 'file', 'template' => $type,
             'voice' => 'audio',
             default => $type !== '' ? $type : 'file',
         };
@@ -935,8 +953,57 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
             'image' => 'image',
             'video' => 'video',
             'audio' => 'voice',
+            'template' => $this->isGenericTemplateAttachment($attachments[0]) ? 'product_card' : 'file',
             default => 'file',
         };
+    }
+
+    protected function isGenericTemplateAttachment(array $attachment): bool
+    {
+        $type = $this->normalizeAttachmentType((string) ($attachment['type'] ?? ''));
+        $templateType = (string) (
+            $attachment['template_type']
+            ?? Arr::get($attachment, 'raw.payload.template_type')
+            ?? ''
+        );
+
+        return $type === 'template' && Str::lower(trim($templateType)) === 'generic';
+    }
+
+    protected function extractProductCardFromTemplateAttachments(array $attachments): ?array
+    {
+        $template = collect($attachments)
+            ->first(fn ($attachment) => is_array($attachment) && $this->isGenericTemplateAttachment($attachment));
+
+        if (! is_array($template)) {
+            return null;
+        }
+
+        $elements = $template['elements'] ?? Arr::get($template, 'raw.payload.elements', []);
+        $firstElement = is_array($elements) ? ($elements[0] ?? null) : null;
+
+        if (! is_array($firstElement)) {
+            return null;
+        }
+
+        $productUrl = Arr::get($firstElement, 'default_action.url');
+
+        if (! $productUrl) {
+            $button = collect(Arr::get($firstElement, 'buttons', []))
+                ->first(fn ($button) => is_array($button) && Arr::get($button, 'type') === 'web_url' && filled(Arr::get($button, 'url')));
+
+            $productUrl = is_array($button) ? Arr::get($button, 'url') : null;
+        }
+
+        return array_filter([
+            'title' => $firstElement['title'] ?? 'Product',
+            'description' => $firstElement['subtitle'] ?? null,
+            'price' => null,
+            'currency' => null,
+            'image_url' => $firstElement['image_url'] ?? null,
+            'product_url' => $productUrl,
+            'availability' => null,
+        ], fn ($value) => $value !== null && $value !== '');
     }
 
     protected function enrichInstagramParticipantProfile(
