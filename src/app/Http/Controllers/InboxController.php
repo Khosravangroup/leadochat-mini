@@ -207,7 +207,7 @@ class InboxController extends Controller
 
         if ($conversation->provider === 'instagram') {
             try {
-                $sendResult = $this->sendInstagramCatalogProductTextMessage($conversation, $dmText);
+                $sendResult = $this->sendInstagramCatalogProductTemplateMessage($conversation, $snapshot, $note);
                 $providerMessageId = (string) (
                     $sendResult['message_id']
                     ?? $sendResult['response']['message_id']
@@ -247,7 +247,7 @@ class InboxController extends Controller
                 'last_error' => $lastError,
                 'meta' => $this->withAgentMeta($user, [
                     'delivery_mode' => $sendResult['delivery_mode'] ?? ($conversation->provider === 'instagram'
-                        ? 'instagram_service_catalog_product_text'
+                        ? 'instagram_service_catalog_product_template'
                         : 'controller_catalog_product_mock'),
                     'product_card' => $snapshot,
                     'product_note' => $note !== '' ? $note : null,
@@ -1265,6 +1265,47 @@ class InboxController extends Controller
         }
     }
 
+    protected function sendInstagramCatalogProductTemplateMessage(Conversation $conversation, array $snapshot, string $note = ''): array
+    {
+        $elements = [
+            $this->buildInstagramProductTemplateElement($snapshot, $note),
+        ];
+
+        try {
+            $result = $this->sendInstagramGenericTemplateWithOptions($conversation, $elements, [
+                'messaging_type' => 'RESPONSE',
+            ]);
+
+            $result['delivery_mode'] = 'instagram_service_catalog_product_template';
+
+            return $result;
+        } catch (\Throwable $exception) {
+            if (! $this->isInstagramAllowedWindowError($exception)) {
+                throw $exception;
+            }
+
+            try {
+                $result = $this->sendInstagramGenericTemplateWithOptions($conversation, $elements, [
+                    'messaging_type' => 'MESSAGE_TAG',
+                    'tag' => 'HUMAN_AGENT',
+                ]);
+
+                $result['delivery_mode'] = 'instagram_service_catalog_product_template_human_agent';
+                $result['fallback_reason'] = 'outside_standard_reply_window';
+                $result['fallback_from'] = 'RESPONSE';
+                $result['original_error'] = $exception->getMessage();
+
+                return $result;
+            } catch (\Throwable $fallbackException) {
+                throw new \RuntimeException(
+                    'Instagram rejected this product card because the customer reply window is closed. I also tried the Human Agent fallback, but Meta rejected it too. Ask the customer to send a new DM, then try again.',
+                    0,
+                    $fallbackException
+                );
+            }
+        }
+    }
+
     protected function sendInstagramTextMessageWithOptions(Conversation $conversation, string $text, array $options): array
     {
         $connection = app(InstagramService::class)->resolveConnectionFromConversation($conversation);
@@ -1280,6 +1321,23 @@ class InboxController extends Controller
         }
 
         return app(InstagramService::class)->sendMessage($connection, $recipientId, $text, $options);
+    }
+
+    protected function sendInstagramGenericTemplateWithOptions(Conversation $conversation, array $elements, array $options): array
+    {
+        $connection = app(InstagramService::class)->resolveConnectionFromConversation($conversation);
+
+        if (! $connection) {
+            throw new \RuntimeException('Instagram provider connection was not found for this conversation.');
+        }
+
+        $recipientId = $this->resolveInstagramRecipientId($conversation);
+
+        if (! $recipientId) {
+            throw new \RuntimeException('Instagram recipient id was not found for this conversation.');
+        }
+
+        return app(InstagramService::class)->sendGenericTemplate($connection, $recipientId, $elements, $options);
     }
 
     protected function isInstagramAllowedWindowError(\Throwable $exception): bool
@@ -1415,6 +1473,61 @@ class InboxController extends Controller
         }
 
         return implode("\n", array_filter($lines, fn ($line) => trim((string) $line) !== ''));
+    }
+
+    protected function buildInstagramProductTemplateElement(array $snapshot, string $note = ''): array
+    {
+        $title = $this->compactTemplateText((string) ($snapshot['title'] ?? 'Product'), 80);
+        $description = trim((string) ($snapshot['description'] ?? ''));
+        $price = null;
+
+        if (($snapshot['price'] ?? null) !== null) {
+            $price = strtoupper((string) ($snapshot['currency'] ?? 'USD')) . ' ' . number_format((float) $snapshot['price'], 2);
+        }
+
+        $subtitleParts = array_filter([
+            $price,
+            $note !== '' ? 'Note: ' . $note : null,
+            $description !== '' ? $description : null,
+        ], fn ($value) => trim((string) $value) !== '');
+
+        $element = [
+            'title' => $title !== '' ? $title : 'Product',
+            'subtitle' => $this->compactTemplateText(implode(' - ', $subtitleParts), 80),
+        ];
+
+        $imageUrl = trim((string) ($snapshot['image_url'] ?? ''));
+        if ($imageUrl !== '') {
+            $element['image_url'] = $imageUrl;
+        }
+
+        $productUrl = trim((string) ($snapshot['product_url'] ?? ''));
+        if ($productUrl !== '') {
+            $element['default_action'] = [
+                'type' => 'web_url',
+                'url' => $productUrl,
+            ];
+            $element['buttons'] = [
+                [
+                    'type' => 'web_url',
+                    'url' => $productUrl,
+                    'title' => 'View product',
+                ],
+            ];
+        }
+
+        return $element;
+    }
+
+    protected function compactTemplateText(string $value, int $limit): string
+    {
+        $value = trim(preg_replace('/\s+/', ' ', $value) ?: '');
+
+        if ($value === '' || mb_strlen($value) <= $limit) {
+            return $value;
+        }
+
+        return rtrim(mb_substr($value, 0, max(1, $limit - 3))) . '...';
     }
 
     protected function createOutboundMessage(

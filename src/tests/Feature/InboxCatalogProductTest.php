@@ -7,6 +7,7 @@ use App\Models\Catalog;
 use App\Models\CatalogProduct;
 use App\Models\Conversation;
 use App\Models\Message;
+use App\Models\OauthToken;
 use App\Models\ProviderConnection;
 use App\Models\User;
 use App\Models\Workspace;
@@ -136,5 +137,108 @@ class InboxCatalogProductTest extends TestCase
                 && $event->action === 'catalog_product_sent'
                 && $event->payload['message_id'] === $message->id
         );
+    }
+
+    public function test_instagram_catalog_product_send_uses_generic_template_payload(): void
+    {
+        Event::fake([WorkspaceRealtimeUpdated::class]);
+
+        $user = User::factory()->create([
+            'name' => 'Agent Two',
+        ]);
+
+        $workspace = Workspace::create([
+            'owner_id' => $user->id,
+            'name' => 'Instagram Catalog Workspace',
+            'slug' => 'instagram-catalog-workspace',
+        ]);
+
+        $workspace->members()->attach($user->id, [
+            'role' => 'owner',
+        ]);
+
+        $connection = ProviderConnection::create([
+            'workspace_id' => $workspace->id,
+            'provider' => 'instagram',
+            'provider_account_type' => 'instagram_account',
+            'provider_account_id' => 'test-instagram-account',
+            'provider_account_name' => 'Leadochat',
+            'status' => 'connected',
+        ]);
+
+        OauthToken::create([
+            'provider_connection_id' => $connection->id,
+            'token_type' => 'access_token',
+            'access_token' => 'test-access-token',
+            'is_primary' => true,
+        ]);
+
+        $conversation = Conversation::create([
+            'workspace_id' => $workspace->id,
+            'provider_connection_id' => $connection->id,
+            'provider' => 'instagram',
+            'provider_conversation_id' => 'instagram-conversation-1',
+            'type' => 'direct',
+            'title' => 'Customer Two',
+            'status' => 'active',
+            'last_message_at' => now()->subMinute(),
+        ]);
+
+        $conversation->participants()->create([
+            'provider_user_id' => 'test-instagram-account',
+            'display_name' => 'Leadochat',
+            'role' => 'business',
+            'is_self' => true,
+        ]);
+
+        $conversation->participants()->create([
+            'provider_user_id' => 'instagram-customer-2',
+            'display_name' => 'Customer Two',
+            'role' => 'customer',
+            'is_self' => false,
+        ]);
+
+        $catalog = Catalog::create([
+            'workspace_id' => $workspace->id,
+            'provider_connection_id' => $connection->id,
+            'source' => 'manual',
+            'name' => 'Instagram Catalog',
+            'status' => 'active',
+        ]);
+
+        $product = CatalogProduct::create([
+            'catalog_id' => $catalog->id,
+            'sku' => 'IG-001',
+            'title' => 'Yellow Notebook',
+            'description' => 'A compact product card test.',
+            'price' => 15,
+            'currency' => 'USD',
+            'image_url' => 'https://example.com/products/notebook.jpg',
+            'product_url' => 'https://example.com/products/yellow-notebook',
+            'availability' => 'in_stock',
+            'is_active' => true,
+        ]);
+
+        $response = $this
+            ->actingAs($user)
+            ->withSession(['_token' => 'test-csrf-token'])
+            ->withHeader('X-CSRF-TOKEN', 'test-csrf-token')
+            ->postJson(route('inbox.catalog-products.send', $conversation), [
+                'catalog_product_id' => $product->id,
+                'note' => 'Good match for this customer.',
+            ]);
+
+        $response->assertOk();
+
+        $message = Message::query()->latest('id')->firstOrFail();
+        $payload = $message->meta['send_result']['payload'];
+
+        $this->assertSame('product_card', $message->message_type);
+        $this->assertSame('instagram_service_catalog_product_template', $message->meta['delivery_mode']);
+        $this->assertSame('instagram-customer-2', $payload['recipient']['id']);
+        $this->assertSame('template', $payload['message']['attachment']['type']);
+        $this->assertSame('generic', $payload['message']['attachment']['payload']['template_type']);
+        $this->assertSame('Yellow Notebook', $payload['message']['attachment']['payload']['elements'][0]['title']);
+        $this->assertSame('View product', $payload['message']['attachment']['payload']['elements'][0]['buttons'][0]['title']);
     }
 }

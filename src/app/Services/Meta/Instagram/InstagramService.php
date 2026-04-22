@@ -64,6 +64,22 @@ class InstagramService
         );
     }
 
+    public function sendGenericTemplate(
+        ProviderConnection $connection,
+        string $recipientId,
+        array $elements,
+        array $options = []
+    ): array {
+        $this->assertInstagramConnection($connection);
+
+        return $this->instagramMessagingService->sendGenericTemplate(
+            $connection,
+            $recipientId,
+            $elements,
+            $options
+        );
+    }
+
     public function fetchUserProfile(ProviderConnection $connection, string $instagramScopedUserId): array
     {
         $this->assertInstagramConnection($connection);
