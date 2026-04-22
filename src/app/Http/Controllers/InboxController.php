@@ -207,7 +207,7 @@ class InboxController extends Controller
 
         if ($conversation->provider === 'instagram') {
             try {
-                $sendResult = $this->sendInstagramTextMessage($conversation, $dmText);
+                $sendResult = $this->sendInstagramCatalogProductTextMessage($conversation, $dmText);
                 $providerMessageId = (string) (
                     $sendResult['message_id']
                     ?? $sendResult['response']['message_id']
@@ -215,14 +215,21 @@ class InboxController extends Controller
                     ?? ''
                 );
             } catch (\Throwable $exception) {
-                $status = 'failed';
-                $failedAt = now();
-                $lastError = $exception->getMessage();
-                $sendResult = [
-                    'send_failed' => true,
-                    'error' => $lastError,
-                ];
                 report($exception);
+
+                $errorMessage = $this->friendlyInstagramSendError($exception);
+
+                if ($request->expectsJson()) {
+                    return response()->json([
+                        'ok' => false,
+                        'status' => 'failed',
+                        'error' => $errorMessage,
+                    ], 422);
+                }
+
+                return redirect()
+                    ->route('inbox.show', ['conversation' => $conversation->id])
+                    ->withErrors(['catalog_product' => $errorMessage]);
             }
         }
 
@@ -239,9 +246,9 @@ class InboxController extends Controller
                 'failed_at' => $failedAt,
                 'last_error' => $lastError,
                 'meta' => $this->withAgentMeta($user, [
-                    'delivery_mode' => $conversation->provider === 'instagram'
+                    'delivery_mode' => $sendResult['delivery_mode'] ?? ($conversation->provider === 'instagram'
                         ? 'instagram_service_catalog_product_text'
-                        : 'controller_catalog_product_mock',
+                        : 'controller_catalog_product_mock'),
                     'product_card' => $snapshot,
                     'product_note' => $note !== '' ? $note : null,
                     'send_result' => $sendResult,
@@ -1216,6 +1223,50 @@ class InboxController extends Controller
 
     protected function sendInstagramTextMessage(Conversation $conversation, string $text): array
     {
+        return $this->sendInstagramTextMessageWithOptions($conversation, $text, [
+            'messaging_type' => 'RESPONSE',
+        ]);
+    }
+
+    protected function sendInstagramCatalogProductTextMessage(Conversation $conversation, string $text): array
+    {
+        try {
+            $result = $this->sendInstagramTextMessageWithOptions($conversation, $text, [
+                'messaging_type' => 'RESPONSE',
+            ]);
+
+            $result['delivery_mode'] = 'instagram_service_catalog_product_text';
+
+            return $result;
+        } catch (\Throwable $exception) {
+            if (! $this->isInstagramAllowedWindowError($exception)) {
+                throw $exception;
+            }
+
+            try {
+                $result = $this->sendInstagramTextMessageWithOptions($conversation, $text, [
+                    'messaging_type' => 'MESSAGE_TAG',
+                    'tag' => 'HUMAN_AGENT',
+                ]);
+
+                $result['delivery_mode'] = 'instagram_service_catalog_product_text_human_agent';
+                $result['fallback_reason'] = 'outside_standard_reply_window';
+                $result['fallback_from'] = 'RESPONSE';
+                $result['original_error'] = $exception->getMessage();
+
+                return $result;
+            } catch (\Throwable $fallbackException) {
+                throw new \RuntimeException(
+                    'Instagram rejected this product DM because the customer reply window is closed. I also tried the Human Agent fallback, but Meta rejected it too. Ask the customer to send a new DM, then try again.',
+                    0,
+                    $fallbackException
+                );
+            }
+        }
+    }
+
+    protected function sendInstagramTextMessageWithOptions(Conversation $conversation, string $text, array $options): array
+    {
         $connection = app(InstagramService::class)->resolveConnectionFromConversation($conversation);
 
         if (! $connection) {
@@ -1228,9 +1279,30 @@ class InboxController extends Controller
             throw new \RuntimeException('Instagram recipient id was not found for this conversation.');
         }
 
-        return app(InstagramService::class)->sendMessage($connection, $recipientId, $text, [
-            'messaging_type' => 'RESPONSE',
-        ]);
+        return app(InstagramService::class)->sendMessage($connection, $recipientId, $text, $options);
+    }
+
+    protected function isInstagramAllowedWindowError(\Throwable $exception): bool
+    {
+        $message = $exception->getMessage();
+        $lowerMessage = mb_strtolower($message);
+
+        return str_contains($message, '2534022')
+            || str_contains($lowerMessage, 'outside of allowed window')
+            || str_contains($lowerMessage, 'outside the allowed window')
+            || str_contains($lowerMessage, 'reply window is closed');
+    }
+
+    protected function friendlyInstagramSendError(\Throwable $exception): string
+    {
+        $message = $exception->getMessage();
+        $lowerMessage = mb_strtolower($message);
+
+        if ($this->isInstagramAllowedWindowError($exception) || str_contains($lowerMessage, 'human agent')) {
+            return 'Instagram did not allow this DM because the customer reply window is closed. Ask the customer to send a new DM, then send the product again.';
+        }
+
+        return 'Instagram did not accept this product DM. Please try again, and if it repeats, check the Instagram connection permissions.';
     }
 
     protected function sendInstagramAttachmentMessage(

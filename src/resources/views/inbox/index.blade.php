@@ -1749,6 +1749,21 @@
             line-height: 1.55;
         }
 
+        .lc-product-picker-error {
+            display: none;
+            padding: .75rem .85rem;
+            border: 1px solid #fecaca;
+            border-radius: 8px;
+            background: #fff1f2;
+            color: #9f1239;
+            font-size: .8rem;
+            line-height: 1.5;
+        }
+
+        .lc-product-picker-error.is-visible {
+            display: block;
+        }
+
         @media (max-width: 720px) {
             .lc-product-picker-list {
                 grid-template-columns: 1fr;
@@ -3307,6 +3322,8 @@
                     <div id="lcProductPickerEmpty" class="lc-product-picker-empty" style="display:none;">
                         No products are available for this conversation yet. Add products in Settings → Catalogs.
                     </div>
+
+                    <div id="lcProductPickerError" class="lc-product-picker-error" role="alert"></div>
 
                     <textarea
                         name="note"
@@ -4873,6 +4890,7 @@
             const productPickerSearch = document.getElementById('lcProductPickerSearch');
             const productPickerProductId = document.getElementById('lcProductPickerProductId');
             const productPickerSend = document.getElementById('lcProductPickerSend');
+            const productPickerError = document.getElementById('lcProductPickerError');
 
             const escapeHtml = function (value) {
                 const element = document.createElement('div');
@@ -4887,6 +4905,16 @@
                 }
 
                 return `${product.currency || 'USD'} ${Number(product.price).toFixed(2)}`;
+            };
+
+            const setProductPickerError = function (message) {
+                if (!productPickerError) {
+                    return;
+                }
+
+                const text = (message || '').trim();
+                productPickerError.textContent = text;
+                productPickerError.classList.toggle('is-visible', Boolean(text));
             };
 
             const closeProductPicker = function () {
@@ -4905,6 +4933,7 @@
 
                 productPickerProductId.value = productId ? String(productId) : '';
                 productPickerSend.disabled = !productId;
+                setProductPickerError('');
 
                 productPickerList?.querySelectorAll('.lc-product-picker-item').forEach((item) => {
                     item.classList.toggle('is-selected', item.dataset.productId === String(productId));
@@ -4960,6 +4989,7 @@
 
             if (productPickerBtn && productPickerModal) {
                 productPickerBtn.addEventListener('click', function () {
+                    setProductPickerError('');
                     renderCatalogProducts();
                     selectCatalogProduct(null);
                     productPickerModal.classList.add('is-open');
@@ -5216,12 +5246,14 @@
                     event.preventDefault();
 
                     if (!productPickerProductId?.value) {
-                        window.alert('Select a product first.');
+                        setProductPickerError('Select a product first.');
                         return;
                     }
 
                     const button = productPickerSend || productForm.querySelector('button[type="submit"]');
                     const originalText = button ? button.textContent : null;
+
+                    setProductPickerError('');
 
                     if (button) {
                         button.disabled = true;
@@ -5242,7 +5274,7 @@
                         const data = await response.json().catch(() => ({}));
 
                         if (!response.ok || data.ok === false) {
-                            window.alert(data.error || data.message || 'Product send failed.');
+                            setProductPickerError(data.error || data.message || 'Product send failed.');
                             return;
                         }
 
@@ -5251,7 +5283,7 @@
                         closeProductPicker();
                         schedulePaneRefresh({ scrollToBottom: true, delay: 50 });
                     } catch (error) {
-                        window.alert('Product send failed.');
+                        setProductPickerError('Product send failed.');
                     } finally {
                         if (button) {
                             button.disabled = false;
