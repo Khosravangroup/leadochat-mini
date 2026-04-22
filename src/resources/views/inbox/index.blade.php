@@ -17,6 +17,23 @@
                 return !$catalogConnectionId || (int) $catalogConnectionId === (int) ($selectedConversation?->provider_connection_id ?? 0);
             })
             ->values();
+
+        $catalogProductPayload = $availableCatalogProducts
+            ->map(function ($product) {
+                return [
+                    'id' => $product->id,
+                    'catalog_name' => $product->catalog?->name,
+                    'title' => $product->title,
+                    'description' => $product->description,
+                    'sku' => $product->sku,
+                    'price' => $product->price !== null ? (float) $product->price : null,
+                    'currency' => strtoupper((string) $product->currency),
+                    'image_url' => $product->image_url,
+                    'product_url' => $product->product_url,
+                    'availability' => $product->availability,
+                ];
+            })
+            ->values();
     @endphp
 
     <style>
@@ -4847,18 +4864,7 @@
                 });
             }
 
-            const catalogProducts = @json($availableCatalogProducts->map(fn ($product) => [
-                'id' => $product->id,
-                'catalog_name' => $product->catalog?->name,
-                'title' => $product->title,
-                'description' => $product->description,
-                'sku' => $product->sku,
-                'price' => $product->price !== null ? (float) $product->price : null,
-                'currency' => strtoupper((string) $product->currency),
-                'image_url' => $product->image_url,
-                'product_url' => $product->product_url,
-                'availability' => $product->availability,
-            ])->values());
+            const catalogProducts = @json($catalogProductPayload);
             const productPickerBtn = document.getElementById('lcProductPickerBtn');
             const productPickerModal = document.getElementById('lcProductPickerModal');
             const productPickerForm = document.getElementById('lcProductPickerForm');
