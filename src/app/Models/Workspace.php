@@ -64,4 +64,11 @@ class Workspace extends Model
     {
         return $this->hasMany(CatalogCollection::class)->orderBy('name');
     }
+
+    public function commerceOrders(): HasMany
+    {
+        return $this->hasMany(CommerceOrder::class)
+            ->orderByDesc('placed_at')
+            ->orderByDesc('id');
+    }
 }

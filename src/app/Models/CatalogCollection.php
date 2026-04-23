@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class CatalogCollection extends Model
 {
@@ -52,5 +53,10 @@ class CatalogCollection extends Model
             ->withTimestamps()
             ->orderBy('catalog_collection_product_set.sort_order')
             ->orderBy('catalog_collection_product_set.id');
+    }
+
+    public function commerceOrders(): HasMany
+    {
+        return $this->hasMany(CommerceOrder::class, 'catalog_collection_id');
     }
 }

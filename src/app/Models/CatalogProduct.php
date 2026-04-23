@@ -80,4 +80,9 @@ class CatalogProduct extends Model
             ->withPivot('sort_order')
             ->withTimestamps();
     }
+
+    public function orderItems(): HasMany
+    {
+        return $this->hasMany(CommerceOrderItem::class, 'catalog_product_id');
+    }
 }

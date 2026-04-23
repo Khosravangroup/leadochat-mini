@@ -6,6 +6,7 @@ use App\Models\Catalog;
 use App\Models\CatalogCollection;
 use App\Models\CatalogProduct;
 use App\Models\CatalogProductSet;
+use App\Models\CommerceOrder;
 use App\Models\WorkspaceTag;
 use App\Models\ProviderConnection;
 use App\Models\User;
@@ -60,6 +61,8 @@ class WorkspaceSettingsController extends Controller
         $commerceProductSets = collect();
         $commerceTaggableProducts = collect();
         $commerceCollections = collect();
+        $commerceOrders = collect();
+        $commerceOrderStats = [];
 
         if ($workspace && $section === 'tags') {
             $workspaceTags = WorkspaceTag::query()
@@ -210,6 +213,36 @@ class WorkspaceSettingsController extends Controller
                 ->withCount('productSets')
                 ->orderBy('name')
                 ->get();
+
+            $commerceOrders = CommerceOrder::query()
+                ->where('workspace_id', $workspace->id)
+                ->with([
+                    'providerConnection',
+                    'catalog',
+                    'collection',
+                    'items.product',
+                    'snapshots.createdBy',
+                ])
+                ->withCount(['items', 'snapshots'])
+                ->orderByDesc('placed_at')
+                ->orderByDesc('id')
+                ->limit(12)
+                ->get();
+
+            $commerceOrderStats = [
+                'order_count' => CommerceOrder::query()
+                    ->where('workspace_id', $workspace->id)
+                    ->count(),
+                'test_order_count' => CommerceOrder::query()
+                    ->where('workspace_id', $workspace->id)
+                    ->where('is_test', true)
+                    ->count(),
+                'snapshot_count' => CommerceOrder::query()
+                    ->where('workspace_id', $workspace->id)
+                    ->withCount('snapshots')
+                    ->get()
+                    ->sum('snapshots_count'),
+            ];
         }
 
         return view('settings.index', [
@@ -229,6 +262,8 @@ class WorkspaceSettingsController extends Controller
             'commerceProductSets' => $commerceProductSets,
             'commerceTaggableProducts' => $commerceTaggableProducts,
             'commerceCollections' => $commerceCollections,
+            'commerceOrders' => $commerceOrders,
+            'commerceOrderStats' => $commerceOrderStats,
             'canManageTeam' => (bool) ($workspace && $user),
         ]);
     }

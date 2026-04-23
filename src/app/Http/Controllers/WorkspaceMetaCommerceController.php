@@ -170,6 +170,8 @@ class WorkspaceMetaCommerceController extends Controller
                 'status' => data_get($packet, 'summary.status'),
                 'headline' => data_get($packet, 'summary.headline'),
                 'discovered_catalog_count' => data_get($packet, 'catalogs.discovered_count', 0),
+                'order_count' => data_get($packet, 'orders.order_count', 0),
+                'snapshot_count' => data_get($packet, 'orders.snapshot_count', 0),
                 'blocker_count' => count((array) data_get($packet, 'review_evidence.blockers', [])),
                 'warning_count' => count((array) data_get($packet, 'review_evidence.warnings', [])),
             ])

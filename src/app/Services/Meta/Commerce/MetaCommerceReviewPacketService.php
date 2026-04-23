@@ -19,6 +19,11 @@ class MetaCommerceReviewPacketService
         $webhook = is_array($diagnostics['webhook'] ?? null) ? $diagnostics['webhook'] : [];
         $shop = is_array($diagnostics['shop'] ?? null) ? $diagnostics['shop'] : [];
         $checkout = is_array($diagnostics['checkout_urls'] ?? null) ? $diagnostics['checkout_urls'] : [];
+        $orderStats = is_array(Arr::get($shop, 'local_stats')) ? Arr::get($shop, 'local_stats') : [];
+        $recentOrders = $connection->commerceOrders()
+            ->with(['items', 'snapshots'])
+            ->limit(5)
+            ->get();
 
         $catalogs = collect($shop['meta_catalogs'] ?? [])
             ->filter(fn ($catalog) => is_array($catalog))
@@ -97,6 +102,25 @@ class MetaCommerceReviewPacketService
                 'invalid_count' => $checkout['invalid_count'] ?? 0,
                 'invalid_examples' => array_values((array) ($checkout['invalid_examples'] ?? [])),
             ],
+            'orders' => [
+                'order_count' => $orderStats['order_count'] ?? 0,
+                'test_order_count' => $orderStats['test_order_count'] ?? 0,
+                'snapshot_count' => $orderStats['order_snapshot_count'] ?? 0,
+                'recent_orders' => $recentOrders->map(fn ($order) => [
+                    'id' => $order->id,
+                    'external_order_id' => $order->external_order_id,
+                    'source' => $order->source,
+                    'status' => $order->status,
+                    'payment_status' => $order->payment_status,
+                    'fulfillment_status' => $order->fulfillment_status,
+                    'total_amount' => (float) $order->total_amount,
+                    'currency' => $order->currency,
+                    'is_test' => (bool) $order->is_test,
+                    'placed_at' => optional($order->placed_at)->toIso8601String(),
+                    'item_count' => $order->items->count(),
+                    'snapshot_count' => $order->snapshots->count(),
+                ])->values()->all(),
+            ],
             'review_evidence' => [
                 'items' => array_values((array) ($review['evidence'] ?? [])),
                 'blockers' => array_values((array) ($review['blockers'] ?? [])),
@@ -153,11 +177,16 @@ class MetaCommerceReviewPacketService
             ],
             [
                 'step' => 6,
+                'title' => 'Show order proof',
+                'summary' => 'Open the order ledger, show at least one test order, and open its latest snapshot to prove the order-state workflow.',
+            ],
+            [
+                'step' => 7,
                 'title' => 'Show checkout handoff proof',
                 'summary' => 'Demonstrate the HTTPS checkout URLs and explain how Instagram commerce traffic is handed off to the external store.',
             ],
             [
-                'step' => 7,
+                'step' => 8,
                 'title' => 'Reference the Meta discovery snapshot',
                 'summary' => count((array) ($discovery['catalogs'] ?? [])) > 0
                     ? 'The saved discovery snapshot includes ' . count((array) ($discovery['catalogs'] ?? [])) . ' discovered Meta catalog(s).'
@@ -179,6 +208,7 @@ class MetaCommerceReviewPacketService
                 'Webhook subscription coverage',
                 'Product tagging eligibility',
                 'Catalog structure with product sets and collections',
+                'Test order flows and order snapshots',
                 'Localized products, offers, and checkout flow links',
             ],
             'status_message' => $review['headline'] ?? null,

@@ -10,6 +10,7 @@ use App\Http\Controllers\WorkspaceCatalogController;
 use App\Http\Controllers\WorkspaceMetaCollectionController;
 use App\Http\Controllers\WorkspaceMetaCommerceController;
 use App\Http\Controllers\WorkspaceMetaProductSetController;
+use App\Http\Controllers\WorkspaceMetaOrderController;
 use App\Http\Controllers\WorkspaceSettingsController;
 use Illuminate\Support\Facades\Route;
 
@@ -123,6 +124,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/settings/commerce/connections/{connection}/diagnostics', [WorkspaceMetaCommerceController::class, 'diagnostics'])->name('settings.commerce.diagnostics');
     Route::post('/settings/commerce/connections/{connection}/review-packet', [WorkspaceMetaCommerceController::class, 'generateReviewPacket'])->name('settings.commerce.review-packet.generate');
     Route::get('/settings/commerce/connections/{connection}/review-packet', [WorkspaceMetaCommerceController::class, 'downloadReviewPacket'])->name('settings.commerce.review-packet.download');
+    Route::post('/settings/commerce/orders', [WorkspaceMetaOrderController::class, 'store'])->name('settings.commerce.orders.store');
+    Route::patch('/settings/commerce/orders/{order}/status', [WorkspaceMetaOrderController::class, 'updateStatus'])->name('settings.commerce.orders.status.update');
+    Route::post('/settings/commerce/orders/{order}/snapshot', [WorkspaceMetaOrderController::class, 'snapshot'])->name('settings.commerce.orders.snapshots.store');
     Route::post('/settings/commerce/catalogs/{catalog}/products/sync', [WorkspaceMetaCommerceController::class, 'syncProducts'])->name('settings.commerce.catalogs.products.sync');
     Route::post('/settings/commerce/product-sets', [WorkspaceMetaProductSetController::class, 'store'])->name('settings.commerce.product-sets.store');
     Route::patch('/settings/commerce/product-sets/{productSet}/products', [WorkspaceMetaProductSetController::class, 'syncProducts'])->name('settings.commerce.product-sets.products.sync');

@@ -4,6 +4,7 @@ namespace App\Services\Meta\Commerce;
 
 use App\Models\Catalog;
 use App\Models\CatalogProduct;
+use App\Models\CommerceOrder;
 use App\Models\OauthToken;
 use App\Models\ProviderConnection;
 use Illuminate\Support\Arr;
@@ -116,6 +117,21 @@ class MetaCommerceDiagnosticsService
             'offer_count' => $products->sum(fn (CatalogProduct $product) => $product->offers->count()),
             'product_set_count' => $connection->catalogProductSets()->count(),
             'collection_count' => $connection->catalogCollections()->count(),
+            'order_count' => CommerceOrder::query()
+                ->where('workspace_id', $workspace?->id)
+                ->where('provider_connection_id', $connection->id)
+                ->count(),
+            'test_order_count' => CommerceOrder::query()
+                ->where('workspace_id', $workspace?->id)
+                ->where('provider_connection_id', $connection->id)
+                ->where('is_test', true)
+                ->count(),
+            'order_snapshot_count' => CommerceOrder::query()
+                ->where('workspace_id', $workspace?->id)
+                ->where('provider_connection_id', $connection->id)
+                ->withCount('snapshots')
+                ->get()
+                ->sum('snapshots_count'),
         ];
 
         $liveCatalogs = $metaCatalogs->map(function (Catalog $catalog) use ($checks): array {
@@ -226,6 +242,18 @@ class MetaCommerceDiagnosticsService
                 [
                     'product_set_count' => $localStats['product_set_count'],
                     'collection_count' => $localStats['collection_count'],
+                ]
+            ),
+            $this->makeReadinessCheck(
+                'orders_foundation',
+                $localStats['order_count'] > 0 && $localStats['order_snapshot_count'] > 0 ? 'ok' : 'warn',
+                $localStats['order_count'] > 0 && $localStats['order_snapshot_count'] > 0
+                    ? 'Orders and snapshots are present for review and demo flows.'
+                    : 'Create at least one test order and capture a snapshot to prove the order flow.',
+                [
+                    'order_count' => $localStats['order_count'],
+                    'test_order_count' => $localStats['test_order_count'],
+                    'order_snapshot_count' => $localStats['order_snapshot_count'],
                 ]
             ),
         ];
@@ -415,6 +443,12 @@ class MetaCommerceDiagnosticsService
                     ? 'No checkout URLs are configured yet.'
                     : ('Checked ' . ($checkoutSummary['checked_count'] ?? 0) . ' URL(s), invalid ' . ($checkoutSummary['invalid_count'] ?? 0) . '.')
             ),
+            $this->makeEvidenceItem(
+                'orders_and_snapshots',
+                'Orders and snapshots',
+                ($localStats['order_count'] ?? 0) > 0 && ($localStats['order_snapshot_count'] ?? 0) > 0 ? 'ok' : 'warn',
+                'Orders: ' . ($localStats['order_count'] ?? 0) . ', test orders: ' . ($localStats['test_order_count'] ?? 0) . ', snapshots: ' . ($localStats['order_snapshot_count'] ?? 0) . '.'
+            ),
         ];
 
         return [
@@ -588,6 +622,11 @@ class MetaCommerceDiagnosticsService
                 'key' => 'shop_structure',
                 'title' => 'Build the final shop structure',
                 'summary' => 'Create product sets and collections so the catalog can be reviewed as a real storefront hierarchy.',
+            ],
+            'orders_foundation' => [
+                'key' => 'orders_foundation',
+                'title' => 'Create test orders and snapshots',
+                'summary' => 'Record at least one test order and capture snapshots so order state changes can be demonstrated during review.',
             ],
             default => null,
         };

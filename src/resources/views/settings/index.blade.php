@@ -3153,6 +3153,26 @@
                             color: #0f172a;
                         }
 
+                        .ws-commerce-order-list {
+                            display: grid;
+                            gap: 10px;
+                        }
+
+                        .ws-commerce-order-item {
+                            border: 1px solid #e2e8f0;
+                            border-radius: 8px;
+                            background: #fff;
+                            padding: 12px;
+                            display: grid;
+                            gap: 10px;
+                        }
+
+                        .ws-commerce-order-meta-row {
+                            display: flex;
+                            flex-wrap: wrap;
+                            gap: 6px;
+                        }
+
                         .ws-commerce-code {
                             display: block;
                             margin-top: 6px;
@@ -3206,16 +3226,16 @@
                             </div>
 
                             <div class="ws-commerce-card">
-                                <h3 class="ws-section-title">Phase 6 scope</h3>
+                                <h3 class="ws-section-title">Phase 7 scope</h3>
                                 <div class="ws-section-subtitle">
-                                    Turn raw Meta commerce checks into a clear App Review readiness view with live channel, catalog, permission, and storefront diagnostics.
+                                    Close the commerce loop with test orders, status snapshots, and review-ready order evidence on top of the existing catalog and shop structure.
                                 </div>
                                 <div class="ws-commerce-list">
-                                    <span class="ws-commerce-pill ok">Live channel health</span>
-                                    <span class="ws-commerce-pill ok">Permission audit</span>
-                                    <span class="ws-commerce-pill ok">Webhook coverage</span>
-                                    <span class="ws-commerce-pill ok">Live catalog reads</span>
-                                    <span class="ws-commerce-pill ok">Review evidence</span>
+                                    <span class="ws-commerce-pill ok">Test order flows</span>
+                                    <span class="ws-commerce-pill ok">Order status updates</span>
+                                    <span class="ws-commerce-pill ok">Order snapshots</span>
+                                    <span class="ws-commerce-pill ok">Packet-ready order proof</span>
+                                    <span class="ws-commerce-pill ok">Review demo steps</span>
                                 </div>
                             </div>
                         </div>
@@ -3246,6 +3266,7 @@
                                         $reviewPacketCatalogs = is_array($reviewPacket['catalogs'] ?? null) ? $reviewPacket['catalogs'] : [];
                                         $reviewPacketLocalShop = is_array($reviewPacket['local_shop'] ?? null) ? $reviewPacket['local_shop'] : [];
                                         $reviewPacketCheckout = is_array($reviewPacket['checkout'] ?? null) ? $reviewPacket['checkout'] : [];
+                                        $reviewPacketOrders = is_array($reviewPacket['orders'] ?? null) ? $reviewPacket['orders'] : [];
                                         $reviewPacketEvidence = is_array($reviewPacket['review_evidence'] ?? null) ? $reviewPacket['review_evidence'] : [];
                                         $reviewPacketNotes = is_array($reviewPacket['review_notes'] ?? null) ? $reviewPacket['review_notes'] : [];
                                         $reviewPacketSteps = is_array($reviewPacket['demo_script'] ?? null) ? $reviewPacket['demo_script'] : [];
@@ -3468,6 +3489,11 @@
                                                                 checkout links {{ $reviewPacketCheckout['checked_count'] ?? 0 }}
                                                                 · invalid {{ $reviewPacketCheckout['invalid_count'] ?? 0 }}
                                                             </span>
+                                                            <span class="ws-commerce-code">
+                                                                orders {{ $reviewPacketOrders['order_count'] ?? 0 }}
+                                                                · test {{ $reviewPacketOrders['test_order_count'] ?? 0 }}
+                                                                · snapshots {{ $reviewPacketOrders['snapshot_count'] ?? 0 }}
+                                                            </span>
                                                             @if (!empty($reviewPacketNotes['requested_scopes']))
                                                                 <span class="ws-commerce-code">
                                                                     scopes {{ implode(', ', (array) $reviewPacketNotes['requested_scopes']) }}
@@ -3515,6 +3541,8 @@
                                                                             · blockers {{ $historyEntry['blocker_count'] ?? 0 }}
                                                                             · warnings {{ $historyEntry['warning_count'] ?? 0 }}
                                                                             · catalogs {{ $historyEntry['discovered_catalog_count'] ?? 0 }}
+                                                                            · orders {{ $historyEntry['order_count'] ?? 0 }}
+                                                                            · snapshots {{ $historyEntry['snapshot_count'] ?? 0 }}
                                                                         </div>
                                                                         @if (!empty($historyEntry['headline']))
                                                                             <span class="ws-commerce-code">{{ $historyEntry['headline'] }}</span>
@@ -3611,7 +3639,9 @@
                                                                 active products {{ $diagnosticShop['local_stats']['active_product_count'] ?? 0 }},
                                                                 offers {{ $diagnosticShop['local_stats']['offer_count'] ?? 0 }},
                                                                 product sets {{ $diagnosticShop['local_stats']['product_set_count'] ?? 0 }},
-                                                                collections {{ $diagnosticShop['local_stats']['collection_count'] ?? 0 }}
+                                                                collections {{ $diagnosticShop['local_stats']['collection_count'] ?? 0 }},
+                                                                orders {{ $diagnosticShop['local_stats']['order_count'] ?? 0 }},
+                                                                snapshots {{ $diagnosticShop['local_stats']['order_snapshot_count'] ?? 0 }}
                                                             </span>
                                                         </div>
                                                     @endif
@@ -3849,6 +3879,264 @@
                                     <span class="ws-commerce-pill">{{ ($commerceProductSets ?? collect())->count() }} product sets</span>
                                     <span class="ws-commerce-pill">{{ ($metaCommerceCatalogs ?? collect())->count() }} Meta catalogs</span>
                                 </div>
+                            </div>
+                        </div>
+
+                        <div class="ws-commerce-grid">
+                            <div class="ws-commerce-card">
+                                <h3 class="ws-section-title">Create test order</h3>
+                                <div class="ws-section-subtitle">
+                                    Build review-safe order proof with real catalog products, status changes, and snapshot history.
+                                </div>
+
+                                <form method="POST" action="{{ route('settings.commerce.orders.store') }}" class="ws-commerce-list" style="margin-top:14px;">
+                                    @csrf
+
+                                    <select name="provider_connection_id" class="ws-commerce-select" required>
+                                        <option value="">Choose Instagram account</option>
+                                        @foreach (($commerceConnections ?? collect()) as $connection)
+                                            <option value="{{ $connection->id }}" @selected((string) old('provider_connection_id') === (string) $connection->id)>
+                                                {{ $connection->provider_account_name ?: $connection->provider_account_id }}
+                                            </option>
+                                        @endforeach
+                                    </select>
+
+                                    <select name="catalog_id" class="ws-commerce-select" required>
+                                        <option value="">Choose source catalog</option>
+                                        @foreach (($commerceSourceCatalogs ?? collect()) as $sourceCatalog)
+                                            <option value="{{ $sourceCatalog->id }}" @selected((string) old('catalog_id') === (string) $sourceCatalog->id)>
+                                                {{ $sourceCatalog->name }} · {{ $sourceCatalog->products_count }} active products
+                                            </option>
+                                        @endforeach
+                                    </select>
+
+                                    <select name="catalog_collection_id" class="ws-commerce-select">
+                                        <option value="">Optional collection context</option>
+                                        @foreach (($commerceCollections ?? collect()) as $collection)
+                                            <option value="{{ $collection->id }}" @selected((string) old('catalog_collection_id') === (string) $collection->id)>
+                                                {{ $collection->name }}
+                                                @if ($collection->providerConnection)
+                                                    · {{ $collection->providerConnection->provider_account_name ?: $collection->providerConnection->provider_account_id }}
+                                                @endif
+                                            </option>
+                                        @endforeach
+                                    </select>
+
+                                    <select name="product_ids[]" class="ws-commerce-select is-multi" multiple required>
+                                        @foreach (($commerceTaggableProducts ?? collect()) as $product)
+                                            <option value="{{ $product->id }}" @selected(in_array((string) $product->id, array_map('strval', (array) old('product_ids', [])), true))>
+                                                {{ $product->title }}
+                                                @if ($product->catalog)
+                                                    · {{ $product->catalog->name }}
+                                                @endif
+                                            </option>
+                                        @endforeach
+                                    </select>
+
+                                    <div class="ws-commerce-grid" style="grid-template-columns:repeat(2, minmax(0, 1fr));">
+                                        <input type="text" name="external_order_id" class="ws-commerce-input" maxlength="120" placeholder="External order ID" value="{{ old('external_order_id') }}">
+                                        <input type="text" name="external_checkout_id" class="ws-commerce-input" maxlength="120" placeholder="External checkout ID" value="{{ old('external_checkout_id') }}">
+                                        <input type="text" name="customer_reference" class="ws-commerce-input" maxlength="120" placeholder="Customer reference" value="{{ old('customer_reference') }}">
+                                        <input type="text" name="customer_name" class="ws-commerce-input" maxlength="160" placeholder="Customer name" value="{{ old('customer_name') }}">
+                                        <input type="email" name="customer_email" class="ws-commerce-input" maxlength="160" placeholder="Customer email" value="{{ old('customer_email') }}">
+                                        <input type="datetime-local" name="placed_at" class="ws-commerce-input" value="{{ old('placed_at') }}">
+                                    </div>
+
+                                    <div class="ws-commerce-grid" style="grid-template-columns:repeat(4, minmax(0, 1fr));">
+                                        <select name="source" class="ws-commerce-select" required>
+                                            @foreach (['manual_test' => 'Manual test', 'instagram_shop' => 'Instagram shop', 'website_checkout' => 'Website checkout', 'catalog_share' => 'Catalog share'] as $value => $label)
+                                                <option value="{{ $value }}" @selected(old('source', 'manual_test') === $value)>{{ $label }}</option>
+                                            @endforeach
+                                        </select>
+                                        <select name="status" class="ws-commerce-select" required>
+                                            @foreach (['placed', 'confirmed', 'processing', 'fulfilled', 'cancelled', 'refunded'] as $value)
+                                                <option value="{{ $value }}" @selected(old('status', 'placed') === $value)>{{ ucfirst($value) }}</option>
+                                            @endforeach
+                                        </select>
+                                        <select name="payment_status" class="ws-commerce-select" required>
+                                            @foreach (['pending', 'authorized', 'paid', 'failed', 'refunded'] as $value)
+                                                <option value="{{ $value }}" @selected(old('payment_status', 'pending') === $value)>{{ ucfirst($value) }}</option>
+                                            @endforeach
+                                        </select>
+                                        <select name="fulfillment_status" class="ws-commerce-select" required>
+                                            @foreach (['unfulfilled', 'processing', 'fulfilled', 'returned'] as $value)
+                                                <option value="{{ $value }}" @selected(old('fulfillment_status', 'unfulfilled') === $value)>{{ ucfirst(str_replace('_', ' ', $value)) }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+
+                                    <div class="ws-commerce-grid" style="grid-template-columns:repeat(4, minmax(0, 1fr));">
+                                        <input type="text" name="currency" class="ws-commerce-input" maxlength="3" placeholder="USD" value="{{ old('currency', 'USD') }}" required>
+                                        <input type="number" step="0.01" min="0" name="discount_amount" class="ws-commerce-input" placeholder="Discount" value="{{ old('discount_amount', '0') }}">
+                                        <input type="number" step="0.01" min="0" name="tax_amount" class="ws-commerce-input" placeholder="Tax" value="{{ old('tax_amount', '0') }}">
+                                        <input type="number" step="0.01" min="0" name="shipping_amount" class="ws-commerce-input" placeholder="Shipping" value="{{ old('shipping_amount', '0') }}">
+                                    </div>
+
+                                    <textarea name="notes" class="ws-commerce-textarea" maxlength="2000" placeholder="Optional internal notes for the test order">{{ old('notes') }}</textarea>
+
+                                    <div>
+                                        <button type="submit" class="ws-commerce-button">Create test order</button>
+                                    </div>
+                                </form>
+                            </div>
+
+                            <div class="ws-commerce-card">
+                                <h3 class="ws-section-title">Order readiness</h3>
+                                <div class="ws-section-subtitle">
+                                    Orders give App Review a concrete way to inspect checkout handoff, state changes, and immutable proof snapshots.
+                                </div>
+                                <div class="ws-commerce-list">
+                                    <span class="ws-commerce-pill ok">{{ (int) (($commerceOrderStats ?? [])['order_count'] ?? 0) }} orders</span>
+                                    <span class="ws-commerce-pill">{{ (int) (($commerceOrderStats ?? [])['test_order_count'] ?? 0) }} test orders</span>
+                                    <span class="ws-commerce-pill">{{ (int) (($commerceOrderStats ?? [])['snapshot_count'] ?? 0) }} snapshots</span>
+                                    <span class="ws-commerce-pill">{{ ($commerceCollections ?? collect())->count() }} collections</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="ws-commerce-card">
+                            <h3 class="ws-section-title">Order ledger</h3>
+
+                            <div class="ws-commerce-order-list">
+                                @forelse (($commerceOrders ?? collect()) as $order)
+                                    <div class="ws-commerce-order-item">
+                                        <div class="ws-commerce-head">
+                                            <div>
+                                                <div class="ws-commerce-title">
+                                                    Order #{{ $order->id }}
+                                                    @if ($order->external_order_id)
+                                                        · {{ $order->external_order_id }}
+                                                    @endif
+                                                </div>
+                                                <div class="ws-commerce-meta">
+                                                    {{ $order->providerConnection?->provider_account_name ?: $order->providerConnection?->provider_account_id ?: 'Instagram account' }}
+                                                    @if ($order->catalog)
+                                                        · {{ $order->catalog->name }}
+                                                    @endif
+                                                    @if ($order->collection)
+                                                        · collection {{ $order->collection->name }}
+                                                    @endif
+                                                    @if ($order->placed_at)
+                                                        · {{ $order->placed_at->format('M d, Y H:i') }}
+                                                    @endif
+                                                </div>
+                                            </div>
+
+                                            <div class="ws-commerce-order-meta-row">
+                                                <span class="ws-commerce-pill {{ $order->is_test ? 'ok' : '' }}">{{ $order->is_test ? 'Test order' : 'Live order' }}</span>
+                                                <span class="ws-commerce-pill">{{ $order->currency }} {{ number_format((float) $order->total_amount, 2) }}</span>
+                                            </div>
+                                        </div>
+
+                                        <div class="ws-commerce-order-meta-row">
+                                            <span class="ws-commerce-pill">{{ ucfirst(str_replace('_', ' ', $order->status)) }}</span>
+                                            <span class="ws-commerce-pill">{{ ucfirst(str_replace('_', ' ', $order->payment_status)) }}</span>
+                                            <span class="ws-commerce-pill">{{ ucfirst(str_replace('_', ' ', $order->fulfillment_status)) }}</span>
+                                            <span class="ws-commerce-pill">{{ ucfirst(str_replace('_', ' ', $order->source)) }}</span>
+                                            <span class="ws-commerce-pill">{{ $order->items_count }} item(s)</span>
+                                            <span class="ws-commerce-pill">{{ $order->snapshots_count }} snapshot(s)</span>
+                                        </div>
+
+                                        @if ($order->customer_name || $order->customer_email || $order->customer_reference)
+                                            <div class="ws-commerce-meta">
+                                                Customer:
+                                                {{ $order->customer_name ?: 'Unknown customer' }}
+                                                @if ($order->customer_email)
+                                                    · {{ $order->customer_email }}
+                                                @endif
+                                                @if ($order->customer_reference)
+                                                    · ref {{ $order->customer_reference }}
+                                                @endif
+                                            </div>
+                                        @endif
+
+                                        @if ($order->items->isNotEmpty())
+                                            <div class="ws-commerce-order-meta-row">
+                                                @foreach ($order->items as $item)
+                                                    <span class="ws-commerce-pill">
+                                                        {{ $item->title }} · {{ $item->currency }} {{ number_format((float) $item->total_price, 2) }}
+                                                    </span>
+                                                @endforeach
+                                            </div>
+                                        @endif
+
+                                        <div class="ws-commerce-grid">
+                                            <form method="POST" action="{{ route('settings.commerce.orders.status.update', $order) }}" class="ws-commerce-list" style="margin-top:0;">
+                                                @csrf
+                                                @method('PATCH')
+
+                                                <div class="ws-commerce-grid" style="grid-template-columns:repeat(3, minmax(0, 1fr));">
+                                                    <select name="status" class="ws-commerce-select" required>
+                                                        @foreach (['placed', 'confirmed', 'processing', 'fulfilled', 'cancelled', 'refunded'] as $value)
+                                                            <option value="{{ $value }}" @selected($order->status === $value)>{{ ucfirst($value) }}</option>
+                                                        @endforeach
+                                                    </select>
+                                                    <select name="payment_status" class="ws-commerce-select" required>
+                                                        @foreach (['pending', 'authorized', 'paid', 'failed', 'refunded'] as $value)
+                                                            <option value="{{ $value }}" @selected($order->payment_status === $value)>{{ ucfirst($value) }}</option>
+                                                        @endforeach
+                                                    </select>
+                                                    <select name="fulfillment_status" class="ws-commerce-select" required>
+                                                        @foreach (['unfulfilled', 'processing', 'fulfilled', 'returned'] as $value)
+                                                            <option value="{{ $value }}" @selected($order->fulfillment_status === $value)>{{ ucfirst(str_replace('_', ' ', $value)) }}</option>
+                                                        @endforeach
+                                                    </select>
+                                                </div>
+
+                                                <input type="text" name="notes" class="ws-commerce-input" maxlength="2000" placeholder="Optional status note">
+
+                                                <div>
+                                                    <button type="submit" class="ws-commerce-button">Update status</button>
+                                                </div>
+                                            </form>
+
+                                            <form method="POST" action="{{ route('settings.commerce.orders.snapshots.store', $order) }}" class="ws-commerce-list" style="margin-top:0;">
+                                                @csrf
+
+                                                <select name="snapshot_type" class="ws-commerce-select">
+                                                    <option value="manual">Manual snapshot</option>
+                                                    <option value="review_demo">Review demo snapshot</option>
+                                                    <option value="sync_check">Sync check snapshot</option>
+                                                </select>
+
+                                                <input type="text" name="notes" class="ws-commerce-input" maxlength="2000" placeholder="Optional snapshot note">
+
+                                                <div>
+                                                    <button type="submit" class="ws-commerce-button" style="background:#1d4ed8;">Capture snapshot</button>
+                                                </div>
+                                            </form>
+                                        </div>
+
+                                        @if ($order->snapshots->isNotEmpty())
+                                            <details class="ws-commerce-details">
+                                                <summary>Snapshot history</summary>
+                                                <div class="ws-commerce-history-list">
+                                                    @foreach ($order->snapshots->take(5) as $snapshot)
+                                                        <div class="ws-commerce-history-item">
+                                                            <div class="ws-commerce-history-title">
+                                                                {{ $snapshot->captured_at?->format('M d, Y H:i') ?: 'Unknown time' }}
+                                                                · {{ ucfirst(str_replace('_', ' ', $snapshot->snapshot_type)) }}
+                                                            </div>
+                                                            <div class="ws-commerce-summary-text">
+                                                                Status {{ $snapshot->status ?? 'unknown' }}
+                                                                @if ($snapshot->createdBy)
+                                                                    · by {{ $snapshot->createdBy->name }}
+                                                                @endif
+                                                            </div>
+                                                            @if (!empty($snapshot->payload['note']))
+                                                                <span class="ws-commerce-code">{{ $snapshot->payload['note'] }}</span>
+                                                            @endif
+                                                        </div>
+                                                    @endforeach
+                                                </div>
+                                            </details>
+                                        @endif
+                                    </div>
+                                @empty
+                                    <div class="ws-empty">
+                                        No orders recorded yet. Create a test order to start building review proof for checkout and order-state flows.
+                                    </div>
+                                @endforelse
                             </div>
                         </div>
 

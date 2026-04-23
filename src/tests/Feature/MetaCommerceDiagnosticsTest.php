@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Catalog;
+use App\Models\CommerceOrder;
 use App\Models\OauthToken;
 use App\Models\ProviderConnection;
 use App\Models\ProviderPermission;
@@ -169,6 +170,42 @@ class MetaCommerceDiagnosticsTest extends TestCase
             'provider_connection_id' => $connection->id,
         ]);
 
+        $order = CommerceOrder::create([
+            'workspace_id' => $workspace->id,
+            'provider_connection_id' => $connection->id,
+            'catalog_id' => $sourceCatalog->id,
+            'status' => 'placed',
+            'payment_status' => 'paid',
+            'fulfillment_status' => 'unfulfilled',
+            'source' => 'manual_test',
+            'currency' => 'USD',
+            'subtotal_amount' => 30,
+            'discount_amount' => 0,
+            'tax_amount' => 0,
+            'shipping_amount' => 0,
+            'total_amount' => 30,
+            'is_test' => true,
+            'placed_at' => now(),
+        ]);
+
+        $order->items()->create([
+            'catalog_product_id' => $product->id,
+            'sku' => $product->sku,
+            'title' => $product->title,
+            'quantity' => 1,
+            'currency' => 'USD',
+            'unit_price' => 30,
+            'total_price' => 30,
+            'item_snapshot' => ['title' => $product->title],
+        ]);
+
+        $order->snapshots()->create([
+            'snapshot_type' => 'test_order_created',
+            'status' => 'placed',
+            'captured_at' => now(),
+            'payload' => ['note' => 'Created for diagnostics test.'],
+        ]);
+
         $response = $this
             ->actingAs($user)
             ->withSession(['_token' => 'test-csrf-token'])
@@ -196,13 +233,16 @@ class MetaCommerceDiagnosticsTest extends TestCase
         $this->assertSame(1, $diagnostics['shop']['local_stats']['meta_catalog_count']);
         $this->assertSame(1, $diagnostics['shop']['local_stats']['market_override_count']);
         $this->assertSame(1, $diagnostics['shop']['local_stats']['offer_count']);
+        $this->assertSame(1, $diagnostics['shop']['local_stats']['order_count']);
+        $this->assertSame(1, $diagnostics['shop']['local_stats']['test_order_count']);
+        $this->assertSame(1, $diagnostics['shop']['local_stats']['order_snapshot_count']);
         $this->assertSame(3, $diagnostics['checkout_urls']['checked_count']);
         $this->assertSame(0, $diagnostics['checkout_urls']['invalid_count']);
         $this->assertSame('ready', $diagnostics['review']['status']);
-        $this->assertSame(8, $diagnostics['review']['counts']['ok']);
+        $this->assertSame(9, $diagnostics['review']['counts']['ok']);
         $this->assertSame(0, $diagnostics['review']['counts']['warn']);
         $this->assertSame(0, $diagnostics['review']['counts']['fail']);
-        $this->assertCount(9, $diagnostics['review']['evidence']);
+        $this->assertCount(10, $diagnostics['review']['evidence']);
         $this->assertSame('Instagram business account', $diagnostics['review']['evidence'][0]['label']);
         $this->assertSame('channel_health', $diagnostics['readiness'][0]['key']);
         $this->assertSame('ok', $diagnostics['readiness'][0]['status']);
@@ -456,6 +496,42 @@ class MetaCommerceDiagnosticsTest extends TestCase
             'provider_connection_id' => $connection->id,
         ]);
 
+        $order = CommerceOrder::create([
+            'workspace_id' => $workspace->id,
+            'provider_connection_id' => $connection->id,
+            'catalog_id' => $sourceCatalog->id,
+            'status' => 'processing',
+            'payment_status' => 'paid',
+            'fulfillment_status' => 'processing',
+            'source' => 'manual_test',
+            'currency' => 'USD',
+            'subtotal_amount' => 45,
+            'discount_amount' => 0,
+            'tax_amount' => 0,
+            'shipping_amount' => 0,
+            'total_amount' => 45,
+            'is_test' => true,
+            'placed_at' => now(),
+        ]);
+
+        $order->items()->create([
+            'catalog_product_id' => $product->id,
+            'sku' => $product->sku,
+            'title' => $product->title,
+            'quantity' => 1,
+            'currency' => 'USD',
+            'unit_price' => 45,
+            'total_price' => 45,
+            'item_snapshot' => ['title' => $product->title],
+        ]);
+
+        $order->snapshots()->create([
+            'snapshot_type' => 'test_order_created',
+            'status' => 'processing',
+            'captured_at' => now(),
+            'payload' => ['note' => 'Created for packet test.'],
+        ]);
+
         $response = $this
             ->actingAs($user)
             ->withSession(['_token' => 'test-csrf-token'])
@@ -471,7 +547,9 @@ class MetaCommerceDiagnosticsTest extends TestCase
         $this->assertSame('ready', $packet['summary']['status']);
         $this->assertSame('packet_shop', $packet['account']['username']);
         $this->assertSame(1, $packet['catalogs']['discovered_count']);
-        $this->assertCount(7, $packet['demo_script']);
+        $this->assertSame(1, $packet['orders']['order_count']);
+        $this->assertSame(1, $packet['orders']['snapshot_count']);
+        $this->assertCount(8, $packet['demo_script']);
         $this->assertSame(1, count($connection->meta['meta_commerce_review_packet_history']));
 
         $download = $this
@@ -486,5 +564,6 @@ class MetaCommerceDiagnosticsTest extends TestCase
 
         $this->assertSame('ready', data_get($downloadedPacket, 'summary.status'));
         $this->assertSame('Packet Catalog', data_get($downloadedPacket, 'catalogs.live_catalogs.0.name'));
+        $this->assertSame(1, data_get($downloadedPacket, 'orders.order_count'));
     }
 }

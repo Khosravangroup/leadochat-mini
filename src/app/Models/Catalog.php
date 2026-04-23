@@ -57,4 +57,9 @@ class Catalog extends Model
     {
         return $this->hasMany(CatalogCollection::class);
     }
+
+    public function commerceOrders(): HasMany
+    {
+        return $this->hasMany(CommerceOrder::class);
+    }
 }
