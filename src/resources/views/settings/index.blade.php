@@ -2849,6 +2849,27 @@
                                             · {{ str_replace('_', ' ', $productSet->meta_sync_status ?: 'not_synced') }}
                                         </div>
 
+                                        @if ($productSet->external_product_set_id)
+                                            <span class="ws-commerce-code">External product set ID: {{ $productSet->external_product_set_id }}</span>
+                                        @endif
+
+                                        @php
+                                            $lastProductSetMetaSync = is_array($productSet->meta ?? null) ? ($productSet->meta['last_meta_sync'] ?? null) : null;
+                                        @endphp
+                                        @if (is_array($lastProductSetMetaSync))
+                                            <div class="ws-commerce-meta">
+                                                Last Meta sync:
+                                                {{ $lastProductSetMetaSync['status'] ?? 'unknown' }}
+                                                @if (!empty($lastProductSetMetaSync['synced_at']))
+                                                    · {{ $lastProductSetMetaSync['synced_at'] }}
+                                                @endif
+                                            </div>
+                                        @endif
+
+                                        @if ($productSet->meta_sync_error)
+                                            <span class="ws-commerce-code">{{ $productSet->meta_sync_error }}</span>
+                                        @endif
+
                                         @if ($productSet->description)
                                             <div class="ws-commerce-meta">{{ $productSet->description }}</div>
                                         @endif
@@ -2865,6 +2886,11 @@
                                                 @endforeach
                                             </div>
                                         @endif
+
+                                        <form method="POST" action="{{ route('settings.commerce.product-sets.sync', $productSet) }}" class="ws-commerce-sync-form">
+                                            @csrf
+                                            <button type="submit" class="ws-commerce-button">Sync product set to Meta</button>
+                                        </form>
 
                                         <form method="POST" action="{{ route('settings.commerce.product-sets.products.sync', $productSet) }}" class="ws-commerce-list" style="margin-top:12px;">
                                             @csrf
@@ -2933,6 +2959,27 @@
                                             · {{ str_replace('_', ' ', $collection->meta_sync_status ?: 'not_synced') }}
                                         </div>
 
+                                        @if ($collection->external_collection_id)
+                                            <span class="ws-commerce-code">External collection ID: {{ $collection->external_collection_id }}</span>
+                                        @endif
+
+                                        @php
+                                            $lastCollectionMetaSync = is_array($collection->meta ?? null) ? ($collection->meta['last_meta_sync'] ?? null) : null;
+                                        @endphp
+                                        @if (is_array($lastCollectionMetaSync))
+                                            <div class="ws-commerce-meta">
+                                                Last Meta sync:
+                                                {{ $lastCollectionMetaSync['status'] ?? 'unknown' }}
+                                                @if (!empty($lastCollectionMetaSync['synced_at']))
+                                                    · {{ $lastCollectionMetaSync['synced_at'] }}
+                                                @endif
+                                            </div>
+                                        @endif
+
+                                        @if ($collection->meta_sync_error)
+                                            <span class="ws-commerce-code">{{ $collection->meta_sync_error }}</span>
+                                        @endif
+
                                         @if ($collection->description)
                                             <div class="ws-commerce-meta">{{ $collection->description }}</div>
                                         @endif
@@ -2947,6 +2994,11 @@
                                                 @endforeach
                                             </div>
                                         @endif
+
+                                        <form method="POST" action="{{ route('settings.commerce.collections.sync', $collection) }}" class="ws-commerce-sync-form">
+                                            @csrf
+                                            <button type="submit" class="ws-commerce-button">Sync collection to Meta</button>
+                                        </form>
 
                                         <form method="POST" action="{{ route('settings.commerce.collections.product-sets.sync', $collection) }}" class="ws-commerce-list" style="margin-top:12px;">
                                             @csrf

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Catalog;
 use App\Models\CatalogCollection;
 use App\Models\CatalogProductSet;
+use App\Services\Meta\Commerce\MetaCollectionSyncService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
@@ -107,6 +108,29 @@ class WorkspaceMetaCollectionController extends Controller
         return redirect()
             ->route('settings.index', ['section' => 'commerce'])
             ->with('status', 'Collection removed.');
+    }
+
+    public function sync(Request $request, CatalogCollection $collection, MetaCollectionSyncService $syncService): RedirectResponse
+    {
+        $workspace = $request->user()?->currentWorkspace();
+        $this->guardWorkspaceCollection($collection, $workspace?->id);
+
+        try {
+            $result = $syncService->sync($collection);
+
+            return redirect()
+                ->route('settings.index', ['section' => 'commerce'])
+                ->with(
+                    'status',
+                    ($result['ok'] ?? false)
+                        ? 'Collection synced to Meta.'
+                        : 'Collection sync failed.'
+                );
+        } catch (\Throwable $exception) {
+            return redirect()
+                ->route('settings.index', ['section' => 'commerce'])
+                ->with('status', 'Collection sync failed: ' . $exception->getMessage());
+        }
     }
 
     protected function guardWorkspaceCollection(?CatalogCollection $collection, ?int $workspaceId): void

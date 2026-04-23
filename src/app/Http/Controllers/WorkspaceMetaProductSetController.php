@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Catalog;
 use App\Models\CatalogProduct;
 use App\Models\CatalogProductSet;
+use App\Services\Meta\Commerce\MetaProductSetSyncService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
@@ -115,6 +116,29 @@ class WorkspaceMetaProductSetController extends Controller
         return redirect()
             ->route('settings.index', ['section' => 'commerce'])
             ->with('status', 'Product set removed.');
+    }
+
+    public function sync(Request $request, CatalogProductSet $productSet, MetaProductSetSyncService $syncService): RedirectResponse
+    {
+        $workspace = $request->user()?->currentWorkspace();
+        $this->guardWorkspaceProductSet($productSet, $workspace?->id);
+
+        try {
+            $result = $syncService->sync($productSet);
+
+            return redirect()
+                ->route('settings.index', ['section' => 'commerce'])
+                ->with(
+                    'status',
+                    ($result['ok'] ?? false)
+                        ? 'Product set synced to Meta.'
+                        : 'Product set sync failed.'
+                );
+        } catch (\Throwable $exception) {
+            return redirect()
+                ->route('settings.index', ['section' => 'commerce'])
+                ->with('status', 'Product set sync failed: ' . $exception->getMessage());
+        }
     }
 
     protected function guardWorkspaceProductSet(?CatalogProductSet $productSet, ?int $workspaceId): void
