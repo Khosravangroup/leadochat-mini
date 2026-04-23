@@ -3126,6 +3126,33 @@
                             display: none;
                         }
 
+                        .ws-commerce-packet-grid {
+                            display: grid;
+                            grid-template-columns: repeat(2, minmax(0, 1fr));
+                            gap: 8px;
+                        }
+
+                        .ws-commerce-step-list,
+                        .ws-commerce-history-list {
+                            display: grid;
+                            gap: 8px;
+                        }
+
+                        .ws-commerce-step,
+                        .ws-commerce-history-item {
+                            border: 1px solid #e2e8f0;
+                            border-radius: 8px;
+                            background: #fff;
+                            padding: 10px;
+                        }
+
+                        .ws-commerce-step-title,
+                        .ws-commerce-history-title {
+                            font-size: 13px;
+                            font-weight: 800;
+                            color: #0f172a;
+                        }
+
                         .ws-commerce-code {
                             display: block;
                             margin-top: 6px;
@@ -3148,7 +3175,8 @@
                             }
 
                             .ws-commerce-evidence-grid,
-                            .ws-commerce-metric-row {
+                            .ws-commerce-metric-row,
+                            .ws-commerce-packet-grid {
                                 grid-template-columns: 1fr;
                             }
                         }
@@ -3198,9 +3226,10 @@
                             <div class="ws-commerce-list">
                                 @forelse (($commerceConnections ?? collect()) as $connection)
                                     @php
-                                        $commerceMeta = is_array($connection->meta ?? null) ? ($connection->meta['meta_commerce'] ?? []) : [];
-                                        $discovery = is_array($connection->meta ?? null) ? ($connection->meta['meta_commerce_discovery'] ?? []) : [];
-                                        $diagnostics = is_array($connection->meta ?? null) ? ($connection->meta['meta_commerce_diagnostics'] ?? []) : [];
+                                        $connectionMeta = is_array($connection->meta ?? null) ? $connection->meta : [];
+                                        $commerceMeta = $connectionMeta['meta_commerce'] ?? [];
+                                        $discovery = $connectionMeta['meta_commerce_discovery'] ?? [];
+                                        $diagnostics = $connectionMeta['meta_commerce_diagnostics'] ?? [];
                                         $checks = is_array($discovery['checks'] ?? null) ? $discovery['checks'] : [];
                                         $readinessChecks = is_array($diagnostics['readiness'] ?? null) ? $diagnostics['readiness'] : [];
                                         $diagnosticAccount = is_array($diagnostics['account'] ?? null) ? $diagnostics['account'] : [];
@@ -3210,6 +3239,17 @@
                                         $diagnosticShop = is_array($diagnostics['shop'] ?? null) ? $diagnostics['shop'] : [];
                                         $diagnosticCheckout = is_array($diagnostics['checkout_urls'] ?? null) ? $diagnostics['checkout_urls'] : [];
                                         $diagnosticReview = is_array($diagnostics['review'] ?? null) ? $diagnostics['review'] : [];
+                                        $reviewPacket = is_array($connectionMeta['meta_commerce_review_packet'] ?? null) ? $connectionMeta['meta_commerce_review_packet'] : [];
+                                        $reviewPacketSummary = is_array($reviewPacket['summary'] ?? null) ? $reviewPacket['summary'] : [];
+                                        $reviewPacketAccount = is_array($reviewPacket['account'] ?? null) ? $reviewPacket['account'] : [];
+                                        $reviewPacketChannel = is_array($reviewPacket['channel'] ?? null) ? $reviewPacket['channel'] : [];
+                                        $reviewPacketCatalogs = is_array($reviewPacket['catalogs'] ?? null) ? $reviewPacket['catalogs'] : [];
+                                        $reviewPacketLocalShop = is_array($reviewPacket['local_shop'] ?? null) ? $reviewPacket['local_shop'] : [];
+                                        $reviewPacketCheckout = is_array($reviewPacket['checkout'] ?? null) ? $reviewPacket['checkout'] : [];
+                                        $reviewPacketEvidence = is_array($reviewPacket['review_evidence'] ?? null) ? $reviewPacket['review_evidence'] : [];
+                                        $reviewPacketNotes = is_array($reviewPacket['review_notes'] ?? null) ? $reviewPacket['review_notes'] : [];
+                                        $reviewPacketSteps = is_array($reviewPacket['demo_script'] ?? null) ? $reviewPacket['demo_script'] : [];
+                                        $reviewPacketHistory = is_array($connectionMeta['meta_commerce_review_packet_history'] ?? null) ? $connectionMeta['meta_commerce_review_packet_history'] : [];
                                     @endphp
 
                                     <div class="ws-commerce-account">
@@ -3236,6 +3276,17 @@
                                                     @csrf
                                                     <button type="submit" class="ws-commerce-button" style="background:#1d4ed8;">Run diagnostics</button>
                                                 </form>
+
+                                                <form method="POST" action="{{ route('settings.commerce.review-packet.generate', $connection) }}">
+                                                    @csrf
+                                                    <button type="submit" class="ws-commerce-button" style="background:#7c3aed;">Build review packet</button>
+                                                </form>
+
+                                                @if ($reviewPacket !== [])
+                                                    <a href="{{ route('settings.commerce.review-packet.download', $connection) }}" class="ws-commerce-button" style="background:#334155; text-decoration:none;">
+                                                        Download packet
+                                                    </a>
+                                                @endif
                                             </div>
                                         </div>
 
@@ -3354,6 +3405,124 @@
                                                                 </div>
                                                             @endforeach
                                                         </div>
+                                                    @endif
+                                                </div>
+                                            @endif
+
+                                            @if ($reviewPacket !== [])
+                                                @php
+                                                    $packetStatusClass = match ($reviewPacketSummary['status'] ?? 'needs_attention') {
+                                                        'ready' => 'ok',
+                                                        'blocked' => 'fail',
+                                                        default => '',
+                                                    };
+                                                @endphp
+
+                                                <div class="ws-commerce-summary">
+                                                    <div class="ws-commerce-summary-head">
+                                                        <div class="ws-commerce-summary-copy">
+                                                            <div class="ws-commerce-summary-title">Review packet</div>
+                                                            <div class="ws-commerce-summary-text">
+                                                                Generated {{ $reviewPacket['generated_at'] ?? 'just now' }}.
+                                                                This packet is a saved proof snapshot for App Review and can be exported as JSON.
+                                                            </div>
+                                                        </div>
+
+                                                        <span class="ws-commerce-pill {{ $packetStatusClass }}">
+                                                            {{ strtoupper(str_replace('_', ' ', (string) ($reviewPacketSummary['status'] ?? 'needs_attention'))) }}
+                                                        </span>
+                                                    </div>
+
+                                                    <div class="ws-commerce-packet-grid">
+                                                        <div class="ws-commerce-action-item">
+                                                            <div class="ws-commerce-action-title">Packet summary</div>
+                                                            <div class="ws-commerce-summary-text">{{ $reviewPacketSummary['headline'] ?? 'No summary available.' }}</div>
+                                                            @if ($reviewPacketAccount !== [])
+                                                                <span class="ws-commerce-code">
+                                                                    {{ $reviewPacketAccount['username'] ?? ($reviewPacketAccount['provider_account_name'] ?? $connection->provider_account_id) }}
+                                                                    @if (!empty($reviewPacketAccount['review_status']))
+                                                                        · review {{ $reviewPacketAccount['review_status'] }}
+                                                                    @endif
+                                                                    @if (array_key_exists('product_tag_eligible', $reviewPacketAccount))
+                                                                        · product tags {{ !empty($reviewPacketAccount['product_tag_eligible']) ? 'eligible' : 'not ready yet' }}
+                                                                    @endif
+                                                                </span>
+                                                            @endif
+                                                            @if ($reviewPacketChannel !== [])
+                                                                <span class="ws-commerce-code">
+                                                                    channel {{ $reviewPacketChannel['status'] ?? '-' }}
+                                                                    · token {{ !empty($reviewPacketChannel['token_expired']) ? 'expired' : 'healthy' }}
+                                                                </span>
+                                                            @endif
+                                                        </div>
+
+                                                        <div class="ws-commerce-action-item">
+                                                            <div class="ws-commerce-action-title">Packet totals</div>
+                                                            <span class="ws-commerce-code">
+                                                                catalogs {{ $reviewPacketCatalogs['discovered_count'] ?? 0 }}
+                                                                · active products {{ $reviewPacketLocalShop['active_product_count'] ?? 0 }}
+                                                                · sets {{ $reviewPacketLocalShop['product_set_count'] ?? 0 }}
+                                                                · collections {{ $reviewPacketLocalShop['collection_count'] ?? 0 }}
+                                                            </span>
+                                                            <span class="ws-commerce-code">
+                                                                checkout links {{ $reviewPacketCheckout['checked_count'] ?? 0 }}
+                                                                · invalid {{ $reviewPacketCheckout['invalid_count'] ?? 0 }}
+                                                            </span>
+                                                            @if (!empty($reviewPacketNotes['requested_scopes']))
+                                                                <span class="ws-commerce-code">
+                                                                    scopes {{ implode(', ', (array) $reviewPacketNotes['requested_scopes']) }}
+                                                                </span>
+                                                            @endif
+                                                        </div>
+                                                    </div>
+
+                                                    @if (!empty($reviewPacketEvidence['next_actions']))
+                                                        <div class="ws-commerce-action-list">
+                                                            @foreach ((array) $reviewPacketEvidence['next_actions'] as $action)
+                                                                <div class="ws-commerce-action-item">
+                                                                    <div class="ws-commerce-action-title">{{ $action['title'] ?? 'Next action' }}</div>
+                                                                    <div class="ws-commerce-summary-text">{{ $action['summary'] ?? '' }}</div>
+                                                                </div>
+                                                            @endforeach
+                                                        </div>
+                                                    @endif
+
+                                                    @if ($reviewPacketSteps !== [])
+                                                        <details class="ws-commerce-details">
+                                                            <summary>Review demo script</summary>
+                                                            <div class="ws-commerce-step-list">
+                                                                @foreach ($reviewPacketSteps as $step)
+                                                                    <div class="ws-commerce-step">
+                                                                        <div class="ws-commerce-step-title">Step {{ $step['step'] ?? '?' }} · {{ $step['title'] ?? 'Demo step' }}</div>
+                                                                        <div class="ws-commerce-summary-text">{{ $step['summary'] ?? '' }}</div>
+                                                                    </div>
+                                                                @endforeach
+                                                            </div>
+                                                        </details>
+                                                    @endif
+
+                                                    @if ($reviewPacketHistory !== [])
+                                                        <details class="ws-commerce-details">
+                                                            <summary>Recent packet history</summary>
+                                                            <div class="ws-commerce-history-list">
+                                                                @foreach ($reviewPacketHistory as $historyEntry)
+                                                                    <div class="ws-commerce-history-item">
+                                                                        <div class="ws-commerce-history-title">
+                                                                            {{ $historyEntry['generated_at'] ?? 'Unknown time' }}
+                                                                        </div>
+                                                                        <div class="ws-commerce-summary-text">
+                                                                            {{ strtoupper(str_replace('_', ' ', (string) ($historyEntry['status'] ?? 'needs_attention'))) }}
+                                                                            · blockers {{ $historyEntry['blocker_count'] ?? 0 }}
+                                                                            · warnings {{ $historyEntry['warning_count'] ?? 0 }}
+                                                                            · catalogs {{ $historyEntry['discovered_catalog_count'] ?? 0 }}
+                                                                        </div>
+                                                                        @if (!empty($historyEntry['headline']))
+                                                                            <span class="ws-commerce-code">{{ $historyEntry['headline'] }}</span>
+                                                                        @endif
+                                                                    </div>
+                                                                @endforeach
+                                                            </div>
+                                                        </details>
                                                     @endif
                                                 </div>
                                             @endif

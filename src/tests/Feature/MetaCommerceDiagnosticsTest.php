@@ -303,4 +303,188 @@ class MetaCommerceDiagnosticsTest extends TestCase
         $this->assertContains('permissions', collect($diagnostics['review']['next_actions'])->pluck('key')->all());
         $this->assertContains('catalog_discovery', collect($diagnostics['review']['next_actions'])->pluck('key')->all());
     }
+
+    public function test_it_generates_and_downloads_a_meta_commerce_review_packet(): void
+    {
+        config([
+            'services.meta.graph_version' => 'v25.0',
+            'services.meta.commerce_review_scopes' => 'business_management,catalog_management,instagram_business_basic',
+        ]);
+
+        Http::fake([
+            'https://graph.facebook.com/v25.0/instagram-account-777*' => Http::response([
+                'id' => 'instagram-account-777',
+                'username' => 'packet_shop',
+                'name' => 'Packet Shop',
+                'ig_id' => '17841439881437777',
+                'shopping_product_tag_eligibility' => true,
+                'shopping_review_status' => 'approved',
+            ], 200),
+            'https://graph.facebook.com/v25.0/me/permissions*' => Http::response([
+                'data' => [
+                    ['permission' => 'business_management', 'status' => 'granted'],
+                    ['permission' => 'catalog_management', 'status' => 'granted'],
+                    ['permission' => 'instagram_business_basic', 'status' => 'granted'],
+                ],
+            ], 200),
+            'https://graph.facebook.com/v25.0/instagram-account-777/subscribed_apps*' => Http::response([
+                'data' => [
+                    [
+                        'id' => 'app-777',
+                        'name' => 'Leadochat Mini',
+                        'subscribed_fields' => ['messages', 'comments'],
+                    ],
+                ],
+            ], 200),
+            'https://graph.facebook.com/v25.0/meta-catalog-777*' => Http::response([
+                'id' => 'meta-catalog-777',
+                'name' => 'Packet Catalog',
+                'vertical' => 'commerce',
+                'product_count' => 9,
+            ], 200),
+        ]);
+
+        $user = User::factory()->create();
+        $workspace = Workspace::create([
+            'owner_id' => $user->id,
+            'name' => 'Packet Commerce Workspace',
+            'slug' => 'packet-commerce-workspace',
+        ]);
+
+        $workspace->members()->attach($user->id, [
+            'role' => 'owner',
+        ]);
+
+        $connection = ProviderConnection::create([
+            'workspace_id' => $workspace->id,
+            'provider' => 'instagram',
+            'provider_account_type' => 'instagram_account',
+            'provider_account_id' => 'instagram-account-777',
+            'provider_account_name' => 'packet_shop',
+            'status' => 'connected',
+            'meta' => [
+                'webhook_subscription' => [
+                    'success' => true,
+                    'verified_fields' => ['messages', 'comments'],
+                    'verified_at' => now()->toIso8601String(),
+                ],
+                'meta_commerce' => [
+                    'business_ids' => ['business-777'],
+                    'review_scopes' => ['business_management', 'catalog_management', 'instagram_business_basic'],
+                ],
+                'meta_commerce_discovery' => [
+                    'catalogs' => [
+                        ['id' => 'meta-catalog-777', 'name' => 'Packet Catalog'],
+                    ],
+                ],
+            ],
+        ]);
+
+        OauthToken::create([
+            'provider_connection_id' => $connection->id,
+            'token_type' => 'access_token',
+            'access_token' => 'packet-meta-access-token',
+            'expires_at' => now()->addDay(),
+            'is_primary' => true,
+        ]);
+
+        foreach (['business_management', 'catalog_management', 'instagram_business_basic'] as $permission) {
+            ProviderPermission::create([
+                'provider_connection_id' => $connection->id,
+                'permission' => $permission,
+                'status' => 'granted',
+            ]);
+        }
+
+        $sourceCatalog = Catalog::create([
+            'workspace_id' => $workspace->id,
+            'provider_connection_id' => $connection->id,
+            'source' => 'leadochat',
+            'name' => 'Packet Source Catalog',
+            'status' => 'active',
+        ]);
+
+        $product = $sourceCatalog->products()->create([
+            'sku' => 'PACKET-001',
+            'title' => 'Packet Product',
+            'price' => 45,
+            'currency' => 'USD',
+            'product_url' => 'https://example.com/products/packet',
+            'availability' => 'in_stock',
+            'is_active' => true,
+        ]);
+
+        $product->marketOverrides()->create([
+            'target_country' => 'US',
+            'content_language' => 'en_US',
+            'price' => 45,
+            'currency' => 'USD',
+            'checkout_url' => 'https://checkout.example.com/us/packet',
+            'is_active' => true,
+        ]);
+
+        $product->offers()->create([
+            'name' => 'Packet Offer',
+            'status' => 'active',
+            'discount_type' => 'fixed_amount',
+            'discount_value' => 5,
+            'currency' => 'USD',
+            'priority' => 1,
+            'checkout_url' => 'https://checkout.example.com/offer/packet',
+        ]);
+
+        $metaCatalog = Catalog::create([
+            'workspace_id' => $workspace->id,
+            'provider_connection_id' => $connection->id,
+            'source' => 'meta',
+            'external_catalog_id' => 'meta-catalog-777',
+            'name' => 'Packet Catalog',
+            'status' => 'active',
+        ]);
+
+        $connection->catalogProductSets()->create([
+            'workspace_id' => $workspace->id,
+            'catalog_id' => $metaCatalog->id,
+            'name' => 'Packet Set',
+            'provider_connection_id' => $connection->id,
+        ]);
+
+        $connection->catalogCollections()->create([
+            'workspace_id' => $workspace->id,
+            'catalog_id' => $metaCatalog->id,
+            'name' => 'Packet Collection',
+            'provider_connection_id' => $connection->id,
+        ]);
+
+        $response = $this
+            ->actingAs($user)
+            ->withSession(['_token' => 'test-csrf-token'])
+            ->withHeader('X-CSRF-TOKEN', 'test-csrf-token')
+            ->post(route('settings.commerce.review-packet.generate', $connection));
+
+        $response->assertRedirect(route('settings.index', ['section' => 'commerce']));
+
+        $connection->refresh();
+
+        $packet = $connection->meta['meta_commerce_review_packet'];
+
+        $this->assertSame('ready', $packet['summary']['status']);
+        $this->assertSame('packet_shop', $packet['account']['username']);
+        $this->assertSame(1, $packet['catalogs']['discovered_count']);
+        $this->assertCount(7, $packet['demo_script']);
+        $this->assertSame(1, count($connection->meta['meta_commerce_review_packet_history']));
+
+        $download = $this
+            ->actingAs($user)
+            ->get(route('settings.commerce.review-packet.download', $connection));
+
+        $download->assertOk();
+        $download->assertHeader('content-type', 'application/json; charset=UTF-8');
+        $this->assertStringContainsString('attachment;', (string) $download->headers->get('content-disposition'));
+
+        $downloadedPacket = json_decode($download->streamedContent(), true);
+
+        $this->assertSame('ready', data_get($downloadedPacket, 'summary.status'));
+        $this->assertSame('Packet Catalog', data_get($downloadedPacket, 'catalogs.live_catalogs.0.name'));
+    }
 }
