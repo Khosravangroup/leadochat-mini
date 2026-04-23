@@ -120,6 +120,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::patch('/settings/catalog-product-offers/{offer}', [WorkspaceCatalogController::class, 'updateOffer'])->name('settings.catalogs.products.offers.update');
     Route::delete('/settings/catalog-product-offers/{offer}', [WorkspaceCatalogController::class, 'deleteOffer'])->name('settings.catalogs.products.offers.delete');
     Route::post('/settings/commerce/connections/{connection}/sync', [WorkspaceMetaCommerceController::class, 'sync'])->name('settings.commerce.sync');
+    Route::post('/settings/commerce/connections/{connection}/diagnostics', [WorkspaceMetaCommerceController::class, 'diagnostics'])->name('settings.commerce.diagnostics');
     Route::post('/settings/commerce/catalogs/{catalog}/products/sync', [WorkspaceMetaCommerceController::class, 'syncProducts'])->name('settings.commerce.catalogs.products.sync');
     Route::post('/settings/commerce/product-sets', [WorkspaceMetaProductSetController::class, 'store'])->name('settings.commerce.product-sets.store');
     Route::patch('/settings/commerce/product-sets/{productSet}/products', [WorkspaceMetaProductSetController::class, 'syncProducts'])->name('settings.commerce.product-sets.products.sync');

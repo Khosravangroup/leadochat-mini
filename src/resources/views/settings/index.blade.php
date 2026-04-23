@@ -3078,7 +3078,14 @@
                                     @php
                                         $commerceMeta = is_array($connection->meta ?? null) ? ($connection->meta['meta_commerce'] ?? []) : [];
                                         $discovery = is_array($connection->meta ?? null) ? ($connection->meta['meta_commerce_discovery'] ?? []) : [];
+                                        $diagnostics = is_array($connection->meta ?? null) ? ($connection->meta['meta_commerce_diagnostics'] ?? []) : [];
                                         $checks = is_array($discovery['checks'] ?? null) ? $discovery['checks'] : [];
+                                        $readinessChecks = is_array($diagnostics['readiness'] ?? null) ? $diagnostics['readiness'] : [];
+                                        $diagnosticAccount = is_array($diagnostics['account'] ?? null) ? $diagnostics['account'] : [];
+                                        $diagnosticPermissions = is_array($diagnostics['permissions'] ?? null) ? $diagnostics['permissions'] : [];
+                                        $diagnosticWebhook = is_array($diagnostics['webhook'] ?? null) ? $diagnostics['webhook'] : [];
+                                        $diagnosticShop = is_array($diagnostics['shop'] ?? null) ? $diagnostics['shop'] : [];
+                                        $diagnosticCheckout = is_array($diagnostics['checkout_urls'] ?? null) ? $diagnostics['checkout_urls'] : [];
                                     @endphp
 
                                     <div class="ws-commerce-account">
@@ -3095,10 +3102,17 @@
                                                 </div>
                                             </div>
 
-                                            <form method="POST" action="{{ route('settings.commerce.sync', $connection) }}">
-                                                @csrf
-                                                <button type="submit" class="ws-commerce-button">Run discovery</button>
-                                            </form>
+                                            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                                                <form method="POST" action="{{ route('settings.commerce.sync', $connection) }}">
+                                                    @csrf
+                                                    <button type="submit" class="ws-commerce-button">Run discovery</button>
+                                                </form>
+
+                                                <form method="POST" action="{{ route('settings.commerce.diagnostics', $connection) }}">
+                                                    @csrf
+                                                    <button type="submit" class="ws-commerce-button" style="background:#1d4ed8;">Run diagnostics</button>
+                                                </form>
+                                            </div>
                                         </div>
 
                                         <div class="ws-commerce-list">
@@ -3106,12 +3120,116 @@
                                                 <span class="ws-commerce-pill {{ (int) ($commerceMeta['catalog_count'] ?? 0) > 0 ? 'ok' : '' }}">
                                                     {{ (int) ($commerceMeta['catalog_count'] ?? 0) }} Meta catalogs
                                                 </span>
+                                                @if (!empty($commerceMeta['last_diagnostics_at']))
+                                                    <span class="ws-commerce-pill {{ !empty($diagnostics['ok']) ? 'ok' : 'fail' }}">
+                                                        Diagnostics {{ !empty($diagnostics['ok']) ? 'ready' : 'needs work' }}
+                                                    </span>
+                                                @endif
                                             </div>
 
                                             @if (!empty($commerceMeta['business_ids']))
                                                 <div class="ws-commerce-meta">
                                                     Business IDs:
                                                     <span class="ws-commerce-code">{{ implode(', ', (array) $commerceMeta['business_ids']) }}</span>
+                                                </div>
+                                            @endif
+
+                                            @if (!empty($commerceMeta['last_diagnostics_at']))
+                                                <div class="ws-commerce-meta">
+                                                    Last diagnostics: {{ $commerceMeta['last_diagnostics_at'] }}
+                                                </div>
+                                            @endif
+
+                                            @if ($diagnosticAccount !== [])
+                                                <div class="ws-commerce-meta">
+                                                    Account:
+                                                    {{ $diagnosticAccount['username'] ?? ($connection->provider_account_name ?: $connection->provider_account_id) }}
+                                                    @if (!empty($diagnosticAccount['shopping_review_status']))
+                                                        · Review: {{ $diagnosticAccount['shopping_review_status'] }}
+                                                    @endif
+                                                    @if (array_key_exists('shopping_product_tag_eligibility', $diagnosticAccount))
+                                                        · Product tags: {{ !empty($diagnosticAccount['shopping_product_tag_eligibility']) ? 'eligible' : 'not eligible yet' }}
+                                                    @endif
+                                                </div>
+                                            @endif
+
+                                            @if ($readinessChecks !== [])
+                                                <div class="ws-commerce-list">
+                                                    @foreach ($readinessChecks as $item)
+                                                        @php
+                                                            $pillClass = match ($item['status'] ?? 'warn') {
+                                                                'ok' => 'ok',
+                                                                'fail' => 'fail',
+                                                                default => '',
+                                                            };
+                                                        @endphp
+                                                        <div class="ws-commerce-check">
+                                                            <span class="ws-commerce-pill {{ $pillClass }}">
+                                                                {{ strtoupper($item['status'] ?? 'warn') }}
+                                                            </span>
+                                                            {{ str_replace('_', ' ', $item['key'] ?? 'check') }}
+                                                            @if (!empty($item['summary']))
+                                                                <span class="ws-commerce-code">{{ $item['summary'] }}</span>
+                                                            @endif
+                                                        </div>
+                                                    @endforeach
+                                                </div>
+                                            @endif
+
+                                            @if ($diagnosticPermissions !== [])
+                                                <div class="ws-commerce-meta">
+                                                    Permission readiness:
+                                                    <span class="ws-commerce-code">
+                                                        Required {{ count((array) ($diagnosticPermissions['required'] ?? [])) }},
+                                                        granted {{ count((array) ($diagnosticPermissions['granted'] ?? [])) }},
+                                                        missing {{ count((array) ($diagnosticPermissions['missing'] ?? [])) }}
+                                                    </span>
+                                                    @if (!empty($diagnosticPermissions['missing']))
+                                                        <span class="ws-commerce-code">Missing: {{ implode(', ', (array) $diagnosticPermissions['missing']) }}</span>
+                                                    @endif
+                                                </div>
+                                            @endif
+
+                                            @if ($diagnosticWebhook !== [])
+                                                <div class="ws-commerce-meta">
+                                                    Webhook fields:
+                                                    <span class="ws-commerce-code">
+                                                        {{ !empty($diagnosticWebhook['verified_fields']) ? implode(', ', (array) $diagnosticWebhook['verified_fields']) : 'No verified fields stored' }}
+                                                    </span>
+                                                    @if (!empty($diagnosticWebhook['missing_fields']))
+                                                        <span class="ws-commerce-code">Missing fields: {{ implode(', ', (array) $diagnosticWebhook['missing_fields']) }}</span>
+                                                    @endif
+                                                </div>
+                                            @endif
+
+                                            @if (!empty($diagnosticShop['local_stats']))
+                                                <div class="ws-commerce-meta">
+                                                    Shop structure:
+                                                    <span class="ws-commerce-code">
+                                                        Source catalogs {{ $diagnosticShop['local_stats']['source_catalog_count'] ?? 0 }},
+                                                        active products {{ $diagnosticShop['local_stats']['active_product_count'] ?? 0 }},
+                                                        offers {{ $diagnosticShop['local_stats']['offer_count'] ?? 0 }},
+                                                        product sets {{ $diagnosticShop['local_stats']['product_set_count'] ?? 0 }},
+                                                        collections {{ $diagnosticShop['local_stats']['collection_count'] ?? 0 }}
+                                                    </span>
+                                                </div>
+                                            @endif
+
+                                            @if ($diagnosticCheckout !== [])
+                                                <div class="ws-commerce-meta">
+                                                    Checkout URL audit:
+                                                    <span class="ws-commerce-code">
+                                                        Checked {{ $diagnosticCheckout['checked_count'] ?? 0 }},
+                                                        valid HTTPS {{ $diagnosticCheckout['valid_count'] ?? 0 }},
+                                                        invalid {{ $diagnosticCheckout['invalid_count'] ?? 0 }}
+                                                    </span>
+                                                    @if (!empty($diagnosticCheckout['invalid_examples']))
+                                                        @foreach ((array) $diagnosticCheckout['invalid_examples'] as $invalidUrl)
+                                                            <span class="ws-commerce-code">
+                                                                {{ $invalidUrl['type'] ?? 'url' }} · {{ $invalidUrl['label'] ?? '-' }} · {{ $invalidUrl['url'] ?? '-' }}
+                                                            </span>
+                                                        @endforeach
+                                                    @endif
                                                 </div>
                                             @endif
 

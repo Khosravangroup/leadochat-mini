@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Catalog;
 use App\Models\ProviderConnection;
 use App\Services\Meta\Commerce\MetaCatalogProductSyncService;
+use App\Services\Meta\Commerce\MetaCommerceDiagnosticsService;
 use App\Services\Meta\Commerce\MetaCommerceDiscoveryService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -107,5 +108,37 @@ class WorkspaceMetaCommerceController extends Controller
                     ? "Meta product sync queued for {$result['product_count']} product(s)."
                     : "Meta product sync failed for {$result['product_count']} product(s)."
             );
+    }
+
+    public function diagnostics(
+        Request $request,
+        ProviderConnection $connection,
+        MetaCommerceDiagnosticsService $diagnosticsService
+    ): RedirectResponse {
+        $workspace = $request->user()?->currentWorkspace();
+
+        abort_unless(
+            $workspace
+            && $connection->workspace_id === $workspace->id
+            && $connection->provider === 'instagram',
+            404
+        );
+
+        $diagnostics = $diagnosticsService->diagnoseForConnection($connection);
+
+        $meta = is_array($connection->meta) ? $connection->meta : [];
+        $meta['meta_commerce_diagnostics'] = $diagnostics;
+        $meta['meta_commerce'] = array_merge($meta['meta_commerce'] ?? [], [
+            'last_diagnostics_at' => now()->toIso8601String(),
+        ]);
+
+        $connection->update([
+            'last_synced_at' => now(),
+            'meta' => $meta,
+        ]);
+
+        return redirect()
+            ->route('settings.index', ['section' => 'commerce'])
+            ->with('status', 'Meta Commerce diagnostics finished.');
     }
 }
