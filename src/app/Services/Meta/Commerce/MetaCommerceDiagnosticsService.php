@@ -207,10 +207,14 @@ class MetaCommerceDiagnosticsService
             ),
             $this->makeReadinessCheck(
                 'checkout_urls',
-                ($checkoutSummary['invalid_count'] ?? 0) === 0 ? 'ok' : 'warn',
-                ($checkoutSummary['invalid_count'] ?? 0) === 0
+                ($checkoutSummary['checked_count'] ?? 0) === 0
+                    ? 'warn'
+                    : ((($checkoutSummary['invalid_count'] ?? 0) === 0) ? 'ok' : 'warn'),
+                ($checkoutSummary['checked_count'] ?? 0) === 0
+                    ? 'Add checkout URLs to products, localized profiles, or offers so review flows can be demonstrated end to end.'
+                    : ((($checkoutSummary['invalid_count'] ?? 0) === 0)
                     ? 'Checkout URLs are valid HTTPS links across products, localized profiles, and offers.'
-                    : 'Some checkout URLs are missing HTTPS or are not valid absolute URLs.',
+                    : 'Some checkout URLs are missing HTTPS or are not valid absolute URLs.'),
                 $checkoutSummary
             ),
             $this->makeReadinessCheck(
@@ -225,6 +229,18 @@ class MetaCommerceDiagnosticsService
                 ]
             ),
         ];
+
+        $review = $this->buildReviewSummary(
+            $connection,
+            $accountBody,
+            $requiredPermissions,
+            $missingPermissions,
+            $verifiedWebhookFields,
+            $liveCatalogs,
+            $localStats,
+            $checkoutSummary,
+            $readiness
+        );
 
         return [
             'ok' => collect($readiness)->every(fn (array $item) => ($item['status'] ?? null) !== 'fail'),
@@ -284,8 +300,150 @@ class MetaCommerceDiagnosticsService
                 'local_stats' => $localStats,
             ],
             'checkout_urls' => $checkoutSummary,
+            'review' => $review,
             'readiness' => $readiness,
             'checks' => $checks,
+        ];
+    }
+
+    protected function buildReviewSummary(
+        ProviderConnection $connection,
+        array $accountBody,
+        array $requiredPermissions,
+        array $missingPermissions,
+        array $verifiedWebhookFields,
+        array $liveCatalogs,
+        array $localStats,
+        array $checkoutSummary,
+        array $readiness
+    ): array {
+        $counts = [
+            'ok' => collect($readiness)->where('status', 'ok')->count(),
+            'warn' => collect($readiness)->where('status', 'warn')->count(),
+            'fail' => collect($readiness)->where('status', 'fail')->count(),
+            'total' => count($readiness),
+        ];
+
+        $status = match (true) {
+            $counts['fail'] > 0 => 'blocked',
+            $counts['warn'] > 0 => 'needs_attention',
+            default => 'ready',
+        };
+
+        $headline = match ($status) {
+            'blocked' => 'App Review proof is blocked until the failing readiness checks are fixed.',
+            'needs_attention' => 'Core commerce connectivity works, but a few proof items still need attention before review.',
+            default => 'This Instagram commerce connection is ready to demonstrate for App Review.',
+        };
+
+        $evidence = [
+            $this->makeEvidenceItem(
+                'instagram_account',
+                'Instagram business account',
+                filled($connection->provider_account_id) ? 'ok' : 'fail',
+                filled($accountBody['username'] ?? null)
+                    ? 'Connected as @' . $accountBody['username'] . '.'
+                    : 'Connection exists but the account identity could not be read live.'
+            ),
+            $this->makeEvidenceItem(
+                'review_permissions',
+                'Review permissions',
+                count($missingPermissions) === 0 ? 'ok' : 'fail',
+                count($missingPermissions) === 0
+                    ? 'All configured review permissions are granted.'
+                    : 'Missing permissions: ' . implode(', ', $missingPermissions),
+                [
+                    'required' => $requiredPermissions,
+                    'missing' => $missingPermissions,
+                ]
+            ),
+            $this->makeEvidenceItem(
+                'product_tag_eligibility',
+                'Product tag eligibility',
+                !empty($accountBody['shopping_product_tag_eligibility']) ? 'ok' : 'warn',
+                !empty($accountBody['shopping_product_tag_eligibility'])
+                    ? 'Instagram reports that product tagging is eligible.'
+                    : 'Instagram has not confirmed product-tag eligibility yet.'
+            ),
+            $this->makeEvidenceItem(
+                'webhook_fields',
+                'Webhook coverage',
+                in_array('messages', $verifiedWebhookFields, true) && in_array('comments', $verifiedWebhookFields, true) ? 'ok' : 'warn',
+                $verifiedWebhookFields !== []
+                    ? 'Live webhook fields: ' . implode(', ', $verifiedWebhookFields)
+                    : 'No live webhook fields were returned yet.'
+            ),
+            $this->makeEvidenceItem(
+                'meta_catalogs',
+                'Discovered Meta catalogs',
+                count($liveCatalogs) > 0 ? 'ok' : 'fail',
+                count($liveCatalogs) > 0
+                    ? 'Found ' . count($liveCatalogs) . ' Meta catalog(s) for this account.'
+                    : 'No Meta catalogs are discovered for this account yet.'
+            ),
+            $this->makeEvidenceItem(
+                'live_catalog_access',
+                'Live catalog access',
+                count($liveCatalogs) === 0
+                    ? 'warn'
+                    : (collect($liveCatalogs)->every(fn (array $catalog) => !empty($catalog['live_ok'])) ? 'ok' : 'warn'),
+                count($liveCatalogs) === 0
+                    ? 'Run discovery and sync to pull in live catalog assets.'
+                    : (collect($liveCatalogs)->every(fn (array $catalog) => !empty($catalog['live_ok']))
+                        ? 'Live reads succeeded for all discovered Meta catalogs.'
+                        : 'Some discovered Meta catalogs could not be queried live.')
+            ),
+            $this->makeEvidenceItem(
+                'merchandising_layers',
+                'Merchandising layers',
+                ($localStats['product_set_count'] ?? 0) > 0 && ($localStats['collection_count'] ?? 0) > 0 ? 'ok' : 'warn',
+                'Product sets: ' . ($localStats['product_set_count'] ?? 0) . ', collections: ' . ($localStats['collection_count'] ?? 0) . '.'
+            ),
+            $this->makeEvidenceItem(
+                'localized_merchandising',
+                'Localized pricing and offers',
+                ($localStats['market_override_count'] ?? 0) > 0 || ($localStats['offer_count'] ?? 0) > 0 ? 'ok' : 'warn',
+                'Localized profiles: ' . ($localStats['market_override_count'] ?? 0) . ', offers: ' . ($localStats['offer_count'] ?? 0) . '.'
+            ),
+            $this->makeEvidenceItem(
+                'checkout_flows',
+                'Checkout flow links',
+                ($checkoutSummary['checked_count'] ?? 0) === 0
+                    ? 'warn'
+                    : ((($checkoutSummary['invalid_count'] ?? 0) === 0) ? 'ok' : 'warn'),
+                ($checkoutSummary['checked_count'] ?? 0) === 0
+                    ? 'No checkout URLs are configured yet.'
+                    : ('Checked ' . ($checkoutSummary['checked_count'] ?? 0) . ' URL(s), invalid ' . ($checkoutSummary['invalid_count'] ?? 0) . '.')
+            ),
+        ];
+
+        return [
+            'status' => $status,
+            'headline' => $headline,
+            'counts' => $counts,
+            'blockers' => collect($readiness)
+                ->where('status', 'fail')
+                ->map(fn (array $item) => [
+                    'key' => $item['key'] ?? null,
+                    'summary' => $item['summary'] ?? null,
+                ])
+                ->values()
+                ->all(),
+            'warnings' => collect($readiness)
+                ->where('status', 'warn')
+                ->map(fn (array $item) => [
+                    'key' => $item['key'] ?? null,
+                    'summary' => $item['summary'] ?? null,
+                ])
+                ->values()
+                ->all(),
+            'next_actions' => collect($readiness)
+                ->filter(fn (array $item) => in_array($item['status'] ?? 'warn', ['fail', 'warn'], true))
+                ->map(fn (array $item) => $this->nextActionForReadiness($item))
+                ->filter()
+                ->values()
+                ->all(),
+            'evidence' => $evidence,
         ];
     }
 
@@ -375,6 +533,64 @@ class MetaCommerceDiagnosticsService
             'summary' => $summary,
             'details' => $details,
         ];
+    }
+
+    protected function makeEvidenceItem(string $key, string $label, string $status, string $summary, array $details = []): array
+    {
+        return [
+            'key' => $key,
+            'label' => $label,
+            'status' => $status,
+            'summary' => $summary,
+            'details' => $details,
+        ];
+    }
+
+    protected function nextActionForReadiness(array $item): ?array
+    {
+        return match ($item['key'] ?? null) {
+            'channel_health' => [
+                'key' => 'channel_health',
+                'title' => 'Reconnect the Instagram channel',
+                'summary' => 'Refresh the primary access token so live commerce and review checks can run without expiry issues.',
+            ],
+            'permissions' => [
+                'key' => 'permissions',
+                'title' => 'Complete the review permission set',
+                'summary' => 'Grant every configured commerce review permission on the Meta app and reconnect the account.',
+            ],
+            'product_tag_eligibility' => [
+                'key' => 'product_tag_eligibility',
+                'title' => 'Confirm shop eligibility for product tagging',
+                'summary' => 'Finish the account-side shop setup in Meta so Instagram reports product-tag eligibility.',
+            ],
+            'webhook_subscription' => [
+                'key' => 'webhook_subscription',
+                'title' => 'Verify required webhook fields',
+                'summary' => 'Keep messages and comments subscribed so review demos can show live messaging and comment activity.',
+            ],
+            'catalog_discovery' => [
+                'key' => 'catalog_discovery',
+                'title' => 'Run catalog discovery for this account',
+                'summary' => 'Pull the real Meta catalogs into Leadochat so the shop structure can be demonstrated.',
+            ],
+            'catalog_access' => [
+                'key' => 'catalog_access',
+                'title' => 'Fix live catalog access',
+                'summary' => 'Check token scope and catalog ownership until every discovered catalog responds successfully.',
+            ],
+            'checkout_urls' => [
+                'key' => 'checkout_urls',
+                'title' => 'Add clean HTTPS checkout URLs',
+                'summary' => 'Use absolute HTTPS links on products, localized profiles, or offers to prove the purchase handoff.',
+            ],
+            'shop_structure' => [
+                'key' => 'shop_structure',
+                'title' => 'Build the final shop structure',
+                'summary' => 'Create product sets and collections so the catalog can be reviewed as a real storefront hierarchy.',
+            ],
+            default => null,
+        };
     }
 
     protected function requestJson(string $accessToken, string $url, array $query = []): array

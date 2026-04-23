@@ -3009,6 +3009,123 @@
                             background: #f8fafc;
                         }
 
+                        .ws-commerce-summary {
+                            display: grid;
+                            gap: 10px;
+                            border: 1px solid #dbeafe;
+                            border-radius: 8px;
+                            background: #f8fbff;
+                            padding: 12px;
+                        }
+
+                        .ws-commerce-summary-head {
+                            display: flex;
+                            justify-content: space-between;
+                            gap: 12px;
+                            align-items: flex-start;
+                            flex-wrap: wrap;
+                        }
+
+                        .ws-commerce-summary-copy {
+                            display: grid;
+                            gap: 6px;
+                        }
+
+                        .ws-commerce-summary-title {
+                            font-size: 14px;
+                            font-weight: 900;
+                            color: #0f172a;
+                        }
+
+                        .ws-commerce-summary-text {
+                            color: #475569;
+                            font-size: 12px;
+                            line-height: 1.6;
+                        }
+
+                        .ws-commerce-metric-row,
+                        .ws-commerce-evidence-grid,
+                        .ws-commerce-action-list {
+                            display: grid;
+                            gap: 8px;
+                        }
+
+                        .ws-commerce-metric-row {
+                            grid-template-columns: repeat(4, minmax(0, 1fr));
+                        }
+
+                        .ws-commerce-metric {
+                            border: 1px solid #e2e8f0;
+                            border-radius: 8px;
+                            background: #fff;
+                            padding: 10px;
+                        }
+
+                        .ws-commerce-metric-label {
+                            font-size: 11px;
+                            font-weight: 800;
+                            color: #64748b;
+                            text-transform: uppercase;
+                        }
+
+                        .ws-commerce-metric-value {
+                            margin-top: 6px;
+                            font-size: 18px;
+                            font-weight: 900;
+                            color: #0f172a;
+                        }
+
+                        .ws-commerce-evidence-grid {
+                            grid-template-columns: repeat(2, minmax(0, 1fr));
+                        }
+
+                        .ws-commerce-evidence-item {
+                            border: 1px solid #e2e8f0;
+                            border-radius: 8px;
+                            background: #fff;
+                            padding: 10px;
+                            display: grid;
+                            gap: 8px;
+                        }
+
+                        .ws-commerce-evidence-label {
+                            font-size: 13px;
+                            font-weight: 800;
+                            color: #0f172a;
+                        }
+
+                        .ws-commerce-action-item {
+                            border: 1px solid #e2e8f0;
+                            border-radius: 8px;
+                            background: #fff;
+                            padding: 10px;
+                        }
+
+                        .ws-commerce-action-title {
+                            font-size: 13px;
+                            font-weight: 800;
+                            color: #0f172a;
+                        }
+
+                        .ws-commerce-details {
+                            border: 1px solid #e2e8f0;
+                            border-radius: 8px;
+                            background: #fff;
+                            padding: 10px;
+                        }
+
+                        .ws-commerce-details summary {
+                            cursor: pointer;
+                            font-size: 13px;
+                            font-weight: 800;
+                            color: #0f172a;
+                            list-style: none;
+                        }
+
+                        .ws-commerce-details summary::-webkit-details-marker {
+                            display: none;
+                        }
+
                         .ws-commerce-code {
                             display: block;
                             margin-top: 6px;
@@ -3027,6 +3144,11 @@
 
                         @media (max-width: 1080px) {
                             .ws-commerce-grid {
+                                grid-template-columns: 1fr;
+                            }
+
+                            .ws-commerce-evidence-grid,
+                            .ws-commerce-metric-row {
                                 grid-template-columns: 1fr;
                             }
                         }
@@ -3056,16 +3178,16 @@
                             </div>
 
                             <div class="ws-commerce-card">
-                                <h3 class="ws-section-title">Phase 3 scope</h3>
+                                <h3 class="ws-section-title">Phase 6 scope</h3>
                                 <div class="ws-section-subtitle">
-                                    Build shop-ready merchandising layers so synced products can move from raw inventory into reusable sets and then into storefront collections.
+                                    Turn raw Meta commerce checks into a clear App Review readiness view with live channel, catalog, permission, and storefront diagnostics.
                                 </div>
                                 <div class="ws-commerce-list">
-                                    <span class="ws-commerce-pill ok">Business discovery</span>
-                                    <span class="ws-commerce-pill ok">Catalog discovery</span>
-                                    <span class="ws-commerce-pill ok">Product sync foundation</span>
-                                    <span class="ws-commerce-pill ok">Product sets</span>
-                                    <span class="ws-commerce-pill ok">Collections</span>
+                                    <span class="ws-commerce-pill ok">Live channel health</span>
+                                    <span class="ws-commerce-pill ok">Permission audit</span>
+                                    <span class="ws-commerce-pill ok">Webhook coverage</span>
+                                    <span class="ws-commerce-pill ok">Live catalog reads</span>
+                                    <span class="ws-commerce-pill ok">Review evidence</span>
                                 </div>
                             </div>
                         </div>
@@ -3087,6 +3209,7 @@
                                         $diagnosticWebhook = is_array($diagnostics['webhook'] ?? null) ? $diagnostics['webhook'] : [];
                                         $diagnosticShop = is_array($diagnostics['shop'] ?? null) ? $diagnostics['shop'] : [];
                                         $diagnosticCheckout = is_array($diagnostics['checkout_urls'] ?? null) ? $diagnostics['checkout_urls'] : [];
+                                        $diagnosticReview = is_array($diagnostics['review'] ?? null) ? $diagnostics['review'] : [];
                                     @endphp
 
                                     <div class="ws-commerce-account">
@@ -3154,139 +3277,229 @@
                                                 </div>
                                             @endif
 
+                                            @if ($diagnosticReview !== [])
+                                                @php
+                                                    $reviewStatusClass = match ($diagnosticReview['status'] ?? 'needs_attention') {
+                                                        'ready' => 'ok',
+                                                        'blocked' => 'fail',
+                                                        default => '',
+                                                    };
+                                                    $reviewCounts = is_array($diagnosticReview['counts'] ?? null) ? $diagnosticReview['counts'] : [];
+                                                    $reviewEvidence = is_array($diagnosticReview['evidence'] ?? null) ? $diagnosticReview['evidence'] : [];
+                                                    $reviewActions = is_array($diagnosticReview['next_actions'] ?? null) ? $diagnosticReview['next_actions'] : [];
+                                                @endphp
+
+                                                <div class="ws-commerce-summary">
+                                                    <div class="ws-commerce-summary-head">
+                                                        <div class="ws-commerce-summary-copy">
+                                                            <div class="ws-commerce-summary-title">App Review summary</div>
+                                                            <div class="ws-commerce-summary-text">
+                                                                {{ $diagnosticReview['headline'] ?? 'Run diagnostics to build the latest review summary.' }}
+                                                            </div>
+                                                        </div>
+
+                                                        <span class="ws-commerce-pill {{ $reviewStatusClass }}">
+                                                            {{ strtoupper(str_replace('_', ' ', (string) ($diagnosticReview['status'] ?? 'needs_attention'))) }}
+                                                        </span>
+                                                    </div>
+
+                                                    <div class="ws-commerce-metric-row">
+                                                        <div class="ws-commerce-metric">
+                                                            <div class="ws-commerce-metric-label">Checks passed</div>
+                                                            <div class="ws-commerce-metric-value">{{ $reviewCounts['ok'] ?? 0 }}</div>
+                                                        </div>
+                                                        <div class="ws-commerce-metric">
+                                                            <div class="ws-commerce-metric-label">Warnings</div>
+                                                            <div class="ws-commerce-metric-value">{{ $reviewCounts['warn'] ?? 0 }}</div>
+                                                        </div>
+                                                        <div class="ws-commerce-metric">
+                                                            <div class="ws-commerce-metric-label">Blockers</div>
+                                                            <div class="ws-commerce-metric-value">{{ $reviewCounts['fail'] ?? 0 }}</div>
+                                                        </div>
+                                                        <div class="ws-commerce-metric">
+                                                            <div class="ws-commerce-metric-label">Total checks</div>
+                                                            <div class="ws-commerce-metric-value">{{ $reviewCounts['total'] ?? 0 }}</div>
+                                                        </div>
+                                                    </div>
+
+                                                    @if ($reviewActions !== [])
+                                                        <div class="ws-commerce-action-list">
+                                                            @foreach ($reviewActions as $action)
+                                                                <div class="ws-commerce-action-item">
+                                                                    <div class="ws-commerce-action-title">{{ $action['title'] ?? 'Next action' }}</div>
+                                                                    <div class="ws-commerce-summary-text">{{ $action['summary'] ?? '' }}</div>
+                                                                </div>
+                                                            @endforeach
+                                                        </div>
+                                                    @endif
+
+                                                    @if ($reviewEvidence !== [])
+                                                        <div class="ws-commerce-evidence-grid">
+                                                            @foreach ($reviewEvidence as $evidenceItem)
+                                                                @php
+                                                                    $evidenceClass = match ($evidenceItem['status'] ?? 'warn') {
+                                                                        'ok' => 'ok',
+                                                                        'fail' => 'fail',
+                                                                        default => '',
+                                                                    };
+                                                                @endphp
+                                                                <div class="ws-commerce-evidence-item">
+                                                                    <div style="display:flex; justify-content:space-between; gap:10px; align-items:flex-start;">
+                                                                        <div class="ws-commerce-evidence-label">{{ $evidenceItem['label'] ?? 'Evidence' }}</div>
+                                                                        <span class="ws-commerce-pill {{ $evidenceClass }}">
+                                                                            {{ strtoupper($evidenceItem['status'] ?? 'warn') }}
+                                                                        </span>
+                                                                    </div>
+                                                                    <div class="ws-commerce-summary-text">{{ $evidenceItem['summary'] ?? '' }}</div>
+                                                                </div>
+                                                            @endforeach
+                                                        </div>
+                                                    @endif
+                                                </div>
+                                            @endif
+
                                             @if ($readinessChecks !== [])
+                                                <details class="ws-commerce-details">
+                                                    <summary>Live readiness checks</summary>
+                                                    <div class="ws-commerce-list">
+                                                        @foreach ($readinessChecks as $item)
+                                                            @php
+                                                                $pillClass = match ($item['status'] ?? 'warn') {
+                                                                    'ok' => 'ok',
+                                                                    'fail' => 'fail',
+                                                                    default => '',
+                                                                };
+                                                            @endphp
+                                                            <div class="ws-commerce-check">
+                                                                <span class="ws-commerce-pill {{ $pillClass }}">
+                                                                    {{ strtoupper($item['status'] ?? 'warn') }}
+                                                                </span>
+                                                                {{ str_replace('_', ' ', $item['key'] ?? 'check') }}
+                                                                @if (!empty($item['summary']))
+                                                                    <span class="ws-commerce-code">{{ $item['summary'] }}</span>
+                                                                @endif
+                                                            </div>
+                                                        @endforeach
+                                                    </div>
+                                                </details>
+                                            @endif
+
+                                            <details class="ws-commerce-details">
+                                                <summary>Live diagnostics detail</summary>
+
                                                 <div class="ws-commerce-list">
-                                                    @foreach ($readinessChecks as $item)
-                                                        @php
-                                                            $pillClass = match ($item['status'] ?? 'warn') {
-                                                                'ok' => 'ok',
-                                                                'fail' => 'fail',
-                                                                default => '',
-                                                            };
-                                                        @endphp
-                                                        <div class="ws-commerce-check">
-                                                            <span class="ws-commerce-pill {{ $pillClass }}">
-                                                                {{ strtoupper($item['status'] ?? 'warn') }}
+                                                    @if ($diagnosticPermissions !== [])
+                                                        <div class="ws-commerce-meta">
+                                                            Permission readiness:
+                                                            <span class="ws-commerce-code">
+                                                                Required {{ count((array) ($diagnosticPermissions['required'] ?? [])) }},
+                                                                granted {{ count((array) ($diagnosticPermissions['granted'] ?? [])) }},
+                                                                missing {{ count((array) ($diagnosticPermissions['missing'] ?? [])) }}
                                                             </span>
-                                                            {{ str_replace('_', ' ', $item['key'] ?? 'check') }}
-                                                            @if (!empty($item['summary']))
-                                                                <span class="ws-commerce-code">{{ $item['summary'] }}</span>
+                                                            @if (!empty($diagnosticPermissions['missing']))
+                                                                <span class="ws-commerce-code">Missing: {{ implode(', ', (array) $diagnosticPermissions['missing']) }}</span>
+                                                            @endif
+                                                        </div>
+                                                    @endif
+
+                                                    @if ($diagnosticChannel !== [])
+                                                        <div class="ws-commerce-meta">
+                                                            Channel health:
+                                                            <span class="ws-commerce-code">
+                                                                Status {{ $diagnosticChannel['status'] ?? '-' }},
+                                                                type {{ $diagnosticChannel['provider_account_type'] ?? '-' }},
+                                                                token {{ !empty($diagnosticChannel['token_expired']) ? 'expired' : 'healthy' }}
+                                                            </span>
+                                                            @if (!empty($diagnosticChannel['connected_at']))
+                                                                <span class="ws-commerce-code">Connected at: {{ $diagnosticChannel['connected_at'] }}</span>
+                                                            @endif
+                                                            @if (!empty($diagnosticChannel['token_expires_at']))
+                                                                <span class="ws-commerce-code">Token expires at: {{ $diagnosticChannel['token_expires_at'] }}</span>
+                                                            @endif
+                                                            @if (!empty($diagnosticChannel['live_subscribed_fields']))
+                                                                <span class="ws-commerce-code">Live subscribed fields: {{ implode(', ', (array) $diagnosticChannel['live_subscribed_fields']) }}</span>
+                                                            @endif
+                                                        </div>
+                                                    @endif
+
+                                                    @if ($diagnosticWebhook !== [])
+                                                        <div class="ws-commerce-meta">
+                                                            Webhook fields:
+                                                            <span class="ws-commerce-code">
+                                                                {{ !empty($diagnosticWebhook['verified_fields']) ? implode(', ', (array) $diagnosticWebhook['verified_fields']) : 'No verified fields stored' }}
+                                                            </span>
+                                                            @if (!empty($diagnosticWebhook['missing_fields']))
+                                                                <span class="ws-commerce-code">Missing fields: {{ implode(', ', (array) $diagnosticWebhook['missing_fields']) }}</span>
+                                                            @endif
+                                                        </div>
+                                                    @endif
+
+                                                    @if (!empty($diagnosticShop['local_stats']))
+                                                        <div class="ws-commerce-meta">
+                                                            Shop structure:
+                                                            <span class="ws-commerce-code">
+                                                                Source catalogs {{ $diagnosticShop['local_stats']['source_catalog_count'] ?? 0 }},
+                                                                active products {{ $diagnosticShop['local_stats']['active_product_count'] ?? 0 }},
+                                                                offers {{ $diagnosticShop['local_stats']['offer_count'] ?? 0 }},
+                                                                product sets {{ $diagnosticShop['local_stats']['product_set_count'] ?? 0 }},
+                                                                collections {{ $diagnosticShop['local_stats']['collection_count'] ?? 0 }}
+                                                            </span>
+                                                        </div>
+                                                    @endif
+
+                                                    @if (!empty($diagnosticShop['meta_catalogs']))
+                                                        <div class="ws-commerce-meta">
+                                                            Live shop assets:
+                                                            @foreach ((array) $diagnosticShop['meta_catalogs'] as $shopCatalog)
+                                                                <span class="ws-commerce-code">
+                                                                    {{ $shopCatalog['name'] ?? 'Meta catalog' }}
+                                                                    · ID {{ $shopCatalog['external_catalog_id'] ?? '-' }}
+                                                                    @if (!empty($shopCatalog['vertical']))
+                                                                        · {{ $shopCatalog['vertical'] }}
+                                                                    @endif
+                                                                    @if (isset($shopCatalog['product_count']))
+                                                                        · {{ $shopCatalog['product_count'] }} product(s)
+                                                                    @endif
+                                                                    · {{ !empty($shopCatalog['live_ok']) ? 'live ok' : 'live check failed' }}
+                                                                    @if (!empty($shopCatalog['live_error']))
+                                                                        · {{ $shopCatalog['live_error'] }}
+                                                                    @endif
+                                                                </span>
+                                                            @endforeach
+                                                        </div>
+                                                    @endif
+
+                                                    @if ($diagnosticCheckout !== [])
+                                                        <div class="ws-commerce-meta">
+                                                            Checkout URL audit:
+                                                            <span class="ws-commerce-code">
+                                                                Checked {{ $diagnosticCheckout['checked_count'] ?? 0 }},
+                                                                valid HTTPS {{ $diagnosticCheckout['valid_count'] ?? 0 }},
+                                                                invalid {{ $diagnosticCheckout['invalid_count'] ?? 0 }}
+                                                            </span>
+                                                            @if (!empty($diagnosticCheckout['invalid_examples']))
+                                                                @foreach ((array) $diagnosticCheckout['invalid_examples'] as $invalidUrl)
+                                                                    <span class="ws-commerce-code">
+                                                                        {{ $invalidUrl['type'] ?? 'url' }} · {{ $invalidUrl['label'] ?? '-' }} · {{ $invalidUrl['url'] ?? '-' }}
+                                                                    </span>
+                                                                @endforeach
+                                                            @endif
+                                                        </div>
+                                                    @endif
+
+                                                    @foreach ($checks as $key => $check)
+                                                        <div class="ws-commerce-check">
+                                                            <span class="ws-commerce-pill {{ !empty($check['ok']) ? 'ok' : 'fail' }}">
+                                                                {{ !empty($check['ok']) ? 'OK' : 'Needs access' }}
+                                                            </span>
+                                                            {{ $key }}
+                                                            @if (empty($check['ok']) && !empty($check['error']))
+                                                                <span class="ws-commerce-code">{{ $check['error'] }}</span>
                                                             @endif
                                                         </div>
                                                     @endforeach
                                                 </div>
-                                            @endif
-
-                                            @if ($diagnosticPermissions !== [])
-                                                <div class="ws-commerce-meta">
-                                                    Permission readiness:
-                                                    <span class="ws-commerce-code">
-                                                        Required {{ count((array) ($diagnosticPermissions['required'] ?? [])) }},
-                                                        granted {{ count((array) ($diagnosticPermissions['granted'] ?? [])) }},
-                                                        missing {{ count((array) ($diagnosticPermissions['missing'] ?? [])) }}
-                                                    </span>
-                                                    @if (!empty($diagnosticPermissions['missing']))
-                                                        <span class="ws-commerce-code">Missing: {{ implode(', ', (array) $diagnosticPermissions['missing']) }}</span>
-                                                    @endif
-                                                </div>
-                                            @endif
-
-                                            @if ($diagnosticChannel !== [])
-                                                <div class="ws-commerce-meta">
-                                                    Channel health:
-                                                    <span class="ws-commerce-code">
-                                                        Status {{ $diagnosticChannel['status'] ?? '-' }},
-                                                        type {{ $diagnosticChannel['provider_account_type'] ?? '-' }},
-                                                        token {{ !empty($diagnosticChannel['token_expired']) ? 'expired' : 'healthy' }}
-                                                    </span>
-                                                    @if (!empty($diagnosticChannel['connected_at']))
-                                                        <span class="ws-commerce-code">Connected at: {{ $diagnosticChannel['connected_at'] }}</span>
-                                                    @endif
-                                                    @if (!empty($diagnosticChannel['token_expires_at']))
-                                                        <span class="ws-commerce-code">Token expires at: {{ $diagnosticChannel['token_expires_at'] }}</span>
-                                                    @endif
-                                                    @if (!empty($diagnosticChannel['live_subscribed_fields']))
-                                                        <span class="ws-commerce-code">Live subscribed fields: {{ implode(', ', (array) $diagnosticChannel['live_subscribed_fields']) }}</span>
-                                                    @endif
-                                                </div>
-                                            @endif
-
-                                            @if ($diagnosticWebhook !== [])
-                                                <div class="ws-commerce-meta">
-                                                    Webhook fields:
-                                                    <span class="ws-commerce-code">
-                                                        {{ !empty($diagnosticWebhook['verified_fields']) ? implode(', ', (array) $diagnosticWebhook['verified_fields']) : 'No verified fields stored' }}
-                                                    </span>
-                                                    @if (!empty($diagnosticWebhook['missing_fields']))
-                                                        <span class="ws-commerce-code">Missing fields: {{ implode(', ', (array) $diagnosticWebhook['missing_fields']) }}</span>
-                                                    @endif
-                                                </div>
-                                            @endif
-
-                                            @if (!empty($diagnosticShop['local_stats']))
-                                                <div class="ws-commerce-meta">
-                                                    Shop structure:
-                                                    <span class="ws-commerce-code">
-                                                        Source catalogs {{ $diagnosticShop['local_stats']['source_catalog_count'] ?? 0 }},
-                                                        active products {{ $diagnosticShop['local_stats']['active_product_count'] ?? 0 }},
-                                                        offers {{ $diagnosticShop['local_stats']['offer_count'] ?? 0 }},
-                                                        product sets {{ $diagnosticShop['local_stats']['product_set_count'] ?? 0 }},
-                                                        collections {{ $diagnosticShop['local_stats']['collection_count'] ?? 0 }}
-                                                    </span>
-                                                </div>
-                                            @endif
-
-                                            @if (!empty($diagnosticShop['meta_catalogs']))
-                                                <div class="ws-commerce-meta">
-                                                    Live shop assets:
-                                                    @foreach ((array) $diagnosticShop['meta_catalogs'] as $shopCatalog)
-                                                        <span class="ws-commerce-code">
-                                                            {{ $shopCatalog['name'] ?? 'Meta catalog' }}
-                                                            · ID {{ $shopCatalog['external_catalog_id'] ?? '-' }}
-                                                            @if (!empty($shopCatalog['vertical']))
-                                                                · {{ $shopCatalog['vertical'] }}
-                                                            @endif
-                                                            @if (isset($shopCatalog['product_count']))
-                                                                · {{ $shopCatalog['product_count'] }} product(s)
-                                                            @endif
-                                                            · {{ !empty($shopCatalog['live_ok']) ? 'live ok' : 'live check failed' }}
-                                                            @if (!empty($shopCatalog['live_error']))
-                                                                · {{ $shopCatalog['live_error'] }}
-                                                            @endif
-                                                        </span>
-                                                    @endforeach
-                                                </div>
-                                            @endif
-
-                                            @if ($diagnosticCheckout !== [])
-                                                <div class="ws-commerce-meta">
-                                                    Checkout URL audit:
-                                                    <span class="ws-commerce-code">
-                                                        Checked {{ $diagnosticCheckout['checked_count'] ?? 0 }},
-                                                        valid HTTPS {{ $diagnosticCheckout['valid_count'] ?? 0 }},
-                                                        invalid {{ $diagnosticCheckout['invalid_count'] ?? 0 }}
-                                                    </span>
-                                                    @if (!empty($diagnosticCheckout['invalid_examples']))
-                                                        @foreach ((array) $diagnosticCheckout['invalid_examples'] as $invalidUrl)
-                                                            <span class="ws-commerce-code">
-                                                                {{ $invalidUrl['type'] ?? 'url' }} · {{ $invalidUrl['label'] ?? '-' }} · {{ $invalidUrl['url'] ?? '-' }}
-                                                            </span>
-                                                        @endforeach
-                                                    @endif
-                                                </div>
-                                            @endif
-
-                                            @foreach ($checks as $key => $check)
-                                                <div class="ws-commerce-check">
-                                                    <span class="ws-commerce-pill {{ !empty($check['ok']) ? 'ok' : 'fail' }}">
-                                                        {{ !empty($check['ok']) ? 'OK' : 'Needs access' }}
-                                                    </span>
-                                                    {{ $key }}
-                                                    @if (empty($check['ok']) && !empty($check['error']))
-                                                        <span class="ws-commerce-code">{{ $check['error'] }}</span>
-                                                    @endif
-                                                </div>
-                                            @endforeach
+                                            </details>
                                         </div>
                                     </div>
                                 @empty

@@ -198,7 +198,109 @@ class MetaCommerceDiagnosticsTest extends TestCase
         $this->assertSame(1, $diagnostics['shop']['local_stats']['offer_count']);
         $this->assertSame(3, $diagnostics['checkout_urls']['checked_count']);
         $this->assertSame(0, $diagnostics['checkout_urls']['invalid_count']);
+        $this->assertSame('ready', $diagnostics['review']['status']);
+        $this->assertSame(8, $diagnostics['review']['counts']['ok']);
+        $this->assertSame(0, $diagnostics['review']['counts']['warn']);
+        $this->assertSame(0, $diagnostics['review']['counts']['fail']);
+        $this->assertCount(9, $diagnostics['review']['evidence']);
+        $this->assertSame('Instagram business account', $diagnostics['review']['evidence'][0]['label']);
         $this->assertSame('channel_health', $diagnostics['readiness'][0]['key']);
         $this->assertSame('ok', $diagnostics['readiness'][0]['status']);
+    }
+
+    public function test_it_marks_review_summary_as_blocked_when_core_commerce_proof_is_missing(): void
+    {
+        config([
+            'services.meta.graph_version' => 'v25.0',
+            'services.meta.commerce_review_scopes' => 'business_management,catalog_management,instagram_business_basic',
+        ]);
+
+        Http::fake([
+            'https://graph.facebook.com/v25.0/instagram-account-999*' => Http::response([
+                'id' => 'instagram-account-999',
+                'username' => 'blocked_shop',
+                'name' => 'Blocked Shop',
+                'ig_id' => '17841439881430000',
+                'shopping_product_tag_eligibility' => false,
+                'shopping_review_status' => 'pending',
+            ], 200),
+            'https://graph.facebook.com/v25.0/me/permissions*' => Http::response([
+                'data' => [
+                    ['permission' => 'business_management', 'status' => 'granted'],
+                ],
+            ], 200),
+            'https://graph.facebook.com/v25.0/instagram-account-999/subscribed_apps*' => Http::response([
+                'data' => [
+                    [
+                        'id' => 'app-123',
+                        'name' => 'Leadochat Mini',
+                        'subscribed_fields' => ['comments'],
+                    ],
+                ],
+            ], 200),
+        ]);
+
+        $user = User::factory()->create();
+        $workspace = Workspace::create([
+            'owner_id' => $user->id,
+            'name' => 'Blocked Commerce Workspace',
+            'slug' => 'blocked-commerce-workspace',
+        ]);
+
+        $workspace->members()->attach($user->id, [
+            'role' => 'owner',
+        ]);
+
+        $connection = ProviderConnection::create([
+            'workspace_id' => $workspace->id,
+            'provider' => 'instagram',
+            'provider_account_type' => 'instagram_account',
+            'provider_account_id' => 'instagram-account-999',
+            'provider_account_name' => 'blocked_shop',
+            'status' => 'connected',
+            'meta' => [
+                'webhook_subscription' => [
+                    'success' => true,
+                    'verified_fields' => ['comments'],
+                    'verified_at' => now()->toIso8601String(),
+                ],
+            ],
+        ]);
+
+        OauthToken::create([
+            'provider_connection_id' => $connection->id,
+            'token_type' => 'access_token',
+            'access_token' => 'blocked-meta-access-token',
+            'expires_at' => now()->addDay(),
+            'is_primary' => true,
+        ]);
+
+        ProviderPermission::create([
+            'provider_connection_id' => $connection->id,
+            'permission' => 'business_management',
+            'status' => 'granted',
+        ]);
+
+        $response = $this
+            ->actingAs($user)
+            ->withSession(['_token' => 'test-csrf-token'])
+            ->withHeader('X-CSRF-TOKEN', 'test-csrf-token')
+            ->post(route('settings.commerce.diagnostics', $connection));
+
+        $response->assertRedirect(route('settings.index', ['section' => 'commerce']));
+
+        $connection->refresh();
+
+        $diagnostics = $connection->meta['meta_commerce_diagnostics'];
+
+        $this->assertFalse($diagnostics['ok']);
+        $this->assertSame('blocked', $diagnostics['review']['status']);
+        $this->assertSame(2, $diagnostics['review']['counts']['fail']);
+        $this->assertNotEmpty($diagnostics['review']['blockers']);
+        $this->assertContains('catalog_management', $diagnostics['permissions']['missing']);
+        $this->assertContains('instagram_business_basic', $diagnostics['permissions']['missing']);
+        $this->assertSame(['comments'], $diagnostics['webhook']['verified_fields']);
+        $this->assertContains('permissions', collect($diagnostics['review']['next_actions'])->pluck('key')->all());
+        $this->assertContains('catalog_discovery', collect($diagnostics['review']['next_actions'])->pluck('key')->all());
     }
 }
