@@ -1023,6 +1023,64 @@
                 display: none !important;
             }
 
+            .social-product-tag-layer {
+                position: absolute;
+                inset: 0;
+                z-index: 4;
+                pointer-events: none;
+            }
+
+            .social-product-tag-marker {
+                position: absolute;
+                transform: translate(-50%, -50%);
+                min-width: 26px;
+                height: 26px;
+                border: 2px solid #fff;
+                border-radius: 999px;
+                background: #111827;
+                color: #fff;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                padding: 0 7px;
+                font-size: 11px;
+                font-weight: 900;
+                box-shadow: 0 8px 20px rgba(15, 23, 42, 0.24);
+                pointer-events: auto;
+            }
+
+            .social-product-tag-picker-row {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) auto;
+                gap: 8px;
+                align-items: stretch;
+            }
+
+            .social-product-tag-list {
+                display: grid;
+                gap: 8px;
+            }
+
+            .social-product-tag-pill {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) auto;
+                gap: 8px;
+                align-items: center;
+                border: 1px solid #e2e8f0;
+                border-radius: 8px;
+                background: #f8fafc;
+                padding: 8px 10px;
+                font-size: 12px;
+                color: #334155;
+            }
+
+            .social-product-tag-pill strong {
+                display: block;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
             .social-story-limits {
                 display: grid;
                 gap: 6px;
@@ -1379,6 +1437,7 @@
                                         </div>
                                         <img id="post-preview-image" class="social-story-preview-image" alt="Post preview" hidden>
                                         <video id="post-preview-video" class="social-story-preview-video" controls playsinline hidden></video>
+                                        <div id="post-product-tag-layer" class="social-product-tag-layer" hidden></div>
                                     </div>
                                 </div>
 
@@ -1508,37 +1567,67 @@
 
                                     <div class="social-story-field">
                                         <label class="social-story-label">Product tags</label>
-                                        @php
-                                            $selectedPostProductTags = array_map('intval', old('post_product_tags', []));
-                                        @endphp
 
                                         @if (($postTagProducts ?? collect())->isNotEmpty())
-                                            <select
-                                                name="post_product_tags[]"
-                                                class="social-story-select is-multiple"
-                                                multiple
-                                                size="5"
-                                                {{ $postPublishEnabled ? '' : 'disabled' }}
-                                            >
-                                                @foreach ($postTagProducts as $tagProduct)
-                                                    @php
-                                                        $tagProductId = trim((string) ($tagProduct->external_product_id ?: $tagProduct->sku));
-                                                        $tagProductPrice = $tagProduct->price !== null
-                                                            ? number_format((float) $tagProduct->price, 2) . ' ' . strtoupper((string) $tagProduct->currency)
-                                                            : 'No price';
-                                                    @endphp
-                                                    <option
-                                                        value="{{ $tagProduct->id }}"
-                                                        {{ in_array((int) $tagProduct->id, $selectedPostProductTags, true) ? 'selected' : '' }}
-                                                    >
-                                                        {{ $tagProduct->title }} · {{ $tagProductId }} · {{ $tagProductPrice }}
-                                                    </option>
-                                                @endforeach
-                                            </select>
-                                            <div class="social-story-help">
-                                                Select up to 5 synced catalog products. Image tags are placed in the center until the visual tag picker is added.
+                                            <div class="social-product-tag-picker-row">
+                                                <select
+                                                    id="post-product-tag-picker"
+                                                    class="social-story-select"
+                                                    {{ $postPublishEnabled ? '' : 'disabled' }}
+                                                >
+                                                    <option value="">Choose a synced product</option>
+                                                    @foreach ($postTagProducts as $tagProduct)
+                                                        @php
+                                                            $tagProductId = trim((string) ($tagProduct->external_product_id ?: $tagProduct->sku));
+                                                            $tagProductPrice = $tagProduct->price !== null
+                                                                ? number_format((float) $tagProduct->price, 2) . ' ' . strtoupper((string) $tagProduct->currency)
+                                                                : 'No price';
+                                                        @endphp
+                                                        <option
+                                                            value="{{ $tagProduct->id }}"
+                                                            data-title="{{ $tagProduct->title }}"
+                                                            data-meta-id="{{ $tagProductId }}"
+                                                            data-price="{{ $tagProductPrice }}"
+                                                        >
+                                                            {{ $tagProduct->title }} · {{ $tagProductId }} · {{ $tagProductPrice }}
+                                                        </option>
+                                                    @endforeach
+                                                </select>
+                                                <button
+                                                    type="button"
+                                                    id="post-product-tag-add"
+                                                    class="social-post-action-button"
+                                                    {{ $postPublishEnabled ? '' : 'disabled' }}
+                                                >
+                                                    Add
+                                                </button>
                                             </div>
+                                            <div
+                                                id="post-product-tag-list"
+                                                class="social-product-tag-list"
+                                                aria-live="polite"
+                                            ></div>
+                                            <div
+                                                id="post-product-tag-inputs"
+                                                hidden
+                                            ></div>
+                                            <div class="social-story-help">
+                                                Choose a product, then click the image preview to place its tag. Up to 5 product tags can be published.
+                                            </div>
+                                            <script type="application/json" id="post-product-tag-old">
+                                                @json(old('post_product_tags', []))
+                                            </script>
                                         @else
+                                            <div
+                                                id="post-product-tag-list"
+                                                class="social-product-tag-list"
+                                                aria-live="polite"
+                                                hidden
+                                            ></div>
+                                            <div
+                                                id="post-product-tag-inputs"
+                                                hidden
+                                            ></div>
                                             <div class="social-story-help">
                                                 No synced Meta catalog products are ready for this Instagram account yet.
                                             </div>
@@ -1547,6 +1636,18 @@
                                         @error('post_product_tags')
                                             <div class="social-story-help" style="color:#b91c1c;">{{ $message }}</div>
                                         @enderror
+
+                                        @foreach ($errors->get('post_product_tags.*.product_id') as $message)
+                                            <div class="social-story-help" style="color:#b91c1c;">{{ $message }}</div>
+                                        @endforeach
+
+                                        @foreach ($errors->get('post_product_tags.*.x') as $message)
+                                            <div class="social-story-help" style="color:#b91c1c;">{{ $message }}</div>
+                                        @endforeach
+
+                                        @foreach ($errors->get('post_product_tags.*.y') as $message)
+                                            <div class="social-story-help" style="color:#b91c1c;">{{ $message }}</div>
+                                        @endforeach
                                     </div>
 
                                     <label class="social-story-confirm">
@@ -2921,6 +3022,7 @@
                         let postPreviewObjectUrl = null;
                         let postProgressTimers = [];
                         let postProcessingInterval = null;
+                        let postProductTags = [];
 
                         const rememberSocialState = function () {
                             sessionStorage.setItem('social_posts_scroll_y', String(window.scrollY || window.pageYOffset || 0));
@@ -3145,6 +3247,8 @@
                             if (emptyBox) {
                                 emptyBox.hidden = false;
                             }
+
+                            renderPostProductTags();
                         };
 
                         const showPostImage = function (src) {
@@ -3170,6 +3274,8 @@
                             if (form) {
                                 form.dataset.postVideoInvalid = '0';
                             }
+
+                            renderPostProductTags();
                         };
 
                         const showPostVideo = function (src) {
@@ -3200,6 +3306,7 @@
                                 }
                             };
                             emptyBox.hidden = true;
+                            renderPostProductTags();
                         };
 
                         const detectPostUrlKind = function (url) {
@@ -3214,6 +3321,186 @@
                             }
 
                             return null;
+                        };
+
+                        const normalizePostProductTagCoordinate = function (value) {
+                            const numeric = Number(value);
+
+                            if (!Number.isFinite(numeric)) {
+                                return 0.5;
+                            }
+
+                            return Math.max(0, Math.min(1, numeric));
+                        };
+
+                        const getPostProductOption = function (productId) {
+                            const picker = document.getElementById('post-product-tag-picker');
+
+                            if (!picker || !productId) {
+                                return null;
+                            }
+
+                            return Array.from(picker.options).find(function (option) {
+                                return option.value === String(productId);
+                            }) || null;
+                        };
+
+                        const renderPostProductTags = function () {
+                            const form = document.getElementById('social-post-publish-form');
+                            const list = document.getElementById('post-product-tag-list');
+                            const inputs = document.getElementById('post-product-tag-inputs');
+                            const layer = document.getElementById('post-product-tag-layer');
+                            const emptyBox = document.getElementById('post-preview-empty');
+                            const mediaTypeInput = form?.querySelector('select[name="post_media_type"]');
+                            const canShowMarkers = Boolean(layer && emptyBox?.hidden && mediaTypeInput?.value !== 'VIDEO');
+
+                            if (inputs) {
+                                inputs.innerHTML = '';
+                            }
+
+                            if (list) {
+                                list.innerHTML = '';
+                                list.hidden = postProductTags.length === 0;
+                            }
+
+                            if (layer) {
+                                layer.innerHTML = '';
+                                layer.hidden = !canShowMarkers || postProductTags.length === 0;
+                            }
+
+                            postProductTags = postProductTags.slice(0, 5).map(function (tag) {
+                                return {
+                                    productId: String(tag.productId || ''),
+                                    title: String(tag.title || 'Catalog product'),
+                                    metaId: String(tag.metaId || ''),
+                                    price: String(tag.price || ''),
+                                    x: normalizePostProductTagCoordinate(tag.x),
+                                    y: normalizePostProductTagCoordinate(tag.y),
+                                };
+                            }).filter(function (tag) {
+                                return tag.productId !== '';
+                            });
+
+                            postProductTags.forEach(function (tag, index) {
+                                if (inputs) {
+                                    [
+                                        ['product_id', tag.productId],
+                                        ['x', tag.x.toFixed(4)],
+                                        ['y', tag.y.toFixed(4)],
+                                    ].forEach(function ([key, value]) {
+                                        const input = document.createElement('input');
+                                        input.type = 'hidden';
+                                        input.name = `post_product_tags[${index}][${key}]`;
+                                        input.value = value;
+                                        inputs.appendChild(input);
+                                    });
+                                }
+
+                                if (list) {
+                                    const row = document.createElement('div');
+                                    row.className = 'social-product-tag-pill';
+
+                                    const label = document.createElement('div');
+                                    const title = document.createElement('strong');
+                                    title.textContent = tag.title;
+                                    const meta = document.createElement('span');
+                                    meta.textContent = `${tag.metaId || 'Meta product'}${tag.price ? ` · ${tag.price}` : ''}`;
+                                    label.appendChild(title);
+                                    label.appendChild(meta);
+
+                                    const remove = document.createElement('button');
+                                    remove.type = 'button';
+                                    remove.className = 'social-post-action-button danger';
+                                    remove.textContent = 'Remove';
+                                    remove.addEventListener('click', function () {
+                                        postProductTags.splice(index, 1);
+                                        renderPostProductTags();
+                                    });
+
+                                    row.appendChild(label);
+                                    row.appendChild(remove);
+                                    list.appendChild(row);
+                                }
+
+                                if (layer && canShowMarkers) {
+                                    const marker = document.createElement('button');
+                                    marker.type = 'button';
+                                    marker.className = 'social-product-tag-marker';
+                                    marker.style.left = `${tag.x * 100}%`;
+                                    marker.style.top = `${tag.y * 100}%`;
+                                    marker.textContent = String(index + 1);
+                                    marker.title = tag.title;
+                                    marker.addEventListener('click', function (event) {
+                                        event.stopPropagation();
+                                        postProductTags.splice(index, 1);
+                                        renderPostProductTags();
+                                    });
+                                    layer.appendChild(marker);
+                                }
+                            });
+                        };
+
+                        const addPostProductTag = function (productId, x = 0.5, y = 0.5) {
+                            const option = getPostProductOption(productId);
+
+                            if (!option) {
+                                setPostMessage('Choose a product before placing a tag.', true);
+                                return;
+                            }
+
+                            const existingIndex = postProductTags.findIndex(function (tag) {
+                                return tag.productId === String(productId);
+                            });
+
+                            const nextTag = {
+                                productId: String(productId),
+                                title: option.dataset.title || option.textContent.trim(),
+                                metaId: option.dataset.metaId || '',
+                                price: option.dataset.price || '',
+                                x: normalizePostProductTagCoordinate(x),
+                                y: normalizePostProductTagCoordinate(y),
+                            };
+
+                            if (existingIndex >= 0) {
+                                postProductTags[existingIndex] = nextTag;
+                            } else if (postProductTags.length >= 5) {
+                                setPostMessage('Instagram allows up to 5 product tags on this post.', true);
+                                return;
+                            } else {
+                                postProductTags.push(nextTag);
+                            }
+
+                            renderPostProductTags();
+                            setPostMessage('Product tag placed.');
+                        };
+
+                        const clearPostProductTags = function () {
+                            postProductTags = [];
+                            renderPostProductTags();
+                        };
+
+                        const loadOldPostProductTags = function () {
+                            const oldPayload = document.getElementById('post-product-tag-old');
+
+                            if (!oldPayload || oldPayload.dataset.loaded === '1') {
+                                return;
+                            }
+
+                            oldPayload.dataset.loaded = '1';
+
+                            try {
+                                const savedTags = JSON.parse(oldPayload.textContent || '[]');
+
+                                if (!Array.isArray(savedTags)) {
+                                    return;
+                                }
+
+                                savedTags.forEach(function (tag) {
+                                    addPostProductTag(tag.product_id, tag.x || 0.5, tag.y || 0.5);
+                                });
+                            } catch (error) {
+                                postProductTags = [];
+                            }
                         };
 
                         const updatePostPreview = function () {
@@ -3262,6 +3549,8 @@
                             if (altTextField) {
                                 altTextField.hidden = selectedMediaType === 'VIDEO';
                             }
+
+                            renderPostProductTags();
 
                             if (postPreviewObjectUrl) {
                                 URL.revokeObjectURL(postPreviewObjectUrl);
@@ -3316,6 +3605,9 @@
                             const zoomControl = document.getElementById('post-zoom-control');
                             const offsetXControl = document.getElementById('post-offset-x-control');
                             const offsetYControl = document.getElementById('post-offset-y-control');
+                            const previewBox = document.getElementById('post-preview-box');
+                            const productPicker = document.getElementById('post-product-tag-picker');
+                            const productAddButton = document.getElementById('post-product-tag-add');
                             const submitButton = form.querySelector('button[type="submit"]');
 
                             if (aspectControl && aspectControl.disabled) {
@@ -3343,6 +3635,39 @@
                             zoomControl?.addEventListener('input', updatePostPreview);
                             offsetXControl?.addEventListener('input', updatePostPreview);
                             offsetYControl?.addEventListener('input', updatePostPreview);
+                            productAddButton?.addEventListener('click', function () {
+                                addPostProductTag(productPicker?.value || '', 0.5, 0.5);
+                            });
+                            previewBox?.addEventListener('click', function (event) {
+                                if (!productPicker || event.target.closest('.social-product-tag-marker')) {
+                                    return;
+                                }
+
+                                if (!productPicker.value) {
+                                    setPostMessage('Choose a product, then click the preview to place it.', true);
+                                    return;
+                                }
+
+                                if (mediaTypeInput?.value === 'VIDEO') {
+                                    setPostMessage('Video product tags are added from the Add button because Instagram does not use x/y coordinates for Reels.', true);
+                                    return;
+                                }
+
+                                const emptyBox = document.getElementById('post-preview-empty');
+
+                                if (!emptyBox?.hidden) {
+                                    setPostMessage('Add a post image or media URL before placing product tags.', true);
+                                    return;
+                                }
+
+                                const rect = previewBox.getBoundingClientRect();
+                                addPostProductTag(
+                                    productPicker.value,
+                                    (event.clientX - rect.left) / rect.width,
+                                    (event.clientY - rect.top) / rect.height
+                                );
+                            });
+                            loadOldPostProductTags();
                             updatePostPreview();
 
                             form.addEventListener('submit', function (event) {
@@ -3422,6 +3747,7 @@
                                         setPostProgress(100, 'Post published');
                                         setPostMessage(data.message || 'Post published successfully.');
                                         form.reset();
+                                        clearPostProductTags();
                                         resetPostPreview();
                                         scheduleSocialRefresh({ delay: 500 });
                                         return;

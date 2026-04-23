@@ -1337,7 +1337,9 @@ class SocialController extends Controller
             'post_offset_x' => ['nullable', 'numeric', 'min:-100', 'max:100'],
             'post_offset_y' => ['nullable', 'numeric', 'min:-100', 'max:100'],
             'post_product_tags' => ['nullable', 'array', 'max:5'],
-            'post_product_tags.*' => ['integer'],
+            'post_product_tags.*.product_id' => ['required', 'integer'],
+            'post_product_tags.*.x' => ['nullable', 'numeric', 'min:0', 'max:1'],
+            'post_product_tags.*.y' => ['nullable', 'numeric', 'min:0', 'max:1'],
             'post_confirmed' => ['accepted'],
         ]);
 
@@ -1354,10 +1356,7 @@ class SocialController extends Controller
         $postZoom = (float) ($validated['post_zoom'] ?? 1);
         $postOffsetX = (float) ($validated['post_offset_x'] ?? 0);
         $postOffsetY = (float) ($validated['post_offset_y'] ?? 0);
-        $selectedProductIds = array_values(array_unique(array_map(
-            'intval',
-            $validated['post_product_tags'] ?? []
-        )));
+        $selectedProductTags = array_values($validated['post_product_tags'] ?? []);
 
         if (! $uploadedFile && empty($validated['post_media_url'])) {
             if ($request->expectsJson()) {
@@ -1456,11 +1455,11 @@ class SocialController extends Controller
         $productTags = $this->resolvePostProductTags(
             (int) $workspace->id,
             (int) $connection->id,
-            $selectedProductIds,
+            $selectedProductTags,
             $requestedMediaType
         );
 
-        if ($selectedProductIds !== [] && $productTags === []) {
+        if ($selectedProductTags !== [] && $productTags === []) {
             $message = 'Selected products are not ready for Meta product tagging yet.';
 
             if ($request->expectsJson()) {
@@ -1549,14 +1548,24 @@ class SocialController extends Controller
         }
     }
 
-    protected function resolvePostProductTags(int $workspaceId, int $connectionId, array $productIds, string $mediaType): array
+    protected function resolvePostProductTags(int $workspaceId, int $connectionId, array $selectedTags, string $mediaType): array
     {
+        if ($selectedTags === []) {
+            return [];
+        }
+
+        $selectedTags = array_slice(array_values(array_filter($selectedTags, 'is_array')), 0, 5);
+        $productIds = array_values(array_filter(array_map(
+            fn (array $tag) => (int) ($tag['product_id'] ?? 0),
+            $selectedTags
+        )));
+
         if ($productIds === []) {
             return [];
         }
 
         $products = CatalogProduct::query()
-            ->whereIn('id', array_slice($productIds, 0, 5))
+            ->whereIn('id', $productIds)
             ->where('is_active', true)
             ->whereIn('meta_sync_status', ['queued', 'synced'])
             ->whereHas('catalog', function ($query) use ($workspaceId, $connectionId) {
@@ -1573,7 +1582,8 @@ class SocialController extends Controller
         $tags = [];
         $seenProductIds = [];
 
-        foreach (array_slice($productIds, 0, 5) as $productId) {
+        foreach ($selectedTags as $selectedTag) {
+            $productId = (int) ($selectedTag['product_id'] ?? 0);
             $product = $products->get($productId);
 
             if (! $product) {
@@ -1591,8 +1601,8 @@ class SocialController extends Controller
             ];
 
             if (strtoupper($mediaType) === 'IMAGE') {
-                $tag['x'] = 0.5;
-                $tag['y'] = 0.5;
+                $tag['x'] = $this->normalizePostProductTagCoordinate($selectedTag['x'] ?? 0.5);
+                $tag['y'] = $this->normalizePostProductTagCoordinate($selectedTag['y'] ?? 0.5);
             }
 
             $tags[] = $tag;
@@ -1600,6 +1610,13 @@ class SocialController extends Controller
         }
 
         return $tags;
+    }
+
+    protected function normalizePostProductTagCoordinate(mixed $value): float
+    {
+        $coordinate = is_numeric($value) ? (float) $value : 0.5;
+
+        return max(0.0, min(1.0, $coordinate));
     }
 
     public function publishInstagramStory(Request $request): RedirectResponse|JsonResponse
