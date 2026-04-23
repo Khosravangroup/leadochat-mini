@@ -2169,6 +2169,11 @@
                                                     </div>
 
                                                     <div>
+                                                        @php
+                                                            $productBrand = $product->brand ?: data_get($product->metadata, 'brand');
+                                                            $productCondition = $product->product_condition ?: data_get($product->metadata, 'condition');
+                                                            $productInventory = $product->inventory_quantity ?? data_get($product->metadata, 'inventory');
+                                                        @endphp
                                                         <div class="ws-product-title">{{ $product->title }}</div>
                                                         <div class="ws-product-meta">
                                                             @if ($product->price !== null)
@@ -2184,6 +2189,26 @@
                                                             <span class="ws-product-status {{ $product->is_active ? 'active' : 'inactive' }}">
                                                                 {{ $product->is_active ? 'Active' : 'Inactive' }}
                                                             </span>
+                                                        </div>
+                                                        <div class="ws-product-meta">
+                                                            @if ($productBrand)
+                                                                Brand: {{ $productBrand }}
+                                                            @endif
+                                                            @if ($productCondition)
+                                                                · Condition: {{ str_replace('_', ' ', $productCondition) }}
+                                                            @endif
+                                                            @if ($productInventory !== null && $productInventory !== '')
+                                                                · Inventory: {{ $productInventory }}
+                                                            @endif
+                                                            @if ($product->sale_price !== null)
+                                                                · Sale: {{ strtoupper($product->currency) }} {{ number_format((float) $product->sale_price, 2) }}
+                                                            @endif
+                                                            @if ($product->content_language)
+                                                                · Language: {{ strtoupper(str_replace('_', '-', $product->content_language)) }}
+                                                            @endif
+                                                            @if ($product->target_country)
+                                                                · Market: {{ strtoupper($product->target_country) }}
+                                                            @endif
                                                         </div>
                                                         @if ($product->description)
                                                             <div class="ws-product-meta">{{ $product->description }}</div>
@@ -2222,6 +2247,11 @@
                                                                     </div>
 
                                                                     <div class="ws-catalog-form-field">
+                                                                        <label class="ws-catalog-label" for="editProductSalePrice{{ $product->id }}">Sale price</label>
+                                                                        <input id="editProductSalePrice{{ $product->id }}" name="sale_price" class="ws-catalog-input" type="number" min="0" step="0.01" value="{{ $product->sale_price }}">
+                                                                    </div>
+
+                                                                    <div class="ws-catalog-form-field">
                                                                         <label class="ws-catalog-label" for="editProductCurrency{{ $product->id }}">Currency</label>
                                                                         <input id="editProductCurrency{{ $product->id }}" name="currency" class="ws-catalog-input" type="text" value="{{ strtoupper($product->currency) }}" maxlength="3" required>
                                                                     </div>
@@ -2232,6 +2262,41 @@
                                                                             <option value="1" @selected($product->is_active)>Active</option>
                                                                             <option value="0" @selected(! $product->is_active)>Inactive</option>
                                                                         </select>
+                                                                    </div>
+
+                                                                    <div class="ws-catalog-form-field">
+                                                                        <label class="ws-catalog-label" for="editProductBrand{{ $product->id }}">Brand</label>
+                                                                        <input id="editProductBrand{{ $product->id }}" name="brand" class="ws-catalog-input" type="text" value="{{ $productBrand }}">
+                                                                    </div>
+
+                                                                    <div class="ws-catalog-form-field">
+                                                                        <label class="ws-catalog-label" for="editProductCondition{{ $product->id }}">Condition</label>
+                                                                        <select id="editProductCondition{{ $product->id }}" name="product_condition" class="ws-catalog-select">
+                                                                            <option value="" @selected(! $productCondition)>Not set</option>
+                                                                            <option value="new" @selected(($productCondition ?? null) === 'new')>New</option>
+                                                                            <option value="refurbished" @selected(($productCondition ?? null) === 'refurbished')>Refurbished</option>
+                                                                            <option value="used" @selected(($productCondition ?? null) === 'used')>Used</option>
+                                                                        </select>
+                                                                    </div>
+
+                                                                    <div class="ws-catalog-form-field">
+                                                                        <label class="ws-catalog-label" for="editProductInventory{{ $product->id }}">Inventory</label>
+                                                                        <input id="editProductInventory{{ $product->id }}" name="inventory_quantity" class="ws-catalog-input" type="number" min="0" step="1" value="{{ $productInventory }}">
+                                                                    </div>
+
+                                                                    <div class="ws-catalog-form-field">
+                                                                        <label class="ws-catalog-label" for="editProductLanguage{{ $product->id }}">Content language</label>
+                                                                        <input id="editProductLanguage{{ $product->id }}" name="content_language" class="ws-catalog-input" type="text" value="{{ $product->content_language }}" placeholder="en or fa_IR">
+                                                                    </div>
+
+                                                                    <div class="ws-catalog-form-field">
+                                                                        <label class="ws-catalog-label" for="editProductCountry{{ $product->id }}">Target country</label>
+                                                                        <input id="editProductCountry{{ $product->id }}" name="target_country" class="ws-catalog-input" type="text" value="{{ $product->target_country }}" maxlength="2" placeholder="US">
+                                                                    </div>
+
+                                                                    <div class="ws-catalog-form-field full">
+                                                                        <label class="ws-catalog-label" for="editProductCategory{{ $product->id }}">Google product category</label>
+                                                                        <input id="editProductCategory{{ $product->id }}" name="google_product_category" class="ws-catalog-input" type="text" value="{{ $product->google_product_category }}" placeholder="Books > Education">
                                                                     </div>
 
                                                                     <div class="ws-catalog-form-field full">
@@ -2247,6 +2312,16 @@
                                                                     <div class="ws-catalog-form-field full">
                                                                         <label class="ws-catalog-label" for="editProductDescription{{ $product->id }}">Description</label>
                                                                         <textarea id="editProductDescription{{ $product->id }}" name="description" class="ws-catalog-textarea">{{ $product->description }}</textarea>
+                                                                    </div>
+
+                                                                    <div class="ws-catalog-form-field">
+                                                                        <label class="ws-catalog-label" for="editProductSaleStart{{ $product->id }}">Sale starts</label>
+                                                                        <input id="editProductSaleStart{{ $product->id }}" name="sale_price_effective_start_at" class="ws-catalog-input" type="datetime-local" value="{{ optional($product->sale_price_effective_start_at)->format('Y-m-d\TH:i') }}">
+                                                                    </div>
+
+                                                                    <div class="ws-catalog-form-field">
+                                                                        <label class="ws-catalog-label" for="editProductSaleEnd{{ $product->id }}">Sale ends</label>
+                                                                        <input id="editProductSaleEnd{{ $product->id }}" name="sale_price_effective_end_at" class="ws-catalog-input" type="datetime-local" value="{{ optional($product->sale_price_effective_end_at)->format('Y-m-d\TH:i') }}">
                                                                     </div>
                                                                 </div>
 
@@ -2282,7 +2357,10 @@
                                             <div class="ws-catalog-import">
                                                 <h4 class="ws-product-title">Bulk import products</h4>
                                                 <div class="ws-catalog-help">
-                                                    Upload a CSV with columns like title, sku, description, price, currency, image_url, product_url, availability, is_active. Existing SKUs will be updated.
+                                                    Upload a CSV with columns like title, sku, description, price, sale_price, currency, brand, product_condition, inventory_quantity, image_url, product_url, google_product_category, content_language, target_country, availability, is_active. Existing SKUs will be updated.
+                                                </div>
+                                                <div class="ws-catalog-help">
+                                                    Extra CSV columns are preserved as product metadata for later commerce mapping.
                                                 </div>
 
                                                 <form method="POST" action="{{ route('settings.catalogs.products.import', $catalog) }}" enctype="multipart/form-data" class="ws-catalog-form">
@@ -2330,8 +2408,42 @@
                                                     </div>
 
                                                     <div class="ws-catalog-form-field">
+                                                        <label class="ws-catalog-label" for="productSalePrice{{ $catalog->id }}">Sale price</label>
+                                                        <input id="productSalePrice{{ $catalog->id }}" name="sale_price" class="ws-catalog-input" type="number" min="0" step="0.01">
+                                                    </div>
+
+                                                    <div class="ws-catalog-form-field">
                                                         <label class="ws-catalog-label" for="productCurrency{{ $catalog->id }}">Currency</label>
                                                         <input id="productCurrency{{ $catalog->id }}" name="currency" class="ws-catalog-input" type="text" value="USD" maxlength="3" required>
+                                                    </div>
+
+                                                    <div class="ws-catalog-form-field">
+                                                        <label class="ws-catalog-label" for="productBrand{{ $catalog->id }}">Brand</label>
+                                                        <input id="productBrand{{ $catalog->id }}" name="brand" class="ws-catalog-input" type="text" placeholder="Leadochat">
+                                                    </div>
+
+                                                    <div class="ws-catalog-form-field">
+                                                        <label class="ws-catalog-label" for="productCondition{{ $catalog->id }}">Condition</label>
+                                                        <select id="productCondition{{ $catalog->id }}" name="product_condition" class="ws-catalog-select">
+                                                            <option value="new">New</option>
+                                                            <option value="refurbished">Refurbished</option>
+                                                            <option value="used">Used</option>
+                                                        </select>
+                                                    </div>
+
+                                                    <div class="ws-catalog-form-field">
+                                                        <label class="ws-catalog-label" for="productInventory{{ $catalog->id }}">Inventory</label>
+                                                        <input id="productInventory{{ $catalog->id }}" name="inventory_quantity" class="ws-catalog-input" type="number" min="0" step="1" placeholder="25">
+                                                    </div>
+
+                                                    <div class="ws-catalog-form-field">
+                                                        <label class="ws-catalog-label" for="productLanguage{{ $catalog->id }}">Content language</label>
+                                                        <input id="productLanguage{{ $catalog->id }}" name="content_language" class="ws-catalog-input" type="text" placeholder="en or fa_IR">
+                                                    </div>
+
+                                                    <div class="ws-catalog-form-field">
+                                                        <label class="ws-catalog-label" for="productCountry{{ $catalog->id }}">Target country</label>
+                                                        <input id="productCountry{{ $catalog->id }}" name="target_country" class="ws-catalog-input" type="text" maxlength="2" placeholder="US">
                                                     </div>
 
                                                     <div class="ws-catalog-form-field">
@@ -2347,6 +2459,21 @@
                                                     <div class="ws-catalog-form-field full">
                                                         <label class="ws-catalog-label" for="productDescription{{ $catalog->id }}">Description</label>
                                                         <textarea id="productDescription{{ $catalog->id }}" name="description" class="ws-catalog-textarea" placeholder="Short product description for agents and DM context."></textarea>
+                                                    </div>
+
+                                                    <div class="ws-catalog-form-field full">
+                                                        <label class="ws-catalog-label" for="productCategory{{ $catalog->id }}">Google product category</label>
+                                                        <input id="productCategory{{ $catalog->id }}" name="google_product_category" class="ws-catalog-input" type="text" placeholder="Books > Education">
+                                                    </div>
+
+                                                    <div class="ws-catalog-form-field">
+                                                        <label class="ws-catalog-label" for="productSaleStart{{ $catalog->id }}">Sale starts</label>
+                                                        <input id="productSaleStart{{ $catalog->id }}" name="sale_price_effective_start_at" class="ws-catalog-input" type="datetime-local">
+                                                    </div>
+
+                                                    <div class="ws-catalog-form-field">
+                                                        <label class="ws-catalog-label" for="productSaleEnd{{ $catalog->id }}">Sale ends</label>
+                                                        <input id="productSaleEnd{{ $catalog->id }}" name="sale_price_effective_end_at" class="ws-catalog-input" type="datetime-local">
                                                     </div>
                                                 </div>
 

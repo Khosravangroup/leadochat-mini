@@ -70,7 +70,7 @@ class WorkspaceCatalogController extends Controller
 
         $product->update($this->normalizeProductAttributes($validated, [
             'is_active' => $request->boolean('is_active'),
-        ]));
+        ], is_array($product->metadata) ? $product->metadata : []));
 
         return redirect()
             ->route('settings.index', ['section' => 'catalogs'])
@@ -143,18 +143,18 @@ class WorkspaceCatalogController extends Controller
                     continue;
                 }
 
+                $sku = trim((string) ($attributes['sku'] ?? ''));
+                $existing = $sku !== ''
+                    ? $catalog->products()->where('sku', $sku)->first()
+                    : null;
+
                 $normalized = $this->normalizeProductAttributes($attributes, [
                     'is_active' => $this->parseBoolean($attributes['is_active'] ?? true),
                     'metadata' => [
                         'imported_at' => now()->toIso8601String(),
                         'imported_from' => 'settings_csv',
                     ],
-                ]);
-
-                $sku = (string) ($normalized['sku'] ?? '');
-                $existing = $sku !== ''
-                    ? $catalog->products()->where('sku', $sku)->first()
-                    : null;
+                ], is_array($existing?->metadata) ? $existing->metadata : []);
 
                 if ($existing) {
                     $existing->update($normalized);
@@ -215,32 +215,58 @@ class WorkspaceCatalogController extends Controller
             'sku' => ['nullable', 'string', 'max:120'],
             'description' => ['nullable', 'string', 'max:1200'],
             'price' => ['nullable', 'numeric', 'min:0', 'max:999999999.99'],
+            'sale_price' => ['nullable', 'numeric', 'min:0', 'max:999999999.99'],
             'currency' => ['required', 'string', 'size:3'],
             'image_url' => ['nullable', 'url', 'max:2048'],
             'product_url' => ['nullable', 'url', 'max:2048'],
+            'brand' => ['nullable', 'string', 'max:120'],
+            'product_condition' => ['nullable', 'string', Rule::in(['new', 'refurbished', 'used'])],
+            'inventory_quantity' => ['nullable', 'integer', 'min:0', 'max:999999999'],
+            'sale_price_effective_start_at' => ['nullable', 'date'],
+            'sale_price_effective_end_at' => ['nullable', 'date', 'after_or_equal:sale_price_effective_start_at'],
+            'google_product_category' => ['nullable', 'string', 'max:255'],
+            'content_language' => ['nullable', 'string', 'max:12'],
+            'target_country' => ['nullable', 'string', 'size:2'],
             'availability' => ['required', 'string', Rule::in(['in_stock', 'out_of_stock', 'preorder'])],
         ], $extra);
     }
 
-    protected function normalizeProductAttributes(array $validated, array $extra = []): array
+    protected function normalizeProductAttributes(array $validated, array $extra = [], array $existingMetadata = []): array
     {
         $currency = strtoupper(trim((string) ($validated['currency'] ?? 'USD')));
+        $salePrice = filled($validated['sale_price'] ?? null) ? (float) $validated['sale_price'] : null;
+        $price = filled($validated['price'] ?? null) ? (float) $validated['price'] : null;
 
         if (strlen($currency) !== 3) {
             $currency = 'USD';
         }
 
+        if ($salePrice !== null && $price !== null && $salePrice > $price) {
+            $salePrice = $price;
+        }
+
+        $metadata = $this->buildProductMetadata($validated, $extra, $existingMetadata);
+
         return array_filter(array_merge([
             'title' => mb_substr(trim((string) $validated['title']), 0, 180),
             'sku' => filled($validated['sku'] ?? null) ? mb_substr(trim((string) $validated['sku']), 0, 120) : null,
             'description' => filled($validated['description'] ?? null) ? mb_substr(trim((string) $validated['description']), 0, 1200) : null,
-            'price' => filled($validated['price'] ?? null) ? (float) $validated['price'] : null,
+            'price' => $price,
+            'sale_price' => $salePrice,
             'currency' => $currency,
             'image_url' => filled($validated['image_url'] ?? null) ? mb_substr(trim((string) $validated['image_url']), 0, 2048) : null,
             'product_url' => filled($validated['product_url'] ?? null) ? mb_substr(trim((string) $validated['product_url']), 0, 2048) : null,
+            'brand' => filled($validated['brand'] ?? null) ? mb_substr(trim((string) $validated['brand']), 0, 120) : null,
+            'product_condition' => $this->normalizeCondition($validated['product_condition'] ?? null),
+            'inventory_quantity' => filled($validated['inventory_quantity'] ?? null) ? (int) $validated['inventory_quantity'] : null,
+            'sale_price_effective_start_at' => filled($validated['sale_price_effective_start_at'] ?? null) ? $validated['sale_price_effective_start_at'] : null,
+            'sale_price_effective_end_at' => filled($validated['sale_price_effective_end_at'] ?? null) ? $validated['sale_price_effective_end_at'] : null,
+            'google_product_category' => filled($validated['google_product_category'] ?? null) ? mb_substr(trim((string) $validated['google_product_category']), 0, 255) : null,
+            'content_language' => $this->normalizeLocaleCode($validated['content_language'] ?? null),
+            'target_country' => $this->normalizeCountryCode($validated['target_country'] ?? null),
             'availability' => $validated['availability'] ?? 'in_stock',
             'is_active' => $extra['is_active'] ?? true,
-            'metadata' => $extra['metadata'] ?? null,
+            'metadata' => $metadata !== [] ? $metadata : null,
         ], Arr::except($extra, ['is_active', 'metadata'])), fn ($value) => $value !== null);
     }
 
@@ -256,6 +282,14 @@ class WorkspaceCatalogController extends Controller
                 'image', 'photo', 'image_link' => 'image_url',
                 'status' => 'availability',
                 'active', 'enabled' => 'is_active',
+                'condition' => 'product_condition',
+                'inventory', 'stock', 'stock_quantity' => 'inventory_quantity',
+                'saleprice', 'sale-price' => 'sale_price',
+                'sale_price_start', 'sale_starts_at', 'sale_price_starts_at' => 'sale_price_effective_start_at',
+                'sale_price_end', 'sale_ends_at', 'sale_price_ends_at' => 'sale_price_effective_end_at',
+                'category', 'google_category' => 'google_product_category',
+                'language', 'locale' => 'content_language',
+                'country', 'market' => 'target_country',
                 default => $value,
             };
         }, $row);
@@ -273,16 +307,52 @@ class WorkspaceCatalogController extends Controller
             $values[$key] = trim((string) ($row[$index] ?? ''));
         }
 
+        $knownKeys = [
+            'title',
+            'sku',
+            'description',
+            'price',
+            'sale_price',
+            'currency',
+            'image_url',
+            'product_url',
+            'brand',
+            'product_condition',
+            'inventory_quantity',
+            'sale_price_effective_start_at',
+            'sale_price_effective_end_at',
+            'google_product_category',
+            'content_language',
+            'target_country',
+            'availability',
+            'is_active',
+        ];
+
+        $extraAttributes = collect($values)
+            ->except($knownKeys)
+            ->filter(fn ($value) => $value !== '')
+            ->all();
+
         return [
             'title' => $values['title'] ?? '',
             'sku' => $values['sku'] ?? null,
             'description' => $values['description'] ?? null,
             'price' => $values['price'] ?? null,
+            'sale_price' => $values['sale_price'] ?? null,
             'currency' => $values['currency'] ?? 'USD',
             'image_url' => $values['image_url'] ?? null,
             'product_url' => $values['product_url'] ?? null,
+            'brand' => $values['brand'] ?? null,
+            'product_condition' => $values['product_condition'] ?? null,
+            'inventory_quantity' => $values['inventory_quantity'] ?? null,
+            'sale_price_effective_start_at' => $values['sale_price_effective_start_at'] ?? null,
+            'sale_price_effective_end_at' => $values['sale_price_effective_end_at'] ?? null,
+            'google_product_category' => $values['google_product_category'] ?? null,
+            'content_language' => $values['content_language'] ?? null,
+            'target_country' => $values['target_country'] ?? null,
             'availability' => $this->normalizeAvailability($values['availability'] ?? 'in_stock'),
             'is_active' => $values['is_active'] ?? true,
+            'extra_attributes' => $extraAttributes,
         ];
     }
 
@@ -313,5 +383,62 @@ class WorkspaceCatalogController extends Controller
     protected function isEmptyCsvRow(array $row): bool
     {
         return collect($row)->every(fn ($value) => trim((string) $value) === '');
+    }
+
+    protected function buildProductMetadata(array $validated, array $extra, array $existingMetadata): array
+    {
+        $metadata = is_array($existingMetadata) ? $existingMetadata : [];
+
+        if (is_array($extra['metadata'] ?? null)) {
+            $metadata = array_replace_recursive($metadata, $extra['metadata']);
+        }
+
+        $extraAttributes = collect($validated['extra_attributes'] ?? [])
+            ->filter(fn ($value) => $value !== null && $value !== '')
+            ->all();
+
+        if ($extraAttributes !== []) {
+            $metadata['extra_attributes'] = $extraAttributes;
+        }
+
+        return $metadata;
+    }
+
+    protected function normalizeCondition(mixed $value): ?string
+    {
+        $value = strtolower(trim((string) $value));
+
+        if ($value === '') {
+            return null;
+        }
+
+        return in_array($value, ['new', 'refurbished', 'used'], true) ? $value : null;
+    }
+
+    protected function normalizeLocaleCode(mixed $value): ?string
+    {
+        $value = trim((string) $value);
+
+        if ($value === '') {
+            return null;
+        }
+
+        $value = str_replace('-', '_', $value);
+        $segments = explode('_', $value);
+        $language = strtolower((string) ($segments[0] ?? ''));
+        $region = strtoupper((string) ($segments[1] ?? ''));
+
+        if ($language === '') {
+            return null;
+        }
+
+        return $region !== '' ? "{$language}_{$region}" : $language;
+    }
+
+    protected function normalizeCountryCode(mixed $value): ?string
+    {
+        $value = strtoupper(trim((string) $value));
+
+        return strlen($value) === 2 ? $value : null;
     }
 }

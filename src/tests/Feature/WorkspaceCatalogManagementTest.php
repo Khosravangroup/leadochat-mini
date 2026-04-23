@@ -37,9 +37,18 @@ class WorkspaceCatalogManagementTest extends TestCase
             'sku' => 'NEW-001',
             'description' => 'Updated description',
             'price' => 19.95,
+            'sale_price' => 17.5,
             'currency' => 'eur',
             'image_url' => 'https://example.com/products/updated.jpg',
             'product_url' => 'https://example.com/products/updated-product',
+            'brand' => 'Leadochat Labs',
+            'product_condition' => 'refurbished',
+            'inventory_quantity' => 14,
+            'sale_price_effective_start_at' => '2026-04-23T10:00',
+            'sale_price_effective_end_at' => '2026-04-25T21:00',
+            'google_product_category' => 'Electronics > Accessories',
+            'content_language' => 'fa-ir',
+            'target_country' => 'ae',
             'availability' => 'preorder',
             'is_active' => '0',
         ]);
@@ -51,6 +60,13 @@ class WorkspaceCatalogManagementTest extends TestCase
         $this->assertSame('Updated Product', $product->title);
         $this->assertSame('NEW-001', $product->sku);
         $this->assertSame('EUR', $product->currency);
+        $this->assertSame('17.50', $product->sale_price);
+        $this->assertSame('Leadochat Labs', $product->brand);
+        $this->assertSame('refurbished', $product->product_condition);
+        $this->assertSame(14, $product->inventory_quantity);
+        $this->assertSame('Electronics > Accessories', $product->google_product_category);
+        $this->assertSame('fa_IR', $product->content_language);
+        $this->assertSame('AE', $product->target_country);
         $this->assertSame('preorder', $product->availability);
         $this->assertFalse($product->is_active);
 
@@ -79,10 +95,10 @@ class WorkspaceCatalogManagementTest extends TestCase
         ]);
 
         $csv = implode("\n", [
-            'title,sku,description,price,currency,image_url,product_url,availability,is_active',
-            'Updated CSV Product,SKU-001,Updated by import,25,USD,https://example.com/one.jpg,https://example.com/one,in_stock,true',
-            'New CSV Product,SKU-002,Created by import,30,EUR,https://example.com/two.jpg,https://example.com/two,out of stock,false',
-            ',SKU-003,Missing title,1,USD,,,in_stock,true',
+            'title,sku,description,price,sale_price,currency,brand,condition,inventory,image_url,product_url,content_language,target_country,custom_label,availability,is_active',
+            'Updated CSV Product,SKU-001,Updated by import,25,20,USD,Leadochat Books,new,12,https://example.com/one.jpg,https://example.com/one,en,us,bestseller,in_stock,true',
+            'New CSV Product,SKU-002,Created by import,30,24,EUR,Leadochat Goods,used,3,https://example.com/two.jpg,https://example.com/two,fa_IR,ae,seasonal,out of stock,false',
+            ',SKU-003,Missing title,1,,USD,,,,,,,,,in_stock,true',
         ]);
 
         $response = $this->actingAs($user)
@@ -101,7 +117,21 @@ class WorkspaceCatalogManagementTest extends TestCase
 
         $this->assertSame('Updated CSV Product', $updated->title);
         $this->assertSame('25.00', $updated->price);
+        $this->assertSame('20.00', $updated->sale_price);
+        $this->assertSame('Leadochat Books', $updated->brand);
+        $this->assertSame('new', $updated->product_condition);
+        $this->assertSame(12, $updated->inventory_quantity);
+        $this->assertSame('en', $updated->content_language);
+        $this->assertSame('US', $updated->target_country);
+        $this->assertSame('bestseller', data_get($updated->metadata, 'extra_attributes.custom_label'));
         $this->assertSame('New CSV Product', $created->title);
+        $this->assertSame('24.00', $created->sale_price);
+        $this->assertSame('Leadochat Goods', $created->brand);
+        $this->assertSame('used', $created->product_condition);
+        $this->assertSame(3, $created->inventory_quantity);
+        $this->assertSame('fa_IR', $created->content_language);
+        $this->assertSame('AE', $created->target_country);
+        $this->assertSame('seasonal', data_get($created->metadata, 'extra_attributes.custom_label'));
         $this->assertSame('out_of_stock', $created->availability);
         $this->assertFalse($created->is_active);
     }

@@ -149,9 +149,9 @@ class MetaCatalogProductSyncService
     protected function buildProductData(CatalogProduct $product): array
     {
         $metadata = is_array($product->metadata) ? $product->metadata : [];
-        $brand = trim((string) Arr::get($metadata, 'brand', config('app.name', 'Leadochat')));
-        $condition = trim((string) Arr::get($metadata, 'condition', 'new'));
-        $inventory = Arr::get($metadata, 'inventory');
+        $brand = trim((string) ($product->brand ?: Arr::get($metadata, 'brand', config('app.name', 'Leadochat'))));
+        $condition = trim((string) ($product->product_condition ?: Arr::get($metadata, 'condition', 'new')));
+        $inventory = $product->inventory_quantity ?? Arr::get($metadata, 'inventory');
 
         return array_filter([
             'name' => mb_substr(trim((string) $product->title), 0, 200),
@@ -164,6 +164,10 @@ class MetaCatalogProductSyncService
             'image_url' => trim((string) $product->image_url),
             'brand' => $brand !== '' ? $brand : 'Leadochat',
             'inventory' => is_numeric($inventory) ? (int) $inventory : null,
+            'sale_price' => $product->sale_price !== null ? $this->formatMetaPrice($product, (float) $product->sale_price) : null,
+            'google_product_category' => filled($product->google_product_category) ? trim((string) $product->google_product_category) : null,
+            'content_language' => filled($product->content_language) ? trim((string) $product->content_language) : null,
+            'target_country' => filled($product->target_country) ? strtoupper(trim((string) $product->target_country)) : null,
         ], fn ($value) => $value !== null && $value !== '');
     }
 
@@ -184,9 +188,9 @@ class MetaCatalogProductSyncService
         };
     }
 
-    protected function formatMetaPrice(CatalogProduct $product): string
+    protected function formatMetaPrice(CatalogProduct $product, ?float $amount = null): string
     {
-        $amount = $product->price !== null ? (float) $product->price : 0;
+        $amount = $amount ?? ($product->price !== null ? (float) $product->price : 0);
 
         return number_format($amount, 2, '.', '') . ' ' . strtoupper((string) ($product->currency ?: 'USD'));
     }

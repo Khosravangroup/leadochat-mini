@@ -79,9 +79,16 @@ class MetaCatalogProductSyncTest extends TestCase
             'title' => 'Yellow Notebook',
             'description' => 'A compact notebook for catalog sync.',
             'price' => 15,
+            'sale_price' => 12,
             'currency' => 'USD',
             'image_url' => 'https://example.com/notebook.jpg',
             'product_url' => 'https://example.com/notebook',
+            'brand' => 'Leadochat Catalog',
+            'product_condition' => 'used',
+            'inventory_quantity' => 9,
+            'google_product_category' => 'Office Supplies > Notebooks',
+            'content_language' => 'en',
+            'target_country' => 'US',
             'availability' => 'in_stock',
             'is_active' => true,
             'metadata' => [
@@ -121,7 +128,12 @@ class MetaCatalogProductSyncTest extends TestCase
         $this->assertSame('Yellow Notebook', $first['data']['name']);
         $this->assertSame('in stock', $first['data']['availability']);
         $this->assertSame('15.00 USD', $first['data']['price']);
-        $this->assertSame('Leadochat Test', $first['data']['brand']);
-        $this->assertSame(7, $first['data']['inventory']);
+        $this->assertSame('12.00 USD', $first['data']['sale_price']);
+        $this->assertSame('Leadochat Catalog', $first['data']['brand']);
+        $this->assertSame('used', $first['data']['condition']);
+        $this->assertSame(9, $first['data']['inventory']);
+        $this->assertSame('Office Supplies > Notebooks', $first['data']['google_product_category']);
+        $this->assertSame('en', $first['data']['content_language']);
+        $this->assertSame('US', $first['data']['target_country']);
     }
 }

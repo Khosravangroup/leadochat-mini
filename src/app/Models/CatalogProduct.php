@@ -19,6 +19,15 @@ class CatalogProduct extends Model
         'currency',
         'image_url',
         'product_url',
+        'brand',
+        'product_condition',
+        'inventory_quantity',
+        'sale_price',
+        'sale_price_effective_start_at',
+        'sale_price_effective_end_at',
+        'google_product_category',
+        'content_language',
+        'target_country',
         'availability',
         'is_active',
         'meta_sync_status',
@@ -31,7 +40,11 @@ class CatalogProduct extends Model
     {
         return [
             'price' => 'decimal:2',
+            'sale_price' => 'decimal:2',
             'is_active' => 'boolean',
+            'inventory_quantity' => 'integer',
+            'sale_price_effective_start_at' => 'datetime',
+            'sale_price_effective_end_at' => 'datetime',
             'meta_synced_at' => 'datetime',
             'metadata' => 'array',
         ];
