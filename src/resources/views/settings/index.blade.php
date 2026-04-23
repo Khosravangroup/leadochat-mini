@@ -2329,6 +2329,169 @@
                                                                     <button type="submit" class="ws-catalog-submit">Save product</button>
                                                                 </div>
                                                             </form>
+
+                                                            <div class="ws-catalog-import" style="margin-top:14px;">
+                                                                <h4 class="ws-product-title">Localized market profiles</h4>
+                                                                <div class="ws-catalog-help">
+                                                                    Add country and language specific price, copy, URL, and category overrides without duplicating the base product.
+                                                                </div>
+
+                                                                <div style="display:grid; gap:12px; margin-top:12px;">
+                                                                    @forelse ($product->marketOverrides as $marketOverride)
+                                                                        <div style="border:1px solid #e2e8f0; border-radius:8px; padding:12px; display:grid; gap:12px;">
+                                                                            <div class="ws-product-meta">
+                                                                                {{ strtoupper($marketOverride->target_country) }} · {{ strtoupper(str_replace('_', '-', $marketOverride->content_language)) }}
+                                                                                · {{ $marketOverride->is_active ? 'Active' : 'Inactive' }}
+                                                                                @if ($marketOverride->price !== null)
+                                                                                    · {{ strtoupper($marketOverride->currency ?: $product->currency) }} {{ number_format((float) $marketOverride->price, 2) }}
+                                                                                @endif
+                                                                                @if ($marketOverride->sale_price !== null)
+                                                                                    · Sale {{ strtoupper($marketOverride->currency ?: $product->currency) }} {{ number_format((float) $marketOverride->sale_price, 2) }}
+                                                                                @endif
+                                                                            </div>
+
+                                                                            <form method="POST" action="{{ route('settings.catalogs.products.market-overrides.update', $marketOverride) }}" class="ws-catalog-form">
+                                                                                @csrf
+                                                                                @method('PATCH')
+
+                                                                                <div class="ws-catalog-form-grid">
+                                                                                    <div class="ws-catalog-form-field">
+                                                                                        <label class="ws-catalog-label" for="overrideCountry{{ $marketOverride->id }}">Target country</label>
+                                                                                        <input id="overrideCountry{{ $marketOverride->id }}" name="target_country" class="ws-catalog-input" type="text" value="{{ $marketOverride->target_country }}" maxlength="2" required>
+                                                                                    </div>
+
+                                                                                    <div class="ws-catalog-form-field">
+                                                                                        <label class="ws-catalog-label" for="overrideLanguage{{ $marketOverride->id }}">Content language</label>
+                                                                                        <input id="overrideLanguage{{ $marketOverride->id }}" name="content_language" class="ws-catalog-input" type="text" value="{{ $marketOverride->content_language }}" required>
+                                                                                    </div>
+
+                                                                                    <div class="ws-catalog-form-field">
+                                                                                        <label class="ws-catalog-label" for="overridePrice{{ $marketOverride->id }}">Price</label>
+                                                                                        <input id="overridePrice{{ $marketOverride->id }}" name="price" class="ws-catalog-input" type="number" min="0" step="0.01" value="{{ $marketOverride->price }}">
+                                                                                    </div>
+
+                                                                                    <div class="ws-catalog-form-field">
+                                                                                        <label class="ws-catalog-label" for="overrideSalePrice{{ $marketOverride->id }}">Sale price</label>
+                                                                                        <input id="overrideSalePrice{{ $marketOverride->id }}" name="sale_price" class="ws-catalog-input" type="number" min="0" step="0.01" value="{{ $marketOverride->sale_price }}">
+                                                                                    </div>
+
+                                                                                    <div class="ws-catalog-form-field">
+                                                                                        <label class="ws-catalog-label" for="overrideCurrency{{ $marketOverride->id }}">Currency</label>
+                                                                                        <input id="overrideCurrency{{ $marketOverride->id }}" name="currency" class="ws-catalog-input" type="text" value="{{ strtoupper($marketOverride->currency ?: $product->currency) }}" maxlength="3">
+                                                                                    </div>
+
+                                                                                    <div class="ws-catalog-form-field">
+                                                                                        <label class="ws-catalog-label" for="overrideStatus{{ $marketOverride->id }}">Status</label>
+                                                                                        <select id="overrideStatus{{ $marketOverride->id }}" name="is_active" class="ws-catalog-select">
+                                                                                            <option value="1" @selected($marketOverride->is_active)>Active</option>
+                                                                                            <option value="0" @selected(! $marketOverride->is_active)>Inactive</option>
+                                                                                        </select>
+                                                                                    </div>
+
+                                                                                    <div class="ws-catalog-form-field full">
+                                                                                        <label class="ws-catalog-label" for="overrideTitle{{ $marketOverride->id }}">Localized title</label>
+                                                                                        <input id="overrideTitle{{ $marketOverride->id }}" name="title" class="ws-catalog-input" type="text" value="{{ $marketOverride->title }}">
+                                                                                    </div>
+
+                                                                                    <div class="ws-catalog-form-field full">
+                                                                                        <label class="ws-catalog-label" for="overrideDescription{{ $marketOverride->id }}">Localized description</label>
+                                                                                        <textarea id="overrideDescription{{ $marketOverride->id }}" name="description" class="ws-catalog-textarea">{{ $marketOverride->description }}</textarea>
+                                                                                    </div>
+
+                                                                                    <div class="ws-catalog-form-field full">
+                                                                                        <label class="ws-catalog-label" for="overrideProductUrl{{ $marketOverride->id }}">Localized product URL</label>
+                                                                                        <input id="overrideProductUrl{{ $marketOverride->id }}" name="product_url" class="ws-catalog-input" type="url" value="{{ $marketOverride->product_url }}" placeholder="https://...">
+                                                                                    </div>
+
+                                                                                    <div class="ws-catalog-form-field full">
+                                                                                        <label class="ws-catalog-label" for="overrideCheckoutUrl{{ $marketOverride->id }}">Checkout URL</label>
+                                                                                        <input id="overrideCheckoutUrl{{ $marketOverride->id }}" name="checkout_url" class="ws-catalog-input" type="url" value="{{ $marketOverride->checkout_url }}" placeholder="https://...">
+                                                                                    </div>
+
+                                                                                    <div class="ws-catalog-form-field full">
+                                                                                        <label class="ws-catalog-label" for="overrideCategory{{ $marketOverride->id }}">Localized category</label>
+                                                                                        <input id="overrideCategory{{ $marketOverride->id }}" name="google_product_category" class="ws-catalog-input" type="text" value="{{ $marketOverride->google_product_category }}">
+                                                                                    </div>
+                                                                                </div>
+
+                                                                                <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                                                                                    <button type="submit" class="ws-catalog-secondary">Save profile</button>
+                                                                                </div>
+                                                                            </form>
+
+                                                                            <form method="POST" action="{{ route('settings.catalogs.products.market-overrides.delete', $marketOverride) }}">
+                                                                                @csrf
+                                                                                @method('DELETE')
+                                                                                <button type="submit" class="ws-catalog-danger">Delete profile</button>
+                                                                            </form>
+                                                                        </div>
+                                                                    @empty
+                                                                        <div class="ws-product-empty">
+                                                                            No localized market profiles yet.
+                                                                        </div>
+                                                                    @endforelse
+                                                                </div>
+
+                                                                <form method="POST" action="{{ route('settings.catalogs.products.market-overrides.store', $product) }}" class="ws-catalog-form" style="margin-top:14px;">
+                                                                    @csrf
+
+                                                                    <div class="ws-catalog-form-grid">
+                                                                        <div class="ws-catalog-form-field">
+                                                                            <label class="ws-catalog-label" for="newOverrideCountry{{ $product->id }}">Target country</label>
+                                                                            <input id="newOverrideCountry{{ $product->id }}" name="target_country" class="ws-catalog-input" type="text" maxlength="2" placeholder="US" required>
+                                                                        </div>
+
+                                                                        <div class="ws-catalog-form-field">
+                                                                            <label class="ws-catalog-label" for="newOverrideLanguage{{ $product->id }}">Content language</label>
+                                                                            <input id="newOverrideLanguage{{ $product->id }}" name="content_language" class="ws-catalog-input" type="text" placeholder="en or fa_IR" required>
+                                                                        </div>
+
+                                                                        <div class="ws-catalog-form-field">
+                                                                            <label class="ws-catalog-label" for="newOverridePrice{{ $product->id }}">Price</label>
+                                                                            <input id="newOverridePrice{{ $product->id }}" name="price" class="ws-catalog-input" type="number" min="0" step="0.01">
+                                                                        </div>
+
+                                                                        <div class="ws-catalog-form-field">
+                                                                            <label class="ws-catalog-label" for="newOverrideSalePrice{{ $product->id }}">Sale price</label>
+                                                                            <input id="newOverrideSalePrice{{ $product->id }}" name="sale_price" class="ws-catalog-input" type="number" min="0" step="0.01">
+                                                                        </div>
+
+                                                                        <div class="ws-catalog-form-field">
+                                                                            <label class="ws-catalog-label" for="newOverrideCurrency{{ $product->id }}">Currency</label>
+                                                                            <input id="newOverrideCurrency{{ $product->id }}" name="currency" class="ws-catalog-input" type="text" value="{{ strtoupper($product->currency) }}" maxlength="3">
+                                                                        </div>
+
+                                                                        <div class="ws-catalog-form-field full">
+                                                                            <label class="ws-catalog-label" for="newOverrideTitle{{ $product->id }}">Localized title</label>
+                                                                            <input id="newOverrideTitle{{ $product->id }}" name="title" class="ws-catalog-input" type="text">
+                                                                        </div>
+
+                                                                        <div class="ws-catalog-form-field full">
+                                                                            <label class="ws-catalog-label" for="newOverrideDescription{{ $product->id }}">Localized description</label>
+                                                                            <textarea id="newOverrideDescription{{ $product->id }}" name="description" class="ws-catalog-textarea"></textarea>
+                                                                        </div>
+
+                                                                        <div class="ws-catalog-form-field full">
+                                                                            <label class="ws-catalog-label" for="newOverrideProductUrl{{ $product->id }}">Localized product URL</label>
+                                                                            <input id="newOverrideProductUrl{{ $product->id }}" name="product_url" class="ws-catalog-input" type="url" placeholder="https://...">
+                                                                        </div>
+
+                                                                        <div class="ws-catalog-form-field full">
+                                                                            <label class="ws-catalog-label" for="newOverrideCheckoutUrl{{ $product->id }}">Checkout URL</label>
+                                                                            <input id="newOverrideCheckoutUrl{{ $product->id }}" name="checkout_url" class="ws-catalog-input" type="url" placeholder="https://...">
+                                                                        </div>
+
+                                                                        <div class="ws-catalog-form-field full">
+                                                                            <label class="ws-catalog-label" for="newOverrideCategory{{ $product->id }}">Localized category</label>
+                                                                            <input id="newOverrideCategory{{ $product->id }}" name="google_product_category" class="ws-catalog-input" type="text">
+                                                                        </div>
+                                                                    </div>
+
+                                                                    <div>
+                                                                        <button type="submit" class="ws-catalog-submit">Add localized profile</button>
+                                                                    </div>
+                                                                </form>
+                                                            </div>
                                                         </details>
                                                     </div>
 

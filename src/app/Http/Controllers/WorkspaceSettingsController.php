@@ -123,6 +123,9 @@ class WorkspaceSettingsController extends Controller
                 ->with([
                     'providerConnection',
                     'products' => fn ($query) => $query
+                        ->with(['marketOverrides' => fn ($marketQuery) => $marketQuery
+                            ->orderBy('target_country')
+                            ->orderBy('content_language')])
                         ->orderByDesc('is_active')
                         ->orderBy('title'),
                 ])

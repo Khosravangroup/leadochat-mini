@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Catalog;
 use App\Models\CatalogProduct;
+use App\Models\CatalogProductMarketOverride;
 use App\Models\ProviderConnection;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -187,6 +188,103 @@ class WorkspaceCatalogController extends Controller
             ->with('status', 'Product removed from catalog.');
     }
 
+    public function storeMarketOverride(Request $request, CatalogProduct $product): RedirectResponse
+    {
+        $workspace = $request->user()?->currentWorkspace();
+        $catalog = $product->catalog;
+
+        $this->guardWorkspaceCatalog($catalog, $workspace?->id);
+
+        $validated = $request->validate($this->marketOverrideRules([
+            'target_country' => [
+                'required',
+                'string',
+                'size:2',
+                Rule::unique('catalog_product_market_overrides')
+                    ->where(fn ($query) => $query
+                        ->where('catalog_product_id', $product->id)
+                        ->where('content_language', $this->normalizeLocaleCode($request->input('content_language')) ?? 'en')),
+            ],
+            'content_language' => [
+                'required',
+                'string',
+                'max:12',
+                Rule::unique('catalog_product_market_overrides')
+                    ->where(fn ($query) => $query
+                        ->where('catalog_product_id', $product->id)
+                        ->where('target_country', $this->normalizeCountryCode($request->input('target_country')) ?? 'US')),
+            ],
+        ]));
+
+        $product->marketOverrides()->updateOrCreate(
+            [
+                'target_country' => $this->normalizeCountryCode($validated['target_country']) ?? 'US',
+                'content_language' => $this->normalizeLocaleCode($validated['content_language']) ?? 'en',
+            ],
+            $this->normalizeMarketOverrideAttributes($validated, $product)
+        );
+
+        return redirect()
+            ->route('settings.index', ['section' => 'catalogs'])
+            ->with('status', 'Localized market profile saved.');
+    }
+
+    public function updateMarketOverride(Request $request, CatalogProductMarketOverride $marketOverride): RedirectResponse
+    {
+        $workspace = $request->user()?->currentWorkspace();
+        $product = $marketOverride->product;
+        $catalog = $product?->catalog;
+
+        $this->guardWorkspaceCatalog($catalog, $workspace?->id);
+
+        $validated = $request->validate($this->marketOverrideRules([
+            'is_active' => ['nullable', 'boolean'],
+            'target_country' => [
+                'required',
+                'string',
+                'size:2',
+                Rule::unique('catalog_product_market_overrides')
+                    ->where(fn ($query) => $query
+                        ->where('catalog_product_id', $product->id)
+                        ->where('content_language', $this->normalizeLocaleCode($request->input('content_language')) ?? $marketOverride->content_language))
+                    ->ignore($marketOverride->id),
+            ],
+            'content_language' => [
+                'required',
+                'string',
+                'max:12',
+                Rule::unique('catalog_product_market_overrides')
+                    ->where(fn ($query) => $query
+                        ->where('catalog_product_id', $product->id)
+                        ->where('target_country', $this->normalizeCountryCode($request->input('target_country')) ?? $marketOverride->target_country))
+                    ->ignore($marketOverride->id),
+            ],
+        ]));
+
+        $marketOverride->update($this->normalizeMarketOverrideAttributes($validated, $product, [
+            'is_active' => $request->boolean('is_active'),
+        ]));
+
+        return redirect()
+            ->route('settings.index', ['section' => 'catalogs'])
+            ->with('status', 'Localized market profile updated.');
+    }
+
+    public function deleteMarketOverride(Request $request, CatalogProductMarketOverride $marketOverride): RedirectResponse
+    {
+        $workspace = $request->user()?->currentWorkspace();
+        $product = $marketOverride->product;
+        $catalog = $product?->catalog;
+
+        $this->guardWorkspaceCatalog($catalog, $workspace?->id);
+
+        $marketOverride->delete();
+
+        return redirect()
+            ->route('settings.index', ['section' => 'catalogs'])
+            ->with('status', 'Localized market profile removed.');
+    }
+
     protected function guardWorkspaceCatalog(?Catalog $catalog, ?int $workspaceId): void
     {
         if (! $workspaceId || ! $catalog || $catalog->workspace_id !== $workspaceId) {
@@ -231,6 +329,22 @@ class WorkspaceCatalogController extends Controller
         ], $extra);
     }
 
+    protected function marketOverrideRules(array $extra = []): array
+    {
+        return array_merge([
+            'target_country' => ['required', 'string', 'size:2'],
+            'content_language' => ['required', 'string', 'max:12'],
+            'title' => ['nullable', 'string', 'max:180'],
+            'description' => ['nullable', 'string', 'max:1200'],
+            'price' => ['nullable', 'numeric', 'min:0', 'max:999999999.99'],
+            'sale_price' => ['nullable', 'numeric', 'min:0', 'max:999999999.99'],
+            'currency' => ['nullable', 'string', 'size:3'],
+            'product_url' => ['nullable', 'url', 'max:2048'],
+            'checkout_url' => ['nullable', 'url', 'max:2048'],
+            'google_product_category' => ['nullable', 'string', 'max:255'],
+        ], $extra);
+    }
+
     protected function normalizeProductAttributes(array $validated, array $extra = [], array $existingMetadata = []): array
     {
         $currency = strtoupper(trim((string) ($validated['currency'] ?? 'USD')));
@@ -268,6 +382,35 @@ class WorkspaceCatalogController extends Controller
             'is_active' => $extra['is_active'] ?? true,
             'metadata' => $metadata !== [] ? $metadata : null,
         ], Arr::except($extra, ['is_active', 'metadata'])), fn ($value) => $value !== null);
+    }
+
+    protected function normalizeMarketOverrideAttributes(array $validated, CatalogProduct $product, array $extra = []): array
+    {
+        $currency = strtoupper(trim((string) ($validated['currency'] ?? $product->currency ?? 'USD')));
+        $price = filled($validated['price'] ?? null) ? (float) $validated['price'] : null;
+        $salePrice = filled($validated['sale_price'] ?? null) ? (float) $validated['sale_price'] : null;
+
+        if (strlen($currency) !== 3) {
+            $currency = strtoupper((string) ($product->currency ?: 'USD'));
+        }
+
+        if ($salePrice !== null && $price !== null && $salePrice > $price) {
+            $salePrice = $price;
+        }
+
+        return array_filter(array_merge([
+            'target_country' => $this->normalizeCountryCode($validated['target_country'] ?? null),
+            'content_language' => $this->normalizeLocaleCode($validated['content_language'] ?? null),
+            'title' => filled($validated['title'] ?? null) ? mb_substr(trim((string) $validated['title']), 0, 180) : null,
+            'description' => filled($validated['description'] ?? null) ? mb_substr(trim((string) $validated['description']), 0, 1200) : null,
+            'price' => $price,
+            'sale_price' => $salePrice,
+            'currency' => $currency,
+            'product_url' => filled($validated['product_url'] ?? null) ? mb_substr(trim((string) $validated['product_url']), 0, 2048) : null,
+            'checkout_url' => filled($validated['checkout_url'] ?? null) ? mb_substr(trim((string) $validated['checkout_url']), 0, 2048) : null,
+            'google_product_category' => filled($validated['google_product_category'] ?? null) ? mb_substr(trim((string) $validated['google_product_category']), 0, 255) : null,
+            'is_active' => $extra['is_active'] ?? true,
+        ], Arr::except($extra, ['is_active'])), fn ($value) => $value !== null);
     }
 
     protected function normalizeCsvHeader(array $row): array

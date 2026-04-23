@@ -60,6 +60,13 @@ class CatalogProduct extends Model
         return $this->hasMany(ConversationProductShare::class);
     }
 
+    public function marketOverrides(): HasMany
+    {
+        return $this->hasMany(CatalogProductMarketOverride::class)
+            ->orderBy('target_country')
+            ->orderBy('content_language');
+    }
+
     public function productSets(): BelongsToMany
     {
         return $this->belongsToMany(CatalogProductSet::class, 'catalog_product_set_items')

@@ -136,6 +136,88 @@ class WorkspaceCatalogManagementTest extends TestCase
         $this->assertFalse($created->is_active);
     }
 
+    public function test_agent_can_manage_localized_market_profiles_for_catalog_product(): void
+    {
+        [$user, $catalog] = $this->makeWorkspaceCatalog();
+
+        $product = CatalogProduct::create([
+            'catalog_id' => $catalog->id,
+            'sku' => 'BOOK-LOC-1',
+            'title' => 'Global Product',
+            'description' => 'Base description',
+            'price' => 50,
+            'currency' => 'USD',
+            'product_url' => 'https://example.com/global-product',
+            'availability' => 'in_stock',
+            'is_active' => true,
+        ]);
+
+        $storeResponse = $this->actingAs($user)
+            ->withSession(['_token' => 'test-csrf-token'])
+            ->withHeader('X-CSRF-TOKEN', 'test-csrf-token')
+            ->post(route('settings.catalogs.products.market-overrides.store', $product), [
+                'target_country' => 'ae',
+                'content_language' => 'fa-ir',
+                'title' => 'Localized Product',
+                'description' => 'Localized description',
+                'price' => 42,
+                'sale_price' => 39,
+                'currency' => 'aed',
+                'product_url' => 'https://example.com/fa/product',
+                'checkout_url' => 'https://checkout.example.com/fa/product',
+                'google_product_category' => 'Books > Persian',
+            ]);
+
+        $storeResponse->assertRedirect(route('settings.index', ['section' => 'catalogs']));
+
+        $override = $product->marketOverrides()->firstOrFail();
+
+        $this->assertSame('AE', $override->target_country);
+        $this->assertSame('fa_IR', $override->content_language);
+        $this->assertSame('Localized Product', $override->title);
+        $this->assertSame('39.00', $override->sale_price);
+        $this->assertSame('AED', $override->currency);
+
+        $updateResponse = $this->actingAs($user)
+            ->withSession(['_token' => 'test-csrf-token'])
+            ->withHeader('X-CSRF-TOKEN', 'test-csrf-token')
+            ->patch(route('settings.catalogs.products.market-overrides.update', $override), [
+                'target_country' => 'ca',
+                'content_language' => 'en',
+                'title' => 'Canada Product',
+                'description' => 'English Canada description',
+                'price' => 55,
+                'sale_price' => 50,
+                'currency' => 'cad',
+                'product_url' => 'https://example.com/ca/product',
+                'checkout_url' => 'https://checkout.example.com/ca/product',
+                'google_product_category' => 'Books > English',
+                'is_active' => '0',
+            ]);
+
+        $updateResponse->assertRedirect(route('settings.index', ['section' => 'catalogs']));
+
+        $override->refresh();
+
+        $this->assertSame('CA', $override->target_country);
+        $this->assertSame('en', $override->content_language);
+        $this->assertSame('Canada Product', $override->title);
+        $this->assertSame('50.00', $override->sale_price);
+        $this->assertSame('CAD', $override->currency);
+        $this->assertFalse($override->is_active);
+
+        $deleteResponse = $this->actingAs($user)
+            ->withSession(['_token' => 'test-csrf-token'])
+            ->withHeader('X-CSRF-TOKEN', 'test-csrf-token')
+            ->delete(route('settings.catalogs.products.market-overrides.delete', $override));
+
+        $deleteResponse->assertRedirect(route('settings.index', ['section' => 'catalogs']));
+
+        $this->assertDatabaseMissing('catalog_product_market_overrides', [
+            'id' => $override->id,
+        ]);
+    }
+
     protected function makeWorkspaceCatalog(): array
     {
         $user = User::factory()->create();
