@@ -4,22 +4,20 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
-class Catalog extends Model
+class CatalogProductSet extends Model
 {
     protected $fillable = [
         'workspace_id',
         'provider_connection_id',
-        'source',
-        'external_catalog_id',
-        'external_business_id',
-        'external_commerce_account_id',
+        'catalog_id',
+        'external_product_set_id',
         'name',
+        'description',
         'status',
         'meta_sync_status',
         'meta_sync_error',
-        'last_synced_at',
         'meta_synced_at',
         'meta',
     ];
@@ -27,7 +25,6 @@ class Catalog extends Model
     protected function casts(): array
     {
         return [
-            'last_synced_at' => 'datetime',
             'meta_synced_at' => 'datetime',
             'meta' => 'array',
         ];
@@ -43,13 +40,17 @@ class Catalog extends Model
         return $this->belongsTo(ProviderConnection::class);
     }
 
-    public function products(): HasMany
+    public function metaCatalog(): BelongsTo
     {
-        return $this->hasMany(CatalogProduct::class);
+        return $this->belongsTo(Catalog::class, 'catalog_id');
     }
 
-    public function productSets(): HasMany
+    public function products(): BelongsToMany
     {
-        return $this->hasMany(CatalogProductSet::class);
+        return $this->belongsToMany(CatalogProduct::class, 'catalog_product_set_items')
+            ->withPivot('sort_order')
+            ->withTimestamps()
+            ->orderBy('catalog_product_set_items.sort_order')
+            ->orderBy('catalog_product_set_items.id');
     }
 }

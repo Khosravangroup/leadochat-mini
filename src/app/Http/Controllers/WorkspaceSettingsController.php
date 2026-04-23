@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Catalog;
+use App\Models\CatalogProduct;
+use App\Models\CatalogProductSet;
 use App\Models\WorkspaceTag;
 use App\Models\ProviderConnection;
 use App\Models\User;
@@ -54,6 +56,8 @@ class WorkspaceSettingsController extends Controller
         $commerceConnections = collect();
         $metaCommerceCatalogs = collect();
         $commerceSourceCatalogs = collect();
+        $commerceProductSets = collect();
+        $commerceTaggableProducts = collect();
 
         if ($workspace && $section === 'tags') {
             $workspaceTags = WorkspaceTag::query()
@@ -156,6 +160,30 @@ class WorkspaceSettingsController extends Controller
                 ->withCount(['products' => fn ($query) => $query->where('is_active', true)])
                 ->orderBy('name')
                 ->get();
+
+            $commerceProductSets = CatalogProductSet::query()
+                ->where('workspace_id', $workspace->id)
+                ->with([
+                    'metaCatalog.providerConnection',
+                    'products' => fn ($query) => $query
+                        ->with('catalog.providerConnection')
+                        ->orderBy('title'),
+                ])
+                ->withCount('products')
+                ->orderBy('name')
+                ->get();
+
+            $commerceTaggableProducts = CatalogProduct::query()
+                ->where('is_active', true)
+                ->whereIn('meta_sync_status', ['queued', 'synced'])
+                ->whereHas('catalog', function ($query) use ($workspace) {
+                    $query->where('workspace_id', $workspace->id)
+                        ->where('status', 'active')
+                        ->where('source', '!=', 'meta');
+                })
+                ->with('catalog.providerConnection')
+                ->orderBy('title')
+                ->get();
         }
 
         return view('settings.index', [
@@ -172,6 +200,8 @@ class WorkspaceSettingsController extends Controller
             'commerceConnections' => $commerceConnections,
             'metaCommerceCatalogs' => $metaCommerceCatalogs,
             'commerceSourceCatalogs' => $commerceSourceCatalogs,
+            'commerceProductSets' => $commerceProductSets,
+            'commerceTaggableProducts' => $commerceTaggableProducts,
             'canManageTeam' => (bool) ($workspace && $user),
         ]);
     }

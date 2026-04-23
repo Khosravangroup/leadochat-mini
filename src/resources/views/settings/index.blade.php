@@ -2466,6 +2466,31 @@
                             outline: none;
                         }
 
+                        .ws-commerce-input,
+                        .ws-commerce-textarea {
+                            width: 100%;
+                            min-height: 38px;
+                            border: 1px solid #cbd5e1;
+                            border-radius: 8px;
+                            background: #fff;
+                            color: #0f172a;
+                            padding: 0 10px;
+                            font-size: 13px;
+                            outline: none;
+                            box-sizing: border-box;
+                        }
+
+                        .ws-commerce-textarea {
+                            min-height: 84px;
+                            padding: 10px;
+                            resize: vertical;
+                        }
+
+                        .ws-commerce-select.is-multi {
+                            min-height: 132px;
+                            padding: 8px 10px;
+                        }
+
                         .ws-commerce-sync-form {
                             display: flex;
                             flex-wrap: wrap;
@@ -2494,6 +2519,13 @@
                             font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
                             font-size: 11px;
                             overflow-wrap: anywhere;
+                        }
+
+                        .ws-commerce-product-set-products {
+                            display: flex;
+                            flex-wrap: wrap;
+                            gap: 6px;
+                            margin-top: 8px;
                         }
 
                         @media (max-width: 1080px) {
@@ -2527,15 +2559,16 @@
                             </div>
 
                             <div class="ws-commerce-card">
-                                <h3 class="ws-section-title">Phase 1 scope</h3>
+                                <h3 class="ws-section-title">Phase 2 scope</h3>
                                 <div class="ws-section-subtitle">
-                                    Connect the account, discover business IDs, find usable product catalogs, and capture permission errors for review evidence.
+                                    Structure the catalog into reusable shop groupings so synced products can be organized before collections, ads, and storefront flows are added.
                                 </div>
                                 <div class="ws-commerce-list">
                                     <span class="ws-commerce-pill ok">Business discovery</span>
                                     <span class="ws-commerce-pill ok">Catalog discovery</span>
-                                    <span class="ws-commerce-pill">Product tag diagnostics</span>
                                     <span class="ws-commerce-pill ok">Product sync foundation</span>
+                                    <span class="ws-commerce-pill ok">Product sets</span>
+                                    <span class="ws-commerce-pill">Collections</span>
                                 </div>
                             </div>
                         </div>
@@ -2658,6 +2691,150 @@
                                 @empty
                                     <div class="ws-empty">
                                         No Meta catalogs discovered yet.
+                                    </div>
+                                @endforelse
+                            </div>
+                        </div>
+
+                        <div class="ws-commerce-grid">
+                            <div class="ws-commerce-card">
+                                <h3 class="ws-section-title">Create product set</h3>
+                                <div class="ws-section-subtitle">
+                                    Group synced products into reusable sets for each Meta catalog. This is the foundation for collections and shop merchandising.
+                                </div>
+
+                                <form method="POST" action="{{ route('settings.commerce.product-sets.store') }}" class="ws-commerce-list" style="margin-top:14px;">
+                                    @csrf
+
+                                    <select name="meta_catalog_id" class="ws-commerce-select" required>
+                                        <option value="">Choose Meta catalog</option>
+                                        @foreach (($metaCommerceCatalogs ?? collect()) as $catalog)
+                                            <option value="{{ $catalog->id }}">
+                                                {{ $catalog->name }}
+                                                @if ($catalog->providerConnection)
+                                                    · {{ $catalog->providerConnection->provider_account_name ?: $catalog->providerConnection->provider_account_id }}
+                                                @endif
+                                            </option>
+                                        @endforeach
+                                    </select>
+
+                                    <input
+                                        type="text"
+                                        name="name"
+                                        class="ws-commerce-input"
+                                        maxlength="160"
+                                        placeholder="Featured summer drop"
+                                        value="{{ old('name') }}"
+                                        required
+                                    >
+
+                                    <textarea
+                                        name="description"
+                                        class="ws-commerce-textarea"
+                                        maxlength="1000"
+                                        placeholder="Optional internal notes for this product set"
+                                    >{{ old('description') }}</textarea>
+
+                                    <div>
+                                        <button type="submit" class="ws-commerce-button">Create product set</button>
+                                    </div>
+                                </form>
+                            </div>
+
+                            <div class="ws-commerce-card">
+                                <h3 class="ws-section-title">Product set readiness</h3>
+                                <div class="ws-section-subtitle">
+                                    Only active Leadochat products that already have Meta sync status queued or synced can be added to a product set.
+                                </div>
+                                <div class="ws-commerce-list">
+                                    <span class="ws-commerce-pill ok">{{ ($commerceTaggableProducts ?? collect())->count() }} taggable products</span>
+                                    <span class="ws-commerce-pill">{{ ($commerceProductSets ?? collect())->count() }} product sets</span>
+                                    <span class="ws-commerce-pill">{{ ($metaCommerceCatalogs ?? collect())->count() }} Meta catalogs</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="ws-commerce-card">
+                            <h3 class="ws-section-title">Product sets</h3>
+
+                            <div class="ws-commerce-list">
+                                @forelse (($commerceProductSets ?? collect()) as $productSet)
+                                    @php
+                                        $setProducts = ($commerceTaggableProducts ?? collect())->filter(function ($product) use ($productSet) {
+                                            $catalogConnectionId = $product->catalog?->provider_connection_id;
+
+                                            return !$catalogConnectionId || (int) $catalogConnectionId === (int) $productSet->provider_connection_id;
+                                        })->values();
+                                    @endphp
+
+                                    <div class="ws-commerce-catalog">
+                                        <div class="ws-commerce-head">
+                                            <div>
+                                                <div class="ws-commerce-title">{{ $productSet->name }}</div>
+                                                <div class="ws-commerce-meta">
+                                                    Meta catalog: {{ $productSet->metaCatalog?->name ?: '-' }}
+                                                    @if ($productSet->providerConnection)
+                                                        · Instagram: {{ $productSet->providerConnection->provider_account_name ?: $productSet->providerConnection->provider_account_id }}
+                                                    @endif
+                                                </div>
+                                            </div>
+
+                                            <form method="POST" action="{{ route('settings.commerce.product-sets.delete', $productSet) }}">
+                                                @csrf
+                                                @method('DELETE')
+                                                <button type="submit" class="ws-commerce-button" style="background:#b91c1c;">Delete</button>
+                                            </form>
+                                        </div>
+
+                                        <div class="ws-commerce-meta">
+                                            {{ $productSet->products_count }} product(s)
+                                            · {{ str_replace('_', ' ', $productSet->meta_sync_status ?: 'not_synced') }}
+                                        </div>
+
+                                        @if ($productSet->description)
+                                            <div class="ws-commerce-meta">{{ $productSet->description }}</div>
+                                        @endif
+
+                                        @if ($productSet->products->isNotEmpty())
+                                            <div class="ws-commerce-product-set-products">
+                                                @foreach ($productSet->products as $product)
+                                                    <span class="ws-commerce-pill">
+                                                        {{ $product->title }}
+                                                        @if ($product->sku)
+                                                            · {{ $product->sku }}
+                                                        @endif
+                                                    </span>
+                                                @endforeach
+                                            </div>
+                                        @endif
+
+                                        <form method="POST" action="{{ route('settings.commerce.product-sets.products.sync', $productSet) }}" class="ws-commerce-list" style="margin-top:12px;">
+                                            @csrf
+                                            @method('PATCH')
+
+                                            <select name="product_ids[]" class="ws-commerce-select is-multi" multiple size="6">
+                                                @foreach ($setProducts as $product)
+                                                    <option
+                                                        value="{{ $product->id }}"
+                                                        @selected($productSet->products->contains('id', $product->id))
+                                                    >
+                                                        {{ $product->title }}
+                                                        @if ($product->sku)
+                                                            · {{ $product->sku }}
+                                                        @endif
+                                                        · {{ $product->catalog?->name ?: 'Catalog' }}
+                                                    </option>
+                                                @endforeach
+                                            </select>
+
+                                            <div>
+                                                <button type="submit" class="ws-commerce-button">Save product set items</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                @empty
+                                    <div class="ws-empty">
+                                        No product sets created yet.
                                     </div>
                                 @endforelse
                             </div>

@@ -54,4 +54,9 @@ class ProviderConnection extends Model
     {
         return $this->hasMany(Catalog::class);
     }
+
+    public function catalogProductSets(): HasMany
+    {
+        return $this->hasMany(CatalogProductSet::class);
+    }
 }

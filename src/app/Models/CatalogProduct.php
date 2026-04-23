@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class CatalogProduct extends Model
@@ -44,5 +45,12 @@ class CatalogProduct extends Model
     public function productShares(): HasMany
     {
         return $this->hasMany(ConversationProductShare::class);
+    }
+
+    public function productSets(): BelongsToMany
+    {
+        return $this->belongsToMany(CatalogProductSet::class, 'catalog_product_set_items')
+            ->withPivot('sort_order')
+            ->withTimestamps();
     }
 }
