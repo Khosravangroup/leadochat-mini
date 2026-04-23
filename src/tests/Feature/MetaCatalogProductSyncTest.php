@@ -79,7 +79,6 @@ class MetaCatalogProductSyncTest extends TestCase
             'title' => 'Yellow Notebook',
             'description' => 'A compact notebook for catalog sync.',
             'price' => 15,
-            'sale_price' => 12,
             'currency' => 'USD',
             'image_url' => 'https://example.com/notebook.jpg',
             'product_url' => 'https://example.com/notebook',
@@ -95,6 +94,17 @@ class MetaCatalogProductSyncTest extends TestCase
                 'brand' => 'Leadochat Test',
                 'inventory' => 7,
             ],
+        ]);
+
+        $product->offers()->create([
+            'name' => 'Notebook launch promo',
+            'status' => 'active',
+            'discount_type' => 'percentage',
+            'discount_value' => 20,
+            'currency' => 'USD',
+            'priority' => 1,
+            'starts_at' => now()->subHour(),
+            'ends_at' => now()->addDay(),
         ]);
 
         $response = $this

@@ -218,6 +218,95 @@ class WorkspaceCatalogManagementTest extends TestCase
         ]);
     }
 
+    public function test_agent_can_manage_product_offers_and_attach_them_to_market_profiles(): void
+    {
+        [$user, $catalog] = $this->makeWorkspaceCatalog();
+
+        $product = CatalogProduct::create([
+            'catalog_id' => $catalog->id,
+            'sku' => 'PROMO-1',
+            'title' => 'Promo Product',
+            'price' => 80,
+            'currency' => 'USD',
+            'availability' => 'in_stock',
+            'is_active' => true,
+        ]);
+
+        $marketOverride = $product->marketOverrides()->create([
+            'target_country' => 'AE',
+            'content_language' => 'fa_IR',
+            'price' => 70,
+            'currency' => 'AED',
+            'is_active' => true,
+        ]);
+
+        $storeResponse = $this->actingAs($user)
+            ->withSession(['_token' => 'test-csrf-token'])
+            ->withHeader('X-CSRF-TOKEN', 'test-csrf-token')
+            ->post(route('settings.catalogs.products.offers.store', $product), [
+                'name' => 'Launch promo',
+                'status' => 'active',
+                'discount_type' => 'percentage',
+                'discount_value' => 15,
+                'currency' => 'usd',
+                'priority' => 5,
+                'starts_at' => '2026-04-23T12:00',
+                'ends_at' => '2026-04-30T12:00',
+                'checkout_url' => 'https://checkout.example.com/promo',
+            ]);
+
+        $storeResponse->assertRedirect(route('settings.index', ['section' => 'catalogs']));
+
+        $offer = $product->offers()->firstOrFail();
+
+        $this->assertSame('Launch promo', $offer->name);
+        $this->assertSame('active', $offer->status);
+        $this->assertSame('percentage', $offer->discount_type);
+        $this->assertSame('15.00', $offer->discount_value);
+        $this->assertSame('USD', $offer->currency);
+        $this->assertSame(5, $offer->priority);
+        $this->assertNull($offer->catalog_product_market_override_id);
+
+        $updateResponse = $this->actingAs($user)
+            ->withSession(['_token' => 'test-csrf-token'])
+            ->withHeader('X-CSRF-TOKEN', 'test-csrf-token')
+            ->patch(route('settings.catalogs.products.offers.update', $offer), [
+                'name' => 'AE promo',
+                'status' => 'paused',
+                'market_override_id' => $marketOverride->id,
+                'discount_type' => 'price_override',
+                'discount_value' => 55,
+                'currency' => 'aed',
+                'priority' => 2,
+                'starts_at' => '2026-04-24T12:00',
+                'ends_at' => '2026-05-01T12:00',
+                'checkout_url' => 'https://checkout.example.com/ae-promo',
+            ]);
+
+        $updateResponse->assertRedirect(route('settings.index', ['section' => 'catalogs']));
+
+        $offer->refresh();
+
+        $this->assertSame('AE promo', $offer->name);
+        $this->assertSame('paused', $offer->status);
+        $this->assertSame('price_override', $offer->discount_type);
+        $this->assertSame('55.00', $offer->discount_value);
+        $this->assertSame('AED', $offer->currency);
+        $this->assertSame(2, $offer->priority);
+        $this->assertSame($marketOverride->id, $offer->catalog_product_market_override_id);
+
+        $deleteResponse = $this->actingAs($user)
+            ->withSession(['_token' => 'test-csrf-token'])
+            ->withHeader('X-CSRF-TOKEN', 'test-csrf-token')
+            ->delete(route('settings.catalogs.products.offers.delete', $offer));
+
+        $deleteResponse->assertRedirect(route('settings.index', ['section' => 'catalogs']));
+
+        $this->assertDatabaseMissing('catalog_product_offers', [
+            'id' => $offer->id,
+        ]);
+    }
+
     protected function makeWorkspaceCatalog(): array
     {
         $user = User::factory()->create();

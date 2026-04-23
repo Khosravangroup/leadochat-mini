@@ -4,6 +4,7 @@ namespace App\Services\Meta\Commerce;
 
 use App\Models\Catalog;
 use App\Models\CatalogProduct;
+use App\Models\CatalogProductOffer;
 use App\Models\ProviderConnection;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Http;
@@ -27,6 +28,7 @@ class MetaCatalogProductSyncService
 
         $products = $sourceCatalog->products()
             ->where('is_active', true)
+            ->with('offers')
             ->orderBy('title')
             ->get();
 
@@ -152,6 +154,9 @@ class MetaCatalogProductSyncService
         $brand = trim((string) ($product->brand ?: Arr::get($metadata, 'brand', config('app.name', 'Leadochat'))));
         $condition = trim((string) ($product->product_condition ?: Arr::get($metadata, 'condition', 'new')));
         $inventory = $product->inventory_quantity ?? Arr::get($metadata, 'inventory');
+        $activeOffer = $this->resolveActiveBaseOffer($product);
+        $resolvedSalePrice = $activeOffer?->resolvedSalePrice($product->price !== null ? (float) $product->price : null)
+            ?? ($product->sale_price !== null ? (float) $product->sale_price : null);
 
         return array_filter([
             'name' => mb_substr(trim((string) $product->title), 0, 200),
@@ -164,11 +169,22 @@ class MetaCatalogProductSyncService
             'image_url' => trim((string) $product->image_url),
             'brand' => $brand !== '' ? $brand : 'Leadochat',
             'inventory' => is_numeric($inventory) ? (int) $inventory : null,
-            'sale_price' => $product->sale_price !== null ? $this->formatMetaPrice($product, (float) $product->sale_price) : null,
+            'sale_price' => $resolvedSalePrice !== null ? $this->formatMetaPrice($product, $resolvedSalePrice) : null,
             'google_product_category' => filled($product->google_product_category) ? trim((string) $product->google_product_category) : null,
             'content_language' => filled($product->content_language) ? trim((string) $product->content_language) : null,
             'target_country' => filled($product->target_country) ? strtoupper(trim((string) $product->target_country)) : null,
         ], fn ($value) => $value !== null && $value !== '');
+    }
+
+    protected function resolveActiveBaseOffer(CatalogProduct $product): ?CatalogProductOffer
+    {
+        $now = now();
+
+        return $product->offers
+            ->whereNull('catalog_product_market_override_id')
+            ->filter(fn (CatalogProductOffer $offer) => $offer->isActiveNow($now))
+            ->sortBy(fn (CatalogProductOffer $offer) => sprintf('%04d-%010d', (int) $offer->priority, 9999999999 - (int) $offer->id))
+            ->first();
     }
 
     protected function retailerIdForProduct(CatalogProduct $product): string

@@ -2173,6 +2173,12 @@
                                                             $productBrand = $product->brand ?: data_get($product->metadata, 'brand');
                                                             $productCondition = $product->product_condition ?: data_get($product->metadata, 'condition');
                                                             $productInventory = $product->inventory_quantity ?? data_get($product->metadata, 'inventory');
+                                                            $now = now();
+                                                            $activeBaseOffer = $product->offers
+                                                                ->whereNull('catalog_product_market_override_id')
+                                                                ->first(function ($offer) use ($now) {
+                                                                    return $offer->isActiveNow($now);
+                                                                });
                                                         @endphp
                                                         <div class="ws-product-title">{{ $product->title }}</div>
                                                         <div class="ws-product-meta">
@@ -2208,6 +2214,9 @@
                                                             @endif
                                                             @if ($product->target_country)
                                                                 · Market: {{ strtoupper($product->target_country) }}
+                                                            @endif
+                                                            @if ($activeBaseOffer)
+                                                                · Offer: {{ $activeBaseOffer->name }}
                                                             @endif
                                                         </div>
                                                         @if ($product->description)
@@ -2489,6 +2498,204 @@
 
                                                                     <div>
                                                                         <button type="submit" class="ws-catalog-submit">Add localized profile</button>
+                                                                    </div>
+                                                                </form>
+                                                            </div>
+
+                                                            <div class="ws-catalog-import" style="margin-top:14px;">
+                                                                <h4 class="ws-product-title">Offers and promos</h4>
+                                                                <div class="ws-catalog-help">
+                                                                    Create reusable timed offers for the base product or attach them to one localized market profile.
+                                                                </div>
+
+                                                                <div style="display:grid; gap:12px; margin-top:12px;">
+                                                                    @forelse ($product->offers as $offer)
+                                                                        @php
+                                                                            $offerTarget = $offer->marketOverride
+                                                                                ? strtoupper($offer->marketOverride->target_country) . ' · ' . strtoupper(str_replace('_', '-', $offer->marketOverride->content_language))
+                                                                                : 'Base product';
+                                                                            $offerState = $offer->status;
+                                                                            if ($offer->status === 'active' && $offer->starts_at && $offer->starts_at->gt($now)) {
+                                                                                $offerState = 'scheduled';
+                                                                            } elseif ($offer->status === 'active' && $offer->ends_at && $offer->ends_at->lt($now)) {
+                                                                                $offerState = 'expired';
+                                                                            }
+                                                                        @endphp
+                                                                        <div style="border:1px solid #e2e8f0; border-radius:8px; padding:12px; display:grid; gap:12px;">
+                                                                            <div class="ws-product-meta">
+                                                                                {{ $offer->name }}
+                                                                                · {{ $offerTarget }}
+                                                                                · {{ ucfirst($offerState) }}
+                                                                                · {{ str_replace('_', ' ', $offer->discount_type) }}
+                                                                                · {{ rtrim(rtrim(number_format((float) $offer->discount_value, 2, '.', ''), '0'), '.') }}
+                                                                                @if ($offer->discount_type === 'percentage')
+                                                                                    %
+                                                                                @else
+                                                                                    {{ strtoupper($offer->currency ?: $product->currency) }}
+                                                                                @endif
+                                                                            </div>
+
+                                                                            <form method="POST" action="{{ route('settings.catalogs.products.offers.update', $offer) }}" class="ws-catalog-form">
+                                                                                @csrf
+                                                                                @method('PATCH')
+
+                                                                                <div class="ws-catalog-form-grid">
+                                                                                    <div class="ws-catalog-form-field">
+                                                                                        <label class="ws-catalog-label" for="offerName{{ $offer->id }}">Offer name</label>
+                                                                                        <input id="offerName{{ $offer->id }}" name="name" class="ws-catalog-input" type="text" value="{{ $offer->name }}" required>
+                                                                                    </div>
+
+                                                                                    <div class="ws-catalog-form-field">
+                                                                                        <label class="ws-catalog-label" for="offerStatus{{ $offer->id }}">Status</label>
+                                                                                        <select id="offerStatus{{ $offer->id }}" name="status" class="ws-catalog-select">
+                                                                                            <option value="draft" @selected($offer->status === 'draft')>Draft</option>
+                                                                                            <option value="active" @selected($offer->status === 'active')>Active</option>
+                                                                                            <option value="paused" @selected($offer->status === 'paused')>Paused</option>
+                                                                                        </select>
+                                                                                    </div>
+
+                                                                                    <div class="ws-catalog-form-field">
+                                                                                        <label class="ws-catalog-label" for="offerTarget{{ $offer->id }}">Target</label>
+                                                                                        <select id="offerTarget{{ $offer->id }}" name="market_override_id" class="ws-catalog-select">
+                                                                                            <option value="">Base product</option>
+                                                                                            @foreach ($product->marketOverrides as $marketOverrideOption)
+                                                                                                <option value="{{ $marketOverrideOption->id }}" @selected($offer->catalog_product_market_override_id === $marketOverrideOption->id)>
+                                                                                                    {{ strtoupper($marketOverrideOption->target_country) }} · {{ strtoupper(str_replace('_', '-', $marketOverrideOption->content_language)) }}
+                                                                                                </option>
+                                                                                            @endforeach
+                                                                                        </select>
+                                                                                    </div>
+
+                                                                                    <div class="ws-catalog-form-field">
+                                                                                        <label class="ws-catalog-label" for="offerDiscountType{{ $offer->id }}">Discount type</label>
+                                                                                        <select id="offerDiscountType{{ $offer->id }}" name="discount_type" class="ws-catalog-select">
+                                                                                            <option value="percentage" @selected($offer->discount_type === 'percentage')>Percentage</option>
+                                                                                            <option value="fixed_amount" @selected($offer->discount_type === 'fixed_amount')>Fixed amount</option>
+                                                                                            <option value="price_override" @selected($offer->discount_type === 'price_override')>Price override</option>
+                                                                                        </select>
+                                                                                    </div>
+
+                                                                                    <div class="ws-catalog-form-field">
+                                                                                        <label class="ws-catalog-label" for="offerDiscountValue{{ $offer->id }}">Discount value</label>
+                                                                                        <input id="offerDiscountValue{{ $offer->id }}" name="discount_value" class="ws-catalog-input" type="number" min="0" step="0.01" value="{{ $offer->discount_value }}" required>
+                                                                                    </div>
+
+                                                                                    <div class="ws-catalog-form-field">
+                                                                                        <label class="ws-catalog-label" for="offerCurrency{{ $offer->id }}">Currency</label>
+                                                                                        <input id="offerCurrency{{ $offer->id }}" name="currency" class="ws-catalog-input" type="text" value="{{ strtoupper($offer->currency ?: $product->currency) }}" maxlength="3">
+                                                                                    </div>
+
+                                                                                    <div class="ws-catalog-form-field">
+                                                                                        <label class="ws-catalog-label" for="offerPriority{{ $offer->id }}">Priority</label>
+                                                                                        <input id="offerPriority{{ $offer->id }}" name="priority" class="ws-catalog-input" type="number" min="1" max="999" step="1" value="{{ $offer->priority }}">
+                                                                                    </div>
+
+                                                                                    <div class="ws-catalog-form-field">
+                                                                                        <label class="ws-catalog-label" for="offerStarts{{ $offer->id }}">Starts at</label>
+                                                                                        <input id="offerStarts{{ $offer->id }}" name="starts_at" class="ws-catalog-input" type="datetime-local" value="{{ optional($offer->starts_at)->format('Y-m-d\TH:i') }}">
+                                                                                    </div>
+
+                                                                                    <div class="ws-catalog-form-field">
+                                                                                        <label class="ws-catalog-label" for="offerEnds{{ $offer->id }}">Ends at</label>
+                                                                                        <input id="offerEnds{{ $offer->id }}" name="ends_at" class="ws-catalog-input" type="datetime-local" value="{{ optional($offer->ends_at)->format('Y-m-d\TH:i') }}">
+                                                                                    </div>
+
+                                                                                    <div class="ws-catalog-form-field full">
+                                                                                        <label class="ws-catalog-label" for="offerCheckout{{ $offer->id }}">Offer checkout URL</label>
+                                                                                        <input id="offerCheckout{{ $offer->id }}" name="checkout_url" class="ws-catalog-input" type="url" value="{{ $offer->checkout_url }}" placeholder="https://...">
+                                                                                    </div>
+                                                                                </div>
+
+                                                                                <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                                                                                    <button type="submit" class="ws-catalog-secondary">Save offer</button>
+                                                                                </div>
+                                                                            </form>
+
+                                                                            <form method="POST" action="{{ route('settings.catalogs.products.offers.delete', $offer) }}">
+                                                                                @csrf
+                                                                                @method('DELETE')
+                                                                                <button type="submit" class="ws-catalog-danger">Delete offer</button>
+                                                                            </form>
+                                                                        </div>
+                                                                    @empty
+                                                                        <div class="ws-product-empty">
+                                                                            No offers yet.
+                                                                        </div>
+                                                                    @endforelse
+                                                                </div>
+
+                                                                <form method="POST" action="{{ route('settings.catalogs.products.offers.store', $product) }}" class="ws-catalog-form" style="margin-top:14px;">
+                                                                    @csrf
+
+                                                                    <div class="ws-catalog-form-grid">
+                                                                        <div class="ws-catalog-form-field">
+                                                                            <label class="ws-catalog-label" for="newOfferName{{ $product->id }}">Offer name</label>
+                                                                            <input id="newOfferName{{ $product->id }}" name="name" class="ws-catalog-input" type="text" placeholder="Spring launch promo" required>
+                                                                        </div>
+
+                                                                        <div class="ws-catalog-form-field">
+                                                                            <label class="ws-catalog-label" for="newOfferStatus{{ $product->id }}">Status</label>
+                                                                            <select id="newOfferStatus{{ $product->id }}" name="status" class="ws-catalog-select">
+                                                                                <option value="draft">Draft</option>
+                                                                                <option value="active">Active</option>
+                                                                                <option value="paused">Paused</option>
+                                                                            </select>
+                                                                        </div>
+
+                                                                        <div class="ws-catalog-form-field">
+                                                                            <label class="ws-catalog-label" for="newOfferTarget{{ $product->id }}">Target</label>
+                                                                            <select id="newOfferTarget{{ $product->id }}" name="market_override_id" class="ws-catalog-select">
+                                                                                <option value="">Base product</option>
+                                                                                @foreach ($product->marketOverrides as $marketOverrideOption)
+                                                                                    <option value="{{ $marketOverrideOption->id }}">
+                                                                                        {{ strtoupper($marketOverrideOption->target_country) }} · {{ strtoupper(str_replace('_', '-', $marketOverrideOption->content_language)) }}
+                                                                                    </option>
+                                                                                @endforeach
+                                                                            </select>
+                                                                        </div>
+
+                                                                        <div class="ws-catalog-form-field">
+                                                                            <label class="ws-catalog-label" for="newOfferDiscountType{{ $product->id }}">Discount type</label>
+                                                                            <select id="newOfferDiscountType{{ $product->id }}" name="discount_type" class="ws-catalog-select">
+                                                                                <option value="percentage">Percentage</option>
+                                                                                <option value="fixed_amount">Fixed amount</option>
+                                                                                <option value="price_override">Price override</option>
+                                                                            </select>
+                                                                        </div>
+
+                                                                        <div class="ws-catalog-form-field">
+                                                                            <label class="ws-catalog-label" for="newOfferDiscountValue{{ $product->id }}">Discount value</label>
+                                                                            <input id="newOfferDiscountValue{{ $product->id }}" name="discount_value" class="ws-catalog-input" type="number" min="0" step="0.01" required>
+                                                                        </div>
+
+                                                                        <div class="ws-catalog-form-field">
+                                                                            <label class="ws-catalog-label" for="newOfferCurrency{{ $product->id }}">Currency</label>
+                                                                            <input id="newOfferCurrency{{ $product->id }}" name="currency" class="ws-catalog-input" type="text" value="{{ strtoupper($product->currency) }}" maxlength="3">
+                                                                        </div>
+
+                                                                        <div class="ws-catalog-form-field">
+                                                                            <label class="ws-catalog-label" for="newOfferPriority{{ $product->id }}">Priority</label>
+                                                                            <input id="newOfferPriority{{ $product->id }}" name="priority" class="ws-catalog-input" type="number" min="1" max="999" step="1" value="100">
+                                                                        </div>
+
+                                                                        <div class="ws-catalog-form-field">
+                                                                            <label class="ws-catalog-label" for="newOfferStarts{{ $product->id }}">Starts at</label>
+                                                                            <input id="newOfferStarts{{ $product->id }}" name="starts_at" class="ws-catalog-input" type="datetime-local">
+                                                                        </div>
+
+                                                                        <div class="ws-catalog-form-field">
+                                                                            <label class="ws-catalog-label" for="newOfferEnds{{ $product->id }}">Ends at</label>
+                                                                            <input id="newOfferEnds{{ $product->id }}" name="ends_at" class="ws-catalog-input" type="datetime-local">
+                                                                        </div>
+
+                                                                        <div class="ws-catalog-form-field full">
+                                                                            <label class="ws-catalog-label" for="newOfferCheckout{{ $product->id }}">Offer checkout URL</label>
+                                                                            <input id="newOfferCheckout{{ $product->id }}" name="checkout_url" class="ws-catalog-input" type="url" placeholder="https://...">
+                                                                        </div>
+                                                                    </div>
+
+                                                                    <div>
+                                                                        <button type="submit" class="ws-catalog-submit">Add offer</button>
                                                                     </div>
                                                                 </form>
                                                             </div>

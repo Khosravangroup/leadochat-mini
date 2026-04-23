@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Catalog;
 use App\Models\CatalogProduct;
 use App\Models\CatalogProductMarketOverride;
+use App\Models\CatalogProductOffer;
 use App\Models\ProviderConnection;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -285,6 +286,56 @@ class WorkspaceCatalogController extends Controller
             ->with('status', 'Localized market profile removed.');
     }
 
+    public function storeOffer(Request $request, CatalogProduct $product): RedirectResponse
+    {
+        $workspace = $request->user()?->currentWorkspace();
+        $catalog = $product->catalog;
+
+        $this->guardWorkspaceCatalog($catalog, $workspace?->id);
+
+        $validated = $request->validate($this->offerRules($product));
+
+        $product->offers()->create($this->normalizeOfferAttributes($validated, $product));
+
+        return redirect()
+            ->route('settings.index', ['section' => 'catalogs'])
+            ->with('status', 'Offer saved.');
+    }
+
+    public function updateOffer(Request $request, CatalogProductOffer $offer): RedirectResponse
+    {
+        $workspace = $request->user()?->currentWorkspace();
+        $product = $offer->product;
+        $catalog = $product?->catalog;
+
+        $this->guardWorkspaceCatalog($catalog, $workspace?->id);
+
+        $validated = $request->validate($this->offerRules($product, [
+            'status' => ['required', 'string', Rule::in(['draft', 'active', 'paused'])],
+        ]));
+
+        $offer->update($this->normalizeOfferAttributes($validated, $product));
+
+        return redirect()
+            ->route('settings.index', ['section' => 'catalogs'])
+            ->with('status', 'Offer updated.');
+    }
+
+    public function deleteOffer(Request $request, CatalogProductOffer $offer): RedirectResponse
+    {
+        $workspace = $request->user()?->currentWorkspace();
+        $product = $offer->product;
+        $catalog = $product?->catalog;
+
+        $this->guardWorkspaceCatalog($catalog, $workspace?->id);
+
+        $offer->delete();
+
+        return redirect()
+            ->route('settings.index', ['section' => 'catalogs'])
+            ->with('status', 'Offer removed.');
+    }
+
     protected function guardWorkspaceCatalog(?Catalog $catalog, ?int $workspaceId): void
     {
         if (! $workspaceId || ! $catalog || $catalog->workspace_id !== $workspaceId) {
@@ -342,6 +393,27 @@ class WorkspaceCatalogController extends Controller
             'product_url' => ['nullable', 'url', 'max:2048'],
             'checkout_url' => ['nullable', 'url', 'max:2048'],
             'google_product_category' => ['nullable', 'string', 'max:255'],
+        ], $extra);
+    }
+
+    protected function offerRules(CatalogProduct $product, array $extra = []): array
+    {
+        return array_merge([
+            'name' => ['required', 'string', 'max:160'],
+            'status' => ['required', 'string', Rule::in(['draft', 'active', 'paused'])],
+            'market_override_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('catalog_product_market_overrides', 'id')
+                    ->where(fn ($query) => $query->where('catalog_product_id', $product->id)),
+            ],
+            'discount_type' => ['required', 'string', Rule::in(['percentage', 'fixed_amount', 'price_override'])],
+            'discount_value' => ['required', 'numeric', 'min:0', 'max:999999999.99'],
+            'currency' => ['nullable', 'string', 'size:3'],
+            'priority' => ['nullable', 'integer', 'min:1', 'max:999'],
+            'starts_at' => ['nullable', 'date'],
+            'ends_at' => ['nullable', 'date', 'after_or_equal:starts_at'],
+            'checkout_url' => ['nullable', 'url', 'max:2048'],
         ], $extra);
     }
 
@@ -411,6 +483,37 @@ class WorkspaceCatalogController extends Controller
             'google_product_category' => filled($validated['google_product_category'] ?? null) ? mb_substr(trim((string) $validated['google_product_category']), 0, 255) : null,
             'is_active' => $extra['is_active'] ?? true,
         ], Arr::except($extra, ['is_active'])), fn ($value) => $value !== null);
+    }
+
+    protected function normalizeOfferAttributes(array $validated, CatalogProduct $product): array
+    {
+        $currency = strtoupper(trim((string) ($validated['currency'] ?? $product->currency ?? 'USD')));
+        $discountType = (string) ($validated['discount_type'] ?? 'fixed_amount');
+        $discountValue = round((float) ($validated['discount_value'] ?? 0), 2);
+        $marketOverrideId = isset($validated['market_override_id']) && $validated['market_override_id'] !== ''
+            ? (int) $validated['market_override_id']
+            : null;
+
+        if (strlen($currency) !== 3) {
+            $currency = strtoupper((string) ($product->currency ?: 'USD'));
+        }
+
+        if ($discountType === 'percentage') {
+            $discountValue = min($discountValue, 100.0);
+        }
+
+        return array_filter([
+            'catalog_product_market_override_id' => $marketOverrideId,
+            'name' => mb_substr(trim((string) $validated['name']), 0, 160),
+            'status' => $validated['status'] ?? 'draft',
+            'discount_type' => $discountType,
+            'discount_value' => $discountValue,
+            'currency' => $currency,
+            'priority' => (int) ($validated['priority'] ?? 100),
+            'starts_at' => filled($validated['starts_at'] ?? null) ? $validated['starts_at'] : null,
+            'ends_at' => filled($validated['ends_at'] ?? null) ? $validated['ends_at'] : null,
+            'checkout_url' => filled($validated['checkout_url'] ?? null) ? mb_substr(trim((string) $validated['checkout_url']), 0, 2048) : null,
+        ], fn ($value) => $value !== null);
     }
 
     protected function normalizeCsvHeader(array $row): array

@@ -67,6 +67,13 @@ class CatalogProduct extends Model
             ->orderBy('content_language');
     }
 
+    public function offers(): HasMany
+    {
+        return $this->hasMany(CatalogProductOffer::class)
+            ->orderBy('priority')
+            ->orderByDesc('id');
+    }
+
     public function productSets(): BelongsToMany
     {
         return $this->belongsToMany(CatalogProductSet::class, 'catalog_product_set_items')

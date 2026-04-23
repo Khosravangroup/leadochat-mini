@@ -116,6 +116,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/settings/catalog-products/{product}/market-overrides', [WorkspaceCatalogController::class, 'storeMarketOverride'])->name('settings.catalogs.products.market-overrides.store');
     Route::patch('/settings/catalog-product-market-overrides/{marketOverride}', [WorkspaceCatalogController::class, 'updateMarketOverride'])->name('settings.catalogs.products.market-overrides.update');
     Route::delete('/settings/catalog-product-market-overrides/{marketOverride}', [WorkspaceCatalogController::class, 'deleteMarketOverride'])->name('settings.catalogs.products.market-overrides.delete');
+    Route::post('/settings/catalog-products/{product}/offers', [WorkspaceCatalogController::class, 'storeOffer'])->name('settings.catalogs.products.offers.store');
+    Route::patch('/settings/catalog-product-offers/{offer}', [WorkspaceCatalogController::class, 'updateOffer'])->name('settings.catalogs.products.offers.update');
+    Route::delete('/settings/catalog-product-offers/{offer}', [WorkspaceCatalogController::class, 'deleteOffer'])->name('settings.catalogs.products.offers.delete');
     Route::post('/settings/commerce/connections/{connection}/sync', [WorkspaceMetaCommerceController::class, 'sync'])->name('settings.commerce.sync');
     Route::post('/settings/commerce/catalogs/{catalog}/products/sync', [WorkspaceMetaCommerceController::class, 'syncProducts'])->name('settings.commerce.catalogs.products.sync');
     Route::post('/settings/commerce/product-sets', [WorkspaceMetaProductSetController::class, 'store'])->name('settings.commerce.product-sets.store');
