@@ -3083,6 +3083,7 @@
                                         $readinessChecks = is_array($diagnostics['readiness'] ?? null) ? $diagnostics['readiness'] : [];
                                         $diagnosticAccount = is_array($diagnostics['account'] ?? null) ? $diagnostics['account'] : [];
                                         $diagnosticPermissions = is_array($diagnostics['permissions'] ?? null) ? $diagnostics['permissions'] : [];
+                                        $diagnosticChannel = is_array($diagnostics['channel'] ?? null) ? $diagnostics['channel'] : [];
                                         $diagnosticWebhook = is_array($diagnostics['webhook'] ?? null) ? $diagnostics['webhook'] : [];
                                         $diagnosticShop = is_array($diagnostics['shop'] ?? null) ? $diagnostics['shop'] : [];
                                         $diagnosticCheckout = is_array($diagnostics['checkout_urls'] ?? null) ? $diagnostics['checkout_urls'] : [];
@@ -3190,6 +3191,26 @@
                                                 </div>
                                             @endif
 
+                                            @if ($diagnosticChannel !== [])
+                                                <div class="ws-commerce-meta">
+                                                    Channel health:
+                                                    <span class="ws-commerce-code">
+                                                        Status {{ $diagnosticChannel['status'] ?? '-' }},
+                                                        type {{ $diagnosticChannel['provider_account_type'] ?? '-' }},
+                                                        token {{ !empty($diagnosticChannel['token_expired']) ? 'expired' : 'healthy' }}
+                                                    </span>
+                                                    @if (!empty($diagnosticChannel['connected_at']))
+                                                        <span class="ws-commerce-code">Connected at: {{ $diagnosticChannel['connected_at'] }}</span>
+                                                    @endif
+                                                    @if (!empty($diagnosticChannel['token_expires_at']))
+                                                        <span class="ws-commerce-code">Token expires at: {{ $diagnosticChannel['token_expires_at'] }}</span>
+                                                    @endif
+                                                    @if (!empty($diagnosticChannel['live_subscribed_fields']))
+                                                        <span class="ws-commerce-code">Live subscribed fields: {{ implode(', ', (array) $diagnosticChannel['live_subscribed_fields']) }}</span>
+                                                    @endif
+                                                </div>
+                                            @endif
+
                                             @if ($diagnosticWebhook !== [])
                                                 <div class="ws-commerce-meta">
                                                     Webhook fields:
@@ -3212,6 +3233,28 @@
                                                         product sets {{ $diagnosticShop['local_stats']['product_set_count'] ?? 0 }},
                                                         collections {{ $diagnosticShop['local_stats']['collection_count'] ?? 0 }}
                                                     </span>
+                                                </div>
+                                            @endif
+
+                                            @if (!empty($diagnosticShop['meta_catalogs']))
+                                                <div class="ws-commerce-meta">
+                                                    Live shop assets:
+                                                    @foreach ((array) $diagnosticShop['meta_catalogs'] as $shopCatalog)
+                                                        <span class="ws-commerce-code">
+                                                            {{ $shopCatalog['name'] ?? 'Meta catalog' }}
+                                                            · ID {{ $shopCatalog['external_catalog_id'] ?? '-' }}
+                                                            @if (!empty($shopCatalog['vertical']))
+                                                                · {{ $shopCatalog['vertical'] }}
+                                                            @endif
+                                                            @if (isset($shopCatalog['product_count']))
+                                                                · {{ $shopCatalog['product_count'] }} product(s)
+                                                            @endif
+                                                            · {{ !empty($shopCatalog['live_ok']) ? 'live ok' : 'live check failed' }}
+                                                            @if (!empty($shopCatalog['live_error']))
+                                                                · {{ $shopCatalog['live_error'] }}
+                                                            @endif
+                                                        </span>
+                                                    @endforeach
                                                 </div>
                                             @endif
 

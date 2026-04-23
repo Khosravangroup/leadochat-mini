@@ -39,6 +39,21 @@ class MetaCommerceDiagnosticsTest extends TestCase
                     ['permission' => 'instagram_business_basic', 'status' => 'granted'],
                 ],
             ], 200),
+            'https://graph.facebook.com/v25.0/instagram-account-456/subscribed_apps*' => Http::response([
+                'data' => [
+                    [
+                        'id' => 'app-123',
+                        'name' => 'Leadochat Mini',
+                        'subscribed_fields' => ['messages', 'comments', 'message_reactions'],
+                    ],
+                ],
+            ], 200),
+            'https://graph.facebook.com/v25.0/meta-catalog-456*' => Http::response([
+                'id' => 'meta-catalog-456',
+                'name' => 'Meta Diagnostics Catalog',
+                'vertical' => 'commerce',
+                'product_count' => 14,
+            ], 200),
         ]);
 
         $user = User::factory()->create();
@@ -72,6 +87,7 @@ class MetaCommerceDiagnosticsTest extends TestCase
             'provider_connection_id' => $connection->id,
             'token_type' => 'access_token',
             'access_token' => 'test-meta-access-token',
+            'expires_at' => now()->addDay(),
             'is_primary' => true,
         ]);
 
@@ -169,14 +185,20 @@ class MetaCommerceDiagnosticsTest extends TestCase
         $this->assertSame('mini_shop', $diagnostics['account']['username']);
         $this->assertSame('approved', $diagnostics['account']['shopping_review_status']);
         $this->assertSame([], $diagnostics['permissions']['missing']);
+        $this->assertFalse($diagnostics['channel']['token_expired']);
+        $this->assertSame('instagram_account', $diagnostics['channel']['provider_account_type']);
+        $this->assertSame(['messages', 'comments', 'message_reactions'], $diagnostics['channel']['live_subscribed_fields']);
         $this->assertSame(['messages', 'comments', 'message_reactions'], $diagnostics['webhook']['verified_fields']);
+        $this->assertSame('Meta Diagnostics Catalog', $diagnostics['shop']['meta_catalogs'][0]['name']);
+        $this->assertSame('commerce', $diagnostics['shop']['meta_catalogs'][0]['vertical']);
+        $this->assertSame(14, $diagnostics['shop']['meta_catalogs'][0]['product_count']);
         $this->assertSame(1, $diagnostics['shop']['local_stats']['source_catalog_count']);
         $this->assertSame(1, $diagnostics['shop']['local_stats']['meta_catalog_count']);
         $this->assertSame(1, $diagnostics['shop']['local_stats']['market_override_count']);
         $this->assertSame(1, $diagnostics['shop']['local_stats']['offer_count']);
         $this->assertSame(3, $diagnostics['checkout_urls']['checked_count']);
         $this->assertSame(0, $diagnostics['checkout_urls']['invalid_count']);
-        $this->assertSame('permissions', $diagnostics['readiness'][0]['key']);
+        $this->assertSame('channel_health', $diagnostics['readiness'][0]['key']);
         $this->assertSame('ok', $diagnostics['readiness'][0]['status']);
     }
 }

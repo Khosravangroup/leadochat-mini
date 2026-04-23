@@ -4,6 +4,7 @@ namespace App\Services\Meta\Commerce;
 
 use App\Models\Catalog;
 use App\Models\CatalogProduct;
+use App\Models\OauthToken;
 use App\Models\ProviderConnection;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
@@ -39,6 +40,15 @@ class MetaCommerceDiagnosticsService
             ]
         );
 
+        $checks['subscribed_apps'] = $this->requestJson(
+            $accessToken,
+            "https://graph.facebook.com/{$graphVersion}/{$accountId}/subscribed_apps",
+            [
+                'fields' => 'id,name,subscribed_fields',
+                'limit' => 50,
+            ]
+        );
+
         $grantedPermissions = $this->extractGrantedPermissions($checks['granted_permissions']);
         $requiredPermissions = $this->requiredReviewScopes();
         $missingPermissions = array_values(array_diff($requiredPermissions, $grantedPermissions));
@@ -56,6 +66,22 @@ class MetaCommerceDiagnosticsService
             ->where('provider_connection_id', $connection->id)
             ->get();
 
+        foreach ($metaCatalogs as $metaCatalog) {
+            $externalCatalogId = trim((string) $metaCatalog->external_catalog_id);
+
+            if ($externalCatalogId === '') {
+                continue;
+            }
+
+            $checks["catalog_detail:{$externalCatalogId}"] = $this->requestJson(
+                $accessToken,
+                "https://graph.facebook.com/{$graphVersion}/{$externalCatalogId}",
+                [
+                    'fields' => 'id,name,vertical,product_count',
+                ]
+            );
+        }
+
         $products = $sourceCatalogs
             ->flatMap(fn (Catalog $catalog) => $catalog->products)
             ->values();
@@ -63,13 +89,24 @@ class MetaCommerceDiagnosticsService
         $checkoutSummary = $this->checkoutSummary($products);
         $accountBody = is_array($checks['instagram_account']['body'] ?? null) ? $checks['instagram_account']['body'] : [];
         $webhookMeta = is_array($connection->meta ?? null) ? ($connection->meta['webhook_subscription'] ?? []) : [];
-        $verifiedWebhookFields = collect($webhookMeta['verified_fields'] ?? [])
+        $liveWebhookFields = collect(Arr::get($checks['subscribed_apps'], 'body.data', []))
+            ->filter(fn ($subscription) => is_array($subscription))
+            ->flatMap(fn ($subscription) => Arr::get($subscription, 'subscribed_fields', []))
+            ->map(fn ($field) => (string) $field)
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+        $verifiedWebhookFields = collect($liveWebhookFields !== [] ? $liveWebhookFields : ($webhookMeta['verified_fields'] ?? []))
             ->map(fn ($field) => (string) $field)
             ->filter()
             ->values()
             ->all();
         $requiredWebhookFields = ['messages', 'comments'];
         $missingWebhookFields = array_values(array_diff($requiredWebhookFields, $verifiedWebhookFields));
+        $token = $this->primaryToken($connection);
+        $tokenExpiresAt = $token?->expires_at;
+        $tokenExpired = $tokenExpiresAt ? $tokenExpiresAt->isPast() : false;
 
         $localStats = [
             'source_catalog_count' => $sourceCatalogs->count(),
@@ -81,7 +118,37 @@ class MetaCommerceDiagnosticsService
             'collection_count' => $connection->catalogCollections()->count(),
         ];
 
+        $liveCatalogs = $metaCatalogs->map(function (Catalog $catalog) use ($checks): array {
+            $externalCatalogId = (string) $catalog->external_catalog_id;
+            $check = $checks["catalog_detail:{$externalCatalogId}"] ?? null;
+            $body = is_array($check['body'] ?? null) ? $check['body'] : [];
+
+            return [
+                'id' => $catalog->id,
+                'external_catalog_id' => $catalog->external_catalog_id,
+                'name' => $body['name'] ?? $catalog->name,
+                'vertical' => $body['vertical'] ?? data_get($catalog->meta, 'meta_catalog.vertical'),
+                'product_count' => $body['product_count'] ?? data_get($catalog->meta, 'meta_catalog.product_count'),
+                'status' => $catalog->meta_sync_status,
+                'live_ok' => (bool) ($check['ok'] ?? false),
+                'live_error' => $check['error'] ?? null,
+            ];
+        })->values()->all();
+
         $readiness = [
+            $this->makeReadinessCheck(
+                'channel_health',
+                ! $tokenExpired ? 'ok' : 'fail',
+                ! $tokenExpired
+                    ? 'Primary access token is present and not expired.'
+                    : 'Primary access token is expired and must be refreshed by reconnecting the channel.',
+                [
+                    'connected_at' => optional($connection->connected_at)?->toIso8601String(),
+                    'last_synced_at' => optional($connection->last_synced_at)?->toIso8601String(),
+                    'token_expires_at' => optional($tokenExpiresAt)?->toIso8601String(),
+                    'token_expired' => $tokenExpired,
+                ]
+            ),
             $this->makeReadinessCheck(
                 'permissions',
                 count($missingPermissions) === 0 ? 'ok' : 'fail',
@@ -124,6 +191,18 @@ class MetaCommerceDiagnosticsService
                     : 'No Meta catalogs are discovered for this Instagram account yet.',
                 [
                     'meta_catalog_count' => $localStats['meta_catalog_count'],
+                ]
+            ),
+            $this->makeReadinessCheck(
+                'catalog_access',
+                collect($liveCatalogs)->every(fn (array $catalog) => $catalog['live_ok']) ? 'ok' : 'warn',
+                collect($liveCatalogs)->isEmpty()
+                    ? 'No live Meta catalog details available yet.'
+                    : (collect($liveCatalogs)->every(fn (array $catalog) => $catalog['live_ok'])
+                        ? 'Live Meta catalog details are readable for all discovered catalogs.'
+                        : 'Some discovered Meta catalogs could not be queried live.'),
+                [
+                    'catalogs' => $liveCatalogs,
                 ]
             ),
             $this->makeReadinessCheck(
@@ -175,6 +254,24 @@ class MetaCommerceDiagnosticsService
                     ->values()
                     ->all(),
             ],
+            'channel' => [
+                'status' => $connection->status,
+                'connected_at' => optional($connection->connected_at)?->toIso8601String(),
+                'last_synced_at' => optional($connection->last_synced_at)?->toIso8601String(),
+                'token_expires_at' => optional($tokenExpiresAt)?->toIso8601String(),
+                'token_expired' => $tokenExpired,
+                'provider_account_type' => $connection->provider_account_type,
+                'live_subscribed_fields' => $verifiedWebhookFields,
+                'live_subscribed_apps' => collect(Arr::get($checks['subscribed_apps'], 'body.data', []))
+                    ->filter(fn ($item) => is_array($item))
+                    ->map(fn ($item) => [
+                        'id' => $item['id'] ?? null,
+                        'name' => $item['name'] ?? null,
+                        'subscribed_fields' => array_values(array_filter((array) ($item['subscribed_fields'] ?? []))),
+                    ])
+                    ->values()
+                    ->all(),
+            ],
             'webhook' => [
                 'success' => (bool) ($webhookMeta['success'] ?? false),
                 'verified_fields' => $verifiedWebhookFields,
@@ -183,12 +280,7 @@ class MetaCommerceDiagnosticsService
                 'error' => $webhookMeta['error'] ?? null,
             ],
             'shop' => [
-                'meta_catalogs' => $metaCatalogs->map(fn (Catalog $catalog) => [
-                    'id' => $catalog->id,
-                    'external_catalog_id' => $catalog->external_catalog_id,
-                    'name' => $catalog->name,
-                    'status' => $catalog->meta_sync_status,
-                ])->values()->all(),
+                'meta_catalogs' => $liveCatalogs,
                 'local_stats' => $localStats,
             ],
             'checkout_urls' => $checkoutSummary,
@@ -316,12 +408,7 @@ class MetaCommerceDiagnosticsService
 
     protected function resolveAccessToken(ProviderConnection $connection): string
     {
-        $token = $connection->oauthTokens()
-            ->where('token_type', 'access_token')
-            ->where('is_primary', true)
-            ->latest('id')
-            ->first();
-
+        $token = $this->primaryToken($connection);
         $accessToken = (string) ($token?->access_token ?? '');
 
         if ($accessToken === '') {
@@ -342,5 +429,14 @@ class MetaCommerceDiagnosticsService
             'trim',
             explode(',', (string) config('services.meta.commerce_review_scopes', ''))
         ))));
+    }
+
+    protected function primaryToken(ProviderConnection $connection): ?OauthToken
+    {
+        return $connection->oauthTokens()
+            ->where('token_type', 'access_token')
+            ->where('is_primary', true)
+            ->latest('id')
+            ->first();
     }
 }
