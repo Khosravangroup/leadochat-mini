@@ -6,13 +6,13 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
-class CatalogProductSet extends Model
+class CatalogCollection extends Model
 {
     protected $fillable = [
         'workspace_id',
         'provider_connection_id',
         'catalog_id',
-        'external_product_set_id',
+        'external_collection_id',
         'name',
         'description',
         'status',
@@ -45,19 +45,12 @@ class CatalogProductSet extends Model
         return $this->belongsTo(Catalog::class, 'catalog_id');
     }
 
-    public function products(): BelongsToMany
+    public function productSets(): BelongsToMany
     {
-        return $this->belongsToMany(CatalogProduct::class, 'catalog_product_set_items')
+        return $this->belongsToMany(CatalogProductSet::class, 'catalog_collection_product_set')
             ->withPivot('sort_order')
             ->withTimestamps()
-            ->orderBy('catalog_product_set_items.sort_order')
-            ->orderBy('catalog_product_set_items.id');
-    }
-
-    public function collections(): BelongsToMany
-    {
-        return $this->belongsToMany(CatalogCollection::class, 'catalog_collection_product_set')
-            ->withPivot('sort_order')
-            ->withTimestamps();
+            ->orderBy('catalog_collection_product_set.sort_order')
+            ->orderBy('catalog_collection_product_set.id');
     }
 }

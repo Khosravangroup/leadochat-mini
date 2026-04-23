@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Catalog;
+use App\Models\CatalogCollection;
 use App\Models\CatalogProduct;
 use App\Models\CatalogProductSet;
 use App\Models\WorkspaceTag;
@@ -58,6 +59,7 @@ class WorkspaceSettingsController extends Controller
         $commerceSourceCatalogs = collect();
         $commerceProductSets = collect();
         $commerceTaggableProducts = collect();
+        $commerceCollections = collect();
 
         if ($workspace && $section === 'tags') {
             $workspaceTags = WorkspaceTag::query()
@@ -184,6 +186,18 @@ class WorkspaceSettingsController extends Controller
                 ->with('catalog.providerConnection')
                 ->orderBy('title')
                 ->get();
+
+            $commerceCollections = CatalogCollection::query()
+                ->where('workspace_id', $workspace->id)
+                ->with([
+                    'metaCatalog.providerConnection',
+                    'productSets' => fn ($query) => $query
+                        ->with('products')
+                        ->orderBy('name'),
+                ])
+                ->withCount('productSets')
+                ->orderBy('name')
+                ->get();
         }
 
         return view('settings.index', [
@@ -202,6 +216,7 @@ class WorkspaceSettingsController extends Controller
             'commerceSourceCatalogs' => $commerceSourceCatalogs,
             'commerceProductSets' => $commerceProductSets,
             'commerceTaggableProducts' => $commerceTaggableProducts,
+            'commerceCollections' => $commerceCollections,
             'canManageTeam' => (bool) ($workspace && $user),
         ]);
     }

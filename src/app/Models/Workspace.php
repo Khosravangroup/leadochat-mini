@@ -59,4 +59,9 @@ class Workspace extends Model
     {
         return $this->hasMany(CatalogProductSet::class)->orderBy('name');
     }
+
+    public function catalogCollections(): HasMany
+    {
+        return $this->hasMany(CatalogCollection::class)->orderBy('name');
+    }
 }

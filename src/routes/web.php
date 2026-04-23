@@ -7,6 +7,7 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SocialController;
 use App\Http\Controllers\PublicPageController;
 use App\Http\Controllers\WorkspaceCatalogController;
+use App\Http\Controllers\WorkspaceMetaCollectionController;
 use App\Http\Controllers\WorkspaceMetaCommerceController;
 use App\Http\Controllers\WorkspaceMetaProductSetController;
 use App\Http\Controllers\WorkspaceSettingsController;
@@ -117,6 +118,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/settings/commerce/product-sets', [WorkspaceMetaProductSetController::class, 'store'])->name('settings.commerce.product-sets.store');
     Route::patch('/settings/commerce/product-sets/{productSet}/products', [WorkspaceMetaProductSetController::class, 'syncProducts'])->name('settings.commerce.product-sets.products.sync');
     Route::delete('/settings/commerce/product-sets/{productSet}', [WorkspaceMetaProductSetController::class, 'destroy'])->name('settings.commerce.product-sets.delete');
+    Route::post('/settings/commerce/collections', [WorkspaceMetaCollectionController::class, 'store'])->name('settings.commerce.collections.store');
+    Route::patch('/settings/commerce/collections/{collection}/product-sets', [WorkspaceMetaCollectionController::class, 'syncProductSets'])->name('settings.commerce.collections.product-sets.sync');
+    Route::delete('/settings/commerce/collections/{collection}', [WorkspaceMetaCollectionController::class, 'destroy'])->name('settings.commerce.collections.delete');
     Route::get('/inbox', [InboxController::class, 'index'])->name('inbox.index');
     Route::get('/inbox/realtime/snapshot', [InboxController::class, 'realtimeSnapshot'])->name('inbox.realtime.snapshot');
     Route::get('/inbox/{conversation}', [InboxController::class, 'index'])->name('inbox.show');

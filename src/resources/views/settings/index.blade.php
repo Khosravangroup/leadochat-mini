@@ -2559,16 +2559,16 @@
                             </div>
 
                             <div class="ws-commerce-card">
-                                <h3 class="ws-section-title">Phase 2 scope</h3>
+                                <h3 class="ws-section-title">Phase 3 scope</h3>
                                 <div class="ws-section-subtitle">
-                                    Structure the catalog into reusable shop groupings so synced products can be organized before collections, ads, and storefront flows are added.
+                                    Build shop-ready merchandising layers so synced products can move from raw inventory into reusable sets and then into storefront collections.
                                 </div>
                                 <div class="ws-commerce-list">
                                     <span class="ws-commerce-pill ok">Business discovery</span>
                                     <span class="ws-commerce-pill ok">Catalog discovery</span>
                                     <span class="ws-commerce-pill ok">Product sync foundation</span>
                                     <span class="ws-commerce-pill ok">Product sets</span>
-                                    <span class="ws-commerce-pill">Collections</span>
+                                    <span class="ws-commerce-pill ok">Collections</span>
                                 </div>
                             </div>
                         </div>
@@ -2754,6 +2754,64 @@
                             </div>
                         </div>
 
+                        <div class="ws-commerce-grid">
+                            <div class="ws-commerce-card">
+                                <h3 class="ws-section-title">Create collection</h3>
+                                <div class="ws-section-subtitle">
+                                    Collections sit above product sets and act as the storefront grouping layer for a Meta catalog.
+                                </div>
+
+                                <form method="POST" action="{{ route('settings.commerce.collections.store') }}" class="ws-commerce-list" style="margin-top:14px;">
+                                    @csrf
+
+                                    <select name="meta_catalog_id" class="ws-commerce-select" required>
+                                        <option value="">Choose Meta catalog</option>
+                                        @foreach (($metaCommerceCatalogs ?? collect()) as $catalog)
+                                            <option value="{{ $catalog->id }}">
+                                                {{ $catalog->name }}
+                                                @if ($catalog->providerConnection)
+                                                    · {{ $catalog->providerConnection->provider_account_name ?: $catalog->providerConnection->provider_account_id }}
+                                                @endif
+                                            </option>
+                                        @endforeach
+                                    </select>
+
+                                    <input
+                                        type="text"
+                                        name="name"
+                                        class="ws-commerce-input"
+                                        maxlength="160"
+                                        placeholder="Holiday featured collection"
+                                        value="{{ old('name') }}"
+                                        required
+                                    >
+
+                                    <textarea
+                                        name="description"
+                                        class="ws-commerce-textarea"
+                                        maxlength="1000"
+                                        placeholder="Optional internal notes for this collection"
+                                    >{{ old('description') }}</textarea>
+
+                                    <div>
+                                        <button type="submit" class="ws-commerce-button">Create collection</button>
+                                    </div>
+                                </form>
+                            </div>
+
+                            <div class="ws-commerce-card">
+                                <h3 class="ws-section-title">Collection readiness</h3>
+                                <div class="ws-section-subtitle">
+                                    Collections can only use product sets that belong to the same Meta catalog, keeping the shop structure clean.
+                                </div>
+                                <div class="ws-commerce-list">
+                                    <span class="ws-commerce-pill ok">{{ ($commerceCollections ?? collect())->count() }} collections</span>
+                                    <span class="ws-commerce-pill">{{ ($commerceProductSets ?? collect())->count() }} product sets</span>
+                                    <span class="ws-commerce-pill">{{ ($metaCommerceCatalogs ?? collect())->count() }} Meta catalogs</span>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="ws-commerce-card">
                             <h3 class="ws-section-title">Product sets</h3>
 
@@ -2835,6 +2893,84 @@
                                 @empty
                                     <div class="ws-empty">
                                         No product sets created yet.
+                                    </div>
+                                @endforelse
+                            </div>
+                        </div>
+
+                        <div class="ws-commerce-card">
+                            <h3 class="ws-section-title">Collections</h3>
+
+                            <div class="ws-commerce-list">
+                                @forelse (($commerceCollections ?? collect()) as $collection)
+                                    @php
+                                        $collectionProductSets = ($commerceProductSets ?? collect())
+                                            ->where('catalog_id', $collection->catalog_id)
+                                            ->values();
+                                    @endphp
+
+                                    <div class="ws-commerce-catalog">
+                                        <div class="ws-commerce-head">
+                                            <div>
+                                                <div class="ws-commerce-title">{{ $collection->name }}</div>
+                                                <div class="ws-commerce-meta">
+                                                    Meta catalog: {{ $collection->metaCatalog?->name ?: '-' }}
+                                                    @if ($collection->providerConnection)
+                                                        · Instagram: {{ $collection->providerConnection->provider_account_name ?: $collection->providerConnection->provider_account_id }}
+                                                    @endif
+                                                </div>
+                                            </div>
+
+                                            <form method="POST" action="{{ route('settings.commerce.collections.delete', $collection) }}">
+                                                @csrf
+                                                @method('DELETE')
+                                                <button type="submit" class="ws-commerce-button" style="background:#b91c1c;">Delete</button>
+                                            </form>
+                                        </div>
+
+                                        <div class="ws-commerce-meta">
+                                            {{ $collection->product_sets_count }} product set(s)
+                                            · {{ str_replace('_', ' ', $collection->meta_sync_status ?: 'not_synced') }}
+                                        </div>
+
+                                        @if ($collection->description)
+                                            <div class="ws-commerce-meta">{{ $collection->description }}</div>
+                                        @endif
+
+                                        @if ($collection->productSets->isNotEmpty())
+                                            <div class="ws-commerce-product-set-products">
+                                                @foreach ($collection->productSets as $productSet)
+                                                    <span class="ws-commerce-pill">
+                                                        {{ $productSet->name }}
+                                                        · {{ $productSet->products->count() }} products
+                                                    </span>
+                                                @endforeach
+                                            </div>
+                                        @endif
+
+                                        <form method="POST" action="{{ route('settings.commerce.collections.product-sets.sync', $collection) }}" class="ws-commerce-list" style="margin-top:12px;">
+                                            @csrf
+                                            @method('PATCH')
+
+                                            <select name="product_set_ids[]" class="ws-commerce-select is-multi" multiple size="6">
+                                                @foreach ($collectionProductSets as $productSet)
+                                                    <option
+                                                        value="{{ $productSet->id }}"
+                                                        @selected($collection->productSets->contains('id', $productSet->id))
+                                                    >
+                                                        {{ $productSet->name }} · {{ $productSet->products_count ?? $productSet->products->count() }} products
+                                                    </option>
+                                                @endforeach
+                                            </select>
+
+                                            <div>
+                                                <button type="submit" class="ws-commerce-button">Save collection product sets</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                @empty
+                                    <div class="ws-empty">
+                                        No collections created yet.
                                     </div>
                                 @endforelse
                             </div>

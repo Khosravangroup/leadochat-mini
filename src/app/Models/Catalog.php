@@ -52,4 +52,9 @@ class Catalog extends Model
     {
         return $this->hasMany(CatalogProductSet::class);
     }
+
+    public function collections(): HasMany
+    {
+        return $this->hasMany(CatalogCollection::class);
+    }
 }
