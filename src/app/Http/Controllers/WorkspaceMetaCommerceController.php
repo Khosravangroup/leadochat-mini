@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Catalog;
 use App\Models\ProviderConnection;
+use App\Services\Meta\Commerce\MetaAppReviewEvidenceService;
 use App\Services\Meta\Commerce\MetaCatalogProductSyncService;
 use App\Services\Meta\Commerce\MetaCommerceDiagnosticsService;
 use App\Services\Meta\Commerce\MetaCommerceDiscoveryService;
@@ -221,6 +222,115 @@ class WorkspaceMetaCommerceController extends Controller
         abort_unless($packet !== null, 404);
 
         $filename = $reviewPacketService->exportFilename($connection, $packet);
+        $json = json_encode($packet, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+
+        return response()->streamDownload(function () use ($json): void {
+            echo $json ?: '{}';
+        }, $filename, [
+            'Content-Type' => 'application/json; charset=UTF-8',
+        ]);
+    }
+
+    public function generateAppReviewEvidence(
+        Request $request,
+        ProviderConnection $connection,
+        MetaCommerceDiagnosticsService $diagnosticsService,
+        MetaCommerceReviewPacketService $reviewPacketService,
+        MetaAppReviewEvidenceService $appReviewEvidenceService
+    ): RedirectResponse {
+        $workspace = $request->user()?->currentWorkspace();
+
+        abort_unless(
+            $workspace
+            && $connection->workspace_id === $workspace->id
+            && $connection->provider === 'instagram',
+            404
+        );
+
+        $diagnostics = $diagnosticsService->diagnoseForConnection($connection);
+        $reviewPacket = $reviewPacketService->generateForConnection($connection, $diagnostics);
+        $appReviewEvidence = $appReviewEvidenceService->generateForConnection($connection, $diagnostics, $reviewPacket);
+
+        $meta = is_array($connection->meta) ? $connection->meta : [];
+        $reviewPacketHistory = collect((array) ($meta['meta_commerce_review_packet_history'] ?? []))
+            ->filter(fn ($entry) => is_array($entry))
+            ->prepend([
+                'generated_at' => $reviewPacket['generated_at'] ?? now()->toIso8601String(),
+                'status' => data_get($reviewPacket, 'summary.status'),
+                'headline' => data_get($reviewPacket, 'summary.headline'),
+                'discovered_catalog_count' => data_get($reviewPacket, 'catalogs.discovered_count', 0),
+                'order_count' => data_get($reviewPacket, 'orders.order_count', 0),
+                'snapshot_count' => data_get($reviewPacket, 'orders.snapshot_count', 0),
+                'campaign_count' => data_get($reviewPacket, 'promotions.campaign_count', 0),
+                'prepared_campaign_count' => data_get($reviewPacket, 'promotions.prepared_campaign_count', 0),
+                'blocker_count' => count((array) data_get($reviewPacket, 'review_evidence.blockers', [])),
+                'warning_count' => count((array) data_get($reviewPacket, 'review_evidence.warnings', [])),
+            ])
+            ->take(5)
+            ->values()
+            ->all();
+
+        $appReviewHistory = collect((array) ($meta['meta_app_review_evidence_history'] ?? []))
+            ->filter(fn ($entry) => is_array($entry))
+            ->prepend([
+                'generated_at' => $appReviewEvidence['generated_at'] ?? now()->toIso8601String(),
+                'status' => data_get($appReviewEvidence, 'summary.status'),
+                'headline' => data_get($appReviewEvidence, 'summary.headline'),
+                'conversation_count' => data_get($appReviewEvidence, 'coverage.inbox.conversation_count', 0),
+                'message_count' => data_get($appReviewEvidence, 'coverage.inbox.message_count', 0),
+                'comment_count' => data_get($appReviewEvidence, 'coverage.social.comment_count', 0),
+                'story_count' => data_get($appReviewEvidence, 'coverage.social.story_count', 0),
+                'webhook_event_count' => data_get($appReviewEvidence, 'coverage.webhooks.event_count', 0),
+                'blocker_count' => count((array) data_get($appReviewEvidence, 'evidence.blockers', [])),
+                'warning_count' => count((array) data_get($appReviewEvidence, 'evidence.warnings', [])),
+            ])
+            ->take(5)
+            ->values()
+            ->all();
+
+        $meta['meta_commerce_diagnostics'] = $diagnostics;
+        $meta['meta_commerce_review_packet'] = $reviewPacket;
+        $meta['meta_commerce_review_packet_history'] = $reviewPacketHistory;
+        $meta['meta_app_review_evidence'] = $appReviewEvidence;
+        $meta['meta_app_review_evidence_history'] = $appReviewHistory;
+        $meta['meta_commerce'] = array_merge($meta['meta_commerce'] ?? [], [
+            'last_diagnostics_at' => now()->toIso8601String(),
+            'last_review_packet_at' => $reviewPacket['generated_at'] ?? now()->toIso8601String(),
+            'last_app_review_evidence_at' => $appReviewEvidence['generated_at'] ?? now()->toIso8601String(),
+        ]);
+
+        $connection->update([
+            'last_synced_at' => now(),
+            'meta' => $meta,
+        ]);
+
+        return redirect()
+            ->route('settings.index', ['section' => 'commerce'])
+            ->with('status', 'Meta App Review evidence packet generated.');
+    }
+
+    public function downloadAppReviewEvidence(
+        Request $request,
+        ProviderConnection $connection,
+        MetaAppReviewEvidenceService $appReviewEvidenceService
+    ): StreamedResponse {
+        $workspace = $request->user()?->currentWorkspace();
+
+        abort_unless(
+            $workspace
+            && $connection->workspace_id === $workspace->id
+            && $connection->provider === 'instagram',
+            404
+        );
+
+        $meta = is_array($connection->meta) ? $connection->meta : [];
+        $packet = is_array($meta['meta_app_review_evidence'] ?? null)
+            ? $meta['meta_app_review_evidence']
+            : null;
+
+        abort_unless($packet !== null, 404);
+
+        $filename = $appReviewEvidenceService->exportFilename($connection, $packet);
         $json = json_encode($packet, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
 
         return response()->streamDownload(function () use ($json): void {

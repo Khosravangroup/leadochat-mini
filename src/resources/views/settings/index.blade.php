@@ -3238,6 +3238,20 @@
                                     <span class="ws-commerce-pill ok">Review campaign proof</span>
                                 </div>
                             </div>
+
+                            <div class="ws-commerce-card">
+                                <h3 class="ws-section-title">Phase 9 scope</h3>
+                                <div class="ws-section-subtitle">
+                                    Build one final App Review evidence packet that combines inbox, social, publishing, webhook, commerce, orders, and promotion proof for the connected Instagram account.
+                                </div>
+                                <div class="ws-commerce-list">
+                                    <span class="ws-commerce-pill ok">Inbox proof</span>
+                                    <span class="ws-commerce-pill ok">Social proof</span>
+                                    <span class="ws-commerce-pill ok">Webhook proof</span>
+                                    <span class="ws-commerce-pill ok">Commerce proof</span>
+                                    <span class="ws-commerce-pill ok">Downloadable JSON</span>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="ws-commerce-card">
@@ -3272,6 +3286,17 @@
                                         $reviewPacketNotes = is_array($reviewPacket['review_notes'] ?? null) ? $reviewPacket['review_notes'] : [];
                                         $reviewPacketSteps = is_array($reviewPacket['demo_script'] ?? null) ? $reviewPacket['demo_script'] : [];
                                         $reviewPacketHistory = is_array($connectionMeta['meta_commerce_review_packet_history'] ?? null) ? $connectionMeta['meta_commerce_review_packet_history'] : [];
+                                        $appReviewEvidencePacket = is_array($connectionMeta['meta_app_review_evidence'] ?? null) ? $connectionMeta['meta_app_review_evidence'] : [];
+                                        $appReviewSummary = is_array($appReviewEvidencePacket['summary'] ?? null) ? $appReviewEvidencePacket['summary'] : [];
+                                        $appReviewCoverage = is_array($appReviewEvidencePacket['coverage'] ?? null) ? $appReviewEvidencePacket['coverage'] : [];
+                                        $appReviewCoverageInbox = is_array($appReviewCoverage['inbox'] ?? null) ? $appReviewCoverage['inbox'] : [];
+                                        $appReviewCoverageSocial = is_array($appReviewCoverage['social'] ?? null) ? $appReviewCoverage['social'] : [];
+                                        $appReviewCoverageWebhooks = is_array($appReviewCoverage['webhooks'] ?? null) ? $appReviewCoverage['webhooks'] : [];
+                                        $appReviewCoverageCommerce = is_array($appReviewCoverage['commerce'] ?? null) ? $appReviewCoverage['commerce'] : [];
+                                        $appReviewEvidence = is_array($appReviewEvidencePacket['evidence'] ?? null) ? $appReviewEvidencePacket['evidence'] : [];
+                                        $appReviewRecentActivity = is_array($appReviewEvidencePacket['recent_activity'] ?? null) ? $appReviewEvidencePacket['recent_activity'] : [];
+                                        $appReviewSteps = is_array($appReviewEvidencePacket['demo_script'] ?? null) ? $appReviewEvidencePacket['demo_script'] : [];
+                                        $appReviewHistory = is_array($connectionMeta['meta_app_review_evidence_history'] ?? null) ? $connectionMeta['meta_app_review_evidence_history'] : [];
                                     @endphp
 
                                     <div class="ws-commerce-account">
@@ -3304,9 +3329,20 @@
                                                     <button type="submit" class="ws-commerce-button" style="background:#7c3aed;">Build review packet</button>
                                                 </form>
 
+                                                <form method="POST" action="{{ route('settings.commerce.app-review-evidence.generate', $connection) }}">
+                                                    @csrf
+                                                    <button type="submit" class="ws-commerce-button" style="background:#059669;">Build app review evidence</button>
+                                                </form>
+
                                                 @if ($reviewPacket !== [])
                                                     <a href="{{ route('settings.commerce.review-packet.download', $connection) }}" class="ws-commerce-button" style="background:#334155; text-decoration:none;">
                                                         Download packet
+                                                    </a>
+                                                @endif
+
+                                                @if ($appReviewEvidencePacket !== [])
+                                                    <a href="{{ route('settings.commerce.app-review-evidence.download', $connection) }}" class="ws-commerce-button" style="background:#0f766e; text-decoration:none;">
+                                                        Download evidence
                                                     </a>
                                                 @endif
                                             </div>
@@ -3552,6 +3588,212 @@
                                                                             · snapshots {{ $historyEntry['snapshot_count'] ?? 0 }}
                                                                             · campaigns {{ $historyEntry['campaign_count'] ?? 0 }}
                                                                             · prepared {{ $historyEntry['prepared_campaign_count'] ?? 0 }}
+                                                                        </div>
+                                                                        @if (!empty($historyEntry['headline']))
+                                                                            <span class="ws-commerce-code">{{ $historyEntry['headline'] }}</span>
+                                                                        @endif
+                                                                    </div>
+                                                                @endforeach
+                                                            </div>
+                                                        </details>
+                                                    @endif
+                                                </div>
+                                            @endif
+
+                                            @if ($appReviewEvidencePacket !== [])
+                                                @php
+                                                    $appReviewStatusClass = match ($appReviewSummary['status'] ?? 'needs_attention') {
+                                                        'ready' => 'ok',
+                                                        'blocked' => 'fail',
+                                                        default => '',
+                                                    };
+                                                @endphp
+
+                                                <div class="ws-commerce-summary">
+                                                    <div class="ws-commerce-summary-head">
+                                                        <div class="ws-commerce-summary-copy">
+                                                            <div class="ws-commerce-summary-title">Final App Review evidence</div>
+                                                            <div class="ws-commerce-summary-text">
+                                                                Generated {{ $appReviewEvidencePacket['generated_at'] ?? 'just now' }}.
+                                                                This packet combines inbox, social, publishing, webhook, and commerce proof in one saved snapshot.
+                                                            </div>
+                                                        </div>
+
+                                                        <span class="ws-commerce-pill {{ $appReviewStatusClass }}">
+                                                            {{ strtoupper(str_replace('_', ' ', (string) ($appReviewSummary['status'] ?? 'needs_attention'))) }}
+                                                        </span>
+                                                    </div>
+
+                                                    <div class="ws-commerce-summary-text">
+                                                        {{ $appReviewSummary['headline'] ?? 'Build the final app review evidence packet to capture cross-product proof.' }}
+                                                    </div>
+
+                                                    <div class="ws-commerce-metric-row">
+                                                        <div class="ws-commerce-metric">
+                                                            <div class="ws-commerce-metric-label">Inbox conversations</div>
+                                                            <div class="ws-commerce-metric-value">{{ $appReviewCoverageInbox['conversation_count'] ?? 0 }}</div>
+                                                        </div>
+                                                        <div class="ws-commerce-metric">
+                                                            <div class="ws-commerce-metric-label">Messages</div>
+                                                            <div class="ws-commerce-metric-value">{{ $appReviewCoverageInbox['message_count'] ?? 0 }}</div>
+                                                        </div>
+                                                        <div class="ws-commerce-metric">
+                                                            <div class="ws-commerce-metric-label">Comments</div>
+                                                            <div class="ws-commerce-metric-value">{{ $appReviewCoverageSocial['comment_count'] ?? 0 }}</div>
+                                                        </div>
+                                                        <div class="ws-commerce-metric">
+                                                            <div class="ws-commerce-metric-label">Stories</div>
+                                                            <div class="ws-commerce-metric-value">{{ $appReviewCoverageSocial['story_count'] ?? 0 }}</div>
+                                                        </div>
+                                                        <div class="ws-commerce-metric">
+                                                            <div class="ws-commerce-metric-label">Webhook events</div>
+                                                            <div class="ws-commerce-metric-value">{{ $appReviewCoverageWebhooks['event_count'] ?? 0 }}</div>
+                                                        </div>
+                                                        <div class="ws-commerce-metric">
+                                                            <div class="ws-commerce-metric-label">Orders</div>
+                                                            <div class="ws-commerce-metric-value">{{ $appReviewCoverageCommerce['order_count'] ?? 0 }}</div>
+                                                        </div>
+                                                    </div>
+
+                                                    @if (!empty($appReviewEvidence['next_actions']))
+                                                        <div class="ws-commerce-action-list">
+                                                            @foreach ((array) $appReviewEvidence['next_actions'] as $action)
+                                                                <div class="ws-commerce-action-item">
+                                                                    <div class="ws-commerce-action-title">{{ $action['title'] ?? 'Next action' }}</div>
+                                                                    <div class="ws-commerce-summary-text">{{ $action['summary'] ?? '' }}</div>
+                                                                </div>
+                                                            @endforeach
+                                                        </div>
+                                                    @endif
+
+                                                    @if (!empty($appReviewEvidence['items']))
+                                                        <div class="ws-commerce-evidence-grid">
+                                                            @foreach ((array) $appReviewEvidence['items'] as $evidenceItem)
+                                                                @php
+                                                                    $appEvidenceClass = match ($evidenceItem['status'] ?? 'warn') {
+                                                                        'ok' => 'ok',
+                                                                        'fail' => 'fail',
+                                                                        default => '',
+                                                                    };
+                                                                @endphp
+                                                                <div class="ws-commerce-evidence-item">
+                                                                    <div style="display:flex; justify-content:space-between; gap:10px; align-items:flex-start;">
+                                                                        <div class="ws-commerce-evidence-label">{{ $evidenceItem['label'] ?? 'Evidence' }}</div>
+                                                                        <span class="ws-commerce-pill {{ $appEvidenceClass }}">
+                                                                            {{ strtoupper($evidenceItem['status'] ?? 'warn') }}
+                                                                        </span>
+                                                                    </div>
+                                                                    <div class="ws-commerce-summary-text">{{ $evidenceItem['summary'] ?? '' }}</div>
+                                                                </div>
+                                                            @endforeach
+                                                        </div>
+                                                    @endif
+
+                                                    @if ($appReviewSteps !== [])
+                                                        <details class="ws-commerce-details">
+                                                            <summary>Final review demo script</summary>
+                                                            <div class="ws-commerce-step-list">
+                                                                @foreach ($appReviewSteps as $step)
+                                                                    <div class="ws-commerce-step">
+                                                                        <div class="ws-commerce-step-title">Step {{ $step['step'] ?? '?' }} · {{ $step['title'] ?? 'Demo step' }}</div>
+                                                                        <div class="ws-commerce-summary-text">{{ $step['summary'] ?? '' }}</div>
+                                                                    </div>
+                                                                @endforeach
+                                                            </div>
+                                                        </details>
+                                                    @endif
+
+                                                    <details class="ws-commerce-details">
+                                                        <summary>Cross-product evidence detail</summary>
+                                                        <div class="ws-commerce-list">
+                                                            <div class="ws-commerce-meta">
+                                                                Inbox coverage:
+                                                                <span class="ws-commerce-code">
+                                                                    Conversations {{ $appReviewCoverageInbox['conversation_count'] ?? 0 }},
+                                                                    assigned {{ $appReviewCoverageInbox['assigned_conversation_count'] ?? 0 }},
+                                                                    unread {{ $appReviewCoverageInbox['unread_conversation_count'] ?? 0 }},
+                                                                    attachments {{ $appReviewCoverageInbox['attachment_count'] ?? 0 }},
+                                                                    product shares {{ $appReviewCoverageInbox['product_share_count'] ?? 0 }}
+                                                                </span>
+                                                            </div>
+
+                                                            <div class="ws-commerce-meta">
+                                                                Social coverage:
+                                                                <span class="ws-commerce-code">
+                                                                    Posts {{ $appReviewCoverageSocial['post_count'] ?? 0 }},
+                                                                    product tagged posts {{ $appReviewCoverageSocial['product_tagged_post_count'] ?? 0 }},
+                                                                    comments {{ $appReviewCoverageSocial['comment_count'] ?? 0 }},
+                                                                    DM replies {{ $appReviewCoverageSocial['dm_reply_count'] ?? 0 }},
+                                                                    stories {{ $appReviewCoverageSocial['story_count'] ?? 0 }}
+                                                                </span>
+                                                            </div>
+
+                                                            <div class="ws-commerce-meta">
+                                                                Webhook coverage:
+                                                                <span class="ws-commerce-code">
+                                                                    Events {{ $appReviewCoverageWebhooks['event_count'] ?? 0 }},
+                                                                    processed {{ $appReviewCoverageWebhooks['processed_count'] ?? 0 }},
+                                                                    failed {{ $appReviewCoverageWebhooks['failed_count'] ?? 0 }},
+                                                                    pending {{ $appReviewCoverageWebhooks['pending_count'] ?? 0 }}
+                                                                </span>
+                                                            </div>
+
+                                                            <div class="ws-commerce-meta">
+                                                                Commerce coverage:
+                                                                <span class="ws-commerce-code">
+                                                                    Catalogs {{ $appReviewCoverageCommerce['catalog_count'] ?? 0 }},
+                                                                    active products {{ $appReviewCoverageCommerce['active_product_count'] ?? 0 }},
+                                                                    sets {{ $appReviewCoverageCommerce['product_set_count'] ?? 0 }},
+                                                                    collections {{ $appReviewCoverageCommerce['collection_count'] ?? 0 }},
+                                                                    orders {{ $appReviewCoverageCommerce['order_count'] ?? 0 }},
+                                                                    campaigns {{ $appReviewCoverageCommerce['promotion_campaign_count'] ?? 0 }}
+                                                                </span>
+                                                            </div>
+
+                                                            @foreach ((array) ($appReviewRecentActivity['messages'] ?? []) as $messageItem)
+                                                                <div class="ws-commerce-meta">
+                                                                    Recent message:
+                                                                    <span class="ws-commerce-code">
+                                                                        {{ strtoupper($messageItem['direction'] ?? 'message') }}
+                                                                        · {{ $messageItem['message_type'] ?? 'text' }}
+                                                                        · {{ $messageItem['customer_name'] ?? ($messageItem['conversation_title'] ?? 'Conversation') }}
+                                                                        · {{ $messageItem['text_preview'] ?? '' }}
+                                                                    </span>
+                                                                </div>
+                                                            @endforeach
+
+                                                            @foreach ((array) ($appReviewRecentActivity['comments'] ?? []) as $commentItem)
+                                                                <div class="ws-commerce-meta">
+                                                                    Recent comment:
+                                                                    <span class="ws-commerce-code">
+                                                                        {{ $commentItem['username'] ?? 'user' }}
+                                                                        · {{ $commentItem['text'] ?? '' }}
+                                                                        · DM {{ !empty($commentItem['replied_via_dm_at']) ? 'yes' : 'no' }}
+                                                                        · Public {{ !empty($commentItem['replied_publicly_at']) ? 'yes' : 'no' }}
+                                                                    </span>
+                                                                </div>
+                                                            @endforeach
+                                                        </div>
+                                                    </details>
+
+                                                    @if ($appReviewHistory !== [])
+                                                        <details class="ws-commerce-details">
+                                                            <summary>Final evidence history</summary>
+                                                            <div class="ws-commerce-history-list">
+                                                                @foreach ($appReviewHistory as $historyEntry)
+                                                                    <div class="ws-commerce-history-item">
+                                                                        <div class="ws-commerce-history-title">
+                                                                            {{ $historyEntry['generated_at'] ?? 'Unknown time' }}
+                                                                        </div>
+                                                                        <div class="ws-commerce-summary-text">
+                                                                            {{ strtoupper(str_replace('_', ' ', (string) ($historyEntry['status'] ?? 'needs_attention'))) }}
+                                                                            · conversations {{ $historyEntry['conversation_count'] ?? 0 }}
+                                                                            · messages {{ $historyEntry['message_count'] ?? 0 }}
+                                                                            · comments {{ $historyEntry['comment_count'] ?? 0 }}
+                                                                            · stories {{ $historyEntry['story_count'] ?? 0 }}
+                                                                            · webhooks {{ $historyEntry['webhook_event_count'] ?? 0 }}
+                                                                            · blockers {{ $historyEntry['blocker_count'] ?? 0 }}
+                                                                            · warnings {{ $historyEntry['warning_count'] ?? 0 }}
                                                                         </div>
                                                                         @if (!empty($historyEntry['headline']))
                                                                             <span class="ws-commerce-code">{{ $historyEntry['headline'] }}</span>

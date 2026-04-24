@@ -125,6 +125,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/settings/commerce/connections/{connection}/diagnostics', [WorkspaceMetaCommerceController::class, 'diagnostics'])->name('settings.commerce.diagnostics');
     Route::post('/settings/commerce/connections/{connection}/review-packet', [WorkspaceMetaCommerceController::class, 'generateReviewPacket'])->name('settings.commerce.review-packet.generate');
     Route::get('/settings/commerce/connections/{connection}/review-packet', [WorkspaceMetaCommerceController::class, 'downloadReviewPacket'])->name('settings.commerce.review-packet.download');
+    Route::post('/settings/commerce/connections/{connection}/app-review-evidence', [WorkspaceMetaCommerceController::class, 'generateAppReviewEvidence'])->name('settings.commerce.app-review-evidence.generate');
+    Route::get('/settings/commerce/connections/{connection}/app-review-evidence', [WorkspaceMetaCommerceController::class, 'downloadAppReviewEvidence'])->name('settings.commerce.app-review-evidence.download');
     Route::post('/settings/commerce/orders', [WorkspaceMetaOrderController::class, 'store'])->name('settings.commerce.orders.store');
     Route::patch('/settings/commerce/orders/{order}/status', [WorkspaceMetaOrderController::class, 'updateStatus'])->name('settings.commerce.orders.status.update');
     Route::post('/settings/commerce/orders/{order}/snapshot', [WorkspaceMetaOrderController::class, 'snapshot'])->name('settings.commerce.orders.snapshots.store');
