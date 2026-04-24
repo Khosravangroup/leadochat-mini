@@ -11,6 +11,7 @@ use App\Models\OauthToken;
 use App\Models\ProviderConnection;
 use App\Models\User;
 use App\Models\Workspace;
+use App\Services\Meta\Instagram\InstagramMessagingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
 use Tests\TestCase;
@@ -218,6 +219,56 @@ class InboxCatalogProductTest extends TestCase
             'availability' => 'in_stock',
             'is_active' => true,
         ]);
+
+        $this->mock(InstagramMessagingService::class, function ($mock) {
+            $mock->shouldReceive('sendGenericTemplate')
+                ->once()
+                ->withArgs(function (
+                    ProviderConnection $connection,
+                    string $recipientId,
+                    array $elements,
+                    array $options
+                ): bool {
+                    return $connection->provider_account_id === 'test-instagram-account'
+                        && $recipientId === 'instagram-customer-2'
+                        && ($options['messaging_type'] ?? null) === 'RESPONSE'
+                        && ($elements[0]['title'] ?? null) === 'Yellow Notebook'
+                        && ($elements[0]['buttons'][0]['title'] ?? null) === 'View product';
+                })
+                ->andReturnUsing(function (
+                    ProviderConnection $connection,
+                    string $recipientId,
+                    array $elements,
+                    array $options
+                ): array {
+                    return [
+                        'mode' => 'live',
+                        'kind' => 'generic_template',
+                        'endpoint' => 'https://graph.instagram.com/v25.0/' . $connection->provider_account_id . '/messages',
+                        'payload' => [
+                            'recipient' => [
+                                'id' => $recipientId,
+                            ],
+                            'message' => [
+                                'attachment' => [
+                                    'type' => 'template',
+                                    'payload' => [
+                                        'template_type' => 'generic',
+                                        'elements' => $elements,
+                                    ],
+                                ],
+                            ],
+                            'messaging_type' => $options['messaging_type'] ?? 'RESPONSE',
+                        ],
+                        'response' => [
+                            'recipient_id' => $recipientId,
+                            'message_id' => 'ig-template-message-1',
+                        ],
+                        'recipient_id' => $recipientId,
+                        'message_id' => 'ig-template-message-1',
+                    ];
+                });
+        });
 
         $response = $this
             ->actingAs($user)

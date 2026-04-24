@@ -8,6 +8,8 @@ use App\Models\User;
 use App\Models\Workspace;
 use App\Services\Meta\Instagram\InstagramMessagingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class InstagramMessagingServiceTest extends TestCase
@@ -18,6 +20,13 @@ class InstagramMessagingServiceTest extends TestCase
     {
         config([
             'services.instagram.graph_version' => 'v25.0',
+        ]);
+
+        Http::fake([
+            'https://graph.instagram.com/v25.0/test-instagram-account/messages' => Http::response([
+                'recipient_id' => 'customer-123',
+                'message_id' => 'ig-message-123',
+            ], 200),
         ]);
 
         $user = User::factory()->create();
@@ -68,7 +77,7 @@ class InstagramMessagingServiceTest extends TestCase
             ]
         );
 
-        $this->assertSame('local_debug', $result['mode']);
+        $this->assertSame('live', $result['mode']);
         $this->assertSame('generic_template', $result['kind']);
         $this->assertSame('https://graph.instagram.com/v25.0/test-instagram-account/messages', $result['endpoint']);
 
@@ -81,5 +90,13 @@ class InstagramMessagingServiceTest extends TestCase
         $this->assertSame('Green Linen Shirt', $payload['message']['attachment']['payload']['elements'][0]['title']);
         $this->assertSame('https://example.com/products/shirt.jpg', $payload['message']['attachment']['payload']['elements'][0]['image_url']);
         $this->assertSame('View product', $payload['message']['attachment']['payload']['elements'][0]['buttons'][0]['title']);
+
+        Http::assertSent(function (Request $request): bool {
+            return $request->method() === 'POST'
+                && $request->url() === 'https://graph.instagram.com/v25.0/test-instagram-account/messages'
+                && $request['recipient']['id'] === 'customer-123'
+                && $request['message']['attachment']['payload']['template_type'] === 'generic'
+                && $request['message']['attachment']['payload']['elements'][0]['title'] === 'Green Linen Shirt';
+        });
     }
 }
