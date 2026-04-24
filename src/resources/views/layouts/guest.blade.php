@@ -5,7 +5,7 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
 
-        <title>{{ config('app.name', 'Leadochat') }}</title>
+        <title>{{ config('app.name', 'Leadochat Mini') }}</title>
         <link rel="shortcut icon" href="{{ asset('leadochat-site/brand-mark.svg') }}" type="image/svg+xml">
 
         @vite(['resources/css/app.css', 'resources/js/app.js'])
@@ -132,7 +132,7 @@
             <section class="lc-auth-story">
                 <a href="{{ route('home') }}" class="lc-auth-brand">
                     <img src="{{ asset('leadochat-site/brand-mark.svg') }}" alt="Leadochat logo">
-                    <span>Leadochat</span>
+                    <span>Leadochat Mini</span>
                 </a>
 
                 <div class="lc-auth-copy">
