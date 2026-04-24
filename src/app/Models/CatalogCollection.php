@@ -59,4 +59,9 @@ class CatalogCollection extends Model
     {
         return $this->hasMany(CommerceOrder::class, 'catalog_collection_id');
     }
+
+    public function promotionCampaigns(): HasMany
+    {
+        return $this->hasMany(CommercePromotionCampaign::class, 'catalog_collection_id');
+    }
 }

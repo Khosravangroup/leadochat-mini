@@ -5,6 +5,7 @@ namespace App\Services\Meta\Commerce;
 use App\Models\Catalog;
 use App\Models\CatalogProduct;
 use App\Models\CommerceOrder;
+use App\Models\CommercePromotionCampaign;
 use App\Models\OauthToken;
 use App\Models\ProviderConnection;
 use Illuminate\Support\Arr;
@@ -132,6 +133,30 @@ class MetaCommerceDiagnosticsService
                 ->withCount('snapshots')
                 ->get()
                 ->sum('snapshots_count'),
+            'promotion_campaign_count' => CommercePromotionCampaign::query()
+                ->where('workspace_id', $workspace?->id)
+                ->where('provider_connection_id', $connection->id)
+                ->count(),
+            'prepared_promotion_campaign_count' => CommercePromotionCampaign::query()
+                ->where('workspace_id', $workspace?->id)
+                ->where('provider_connection_id', $connection->id)
+                ->whereIn('meta_sync_status', ['prepared', 'prepared_with_warnings'])
+                ->count(),
+            'promoted_post_campaign_count' => CommercePromotionCampaign::query()
+                ->where('workspace_id', $workspace?->id)
+                ->where('provider_connection_id', $connection->id)
+                ->where('campaign_type', 'promoted_post')
+                ->count(),
+            'collection_ad_campaign_count' => CommercePromotionCampaign::query()
+                ->where('workspace_id', $workspace?->id)
+                ->where('provider_connection_id', $connection->id)
+                ->where('campaign_type', 'collection_ad')
+                ->count(),
+            'shops_ad_campaign_count' => CommercePromotionCampaign::query()
+                ->where('workspace_id', $workspace?->id)
+                ->where('provider_connection_id', $connection->id)
+                ->where('campaign_type', 'shops_ad')
+                ->count(),
         ];
 
         $liveCatalogs = $metaCatalogs->map(function (Catalog $catalog) use ($checks): array {
@@ -254,6 +279,20 @@ class MetaCommerceDiagnosticsService
                     'order_count' => $localStats['order_count'],
                     'test_order_count' => $localStats['test_order_count'],
                     'order_snapshot_count' => $localStats['order_snapshot_count'],
+                ]
+            ),
+            $this->makeReadinessCheck(
+                'promotion_foundation',
+                $localStats['promotion_campaign_count'] > 0 && $localStats['prepared_promotion_campaign_count'] > 0 ? 'ok' : 'warn',
+                $localStats['promotion_campaign_count'] > 0 && $localStats['prepared_promotion_campaign_count'] > 0
+                    ? 'Promotion campaigns and prepared ad previews are available for review.'
+                    : 'Create at least one promotion campaign and prepare it to prove collection ads or promoted post flows.',
+                [
+                    'promotion_campaign_count' => $localStats['promotion_campaign_count'],
+                    'prepared_promotion_campaign_count' => $localStats['prepared_promotion_campaign_count'],
+                    'promoted_post_campaign_count' => $localStats['promoted_post_campaign_count'],
+                    'collection_ad_campaign_count' => $localStats['collection_ad_campaign_count'],
+                    'shops_ad_campaign_count' => $localStats['shops_ad_campaign_count'],
                 ]
             ),
         ];
@@ -449,6 +488,16 @@ class MetaCommerceDiagnosticsService
                 ($localStats['order_count'] ?? 0) > 0 && ($localStats['order_snapshot_count'] ?? 0) > 0 ? 'ok' : 'warn',
                 'Orders: ' . ($localStats['order_count'] ?? 0) . ', test orders: ' . ($localStats['test_order_count'] ?? 0) . ', snapshots: ' . ($localStats['order_snapshot_count'] ?? 0) . '.'
             ),
+            $this->makeEvidenceItem(
+                'ads_and_promotions',
+                'Ads and promotion foundation',
+                ($localStats['promotion_campaign_count'] ?? 0) > 0 && ($localStats['prepared_promotion_campaign_count'] ?? 0) > 0 ? 'ok' : 'warn',
+                'Campaigns: ' . ($localStats['promotion_campaign_count'] ?? 0)
+                    . ', prepared: ' . ($localStats['prepared_promotion_campaign_count'] ?? 0)
+                    . ', promoted posts: ' . ($localStats['promoted_post_campaign_count'] ?? 0)
+                    . ', collection ads: ' . ($localStats['collection_ad_campaign_count'] ?? 0)
+                    . ', shops ads: ' . ($localStats['shops_ad_campaign_count'] ?? 0) . '.'
+            ),
         ];
 
         return [
@@ -627,6 +676,11 @@ class MetaCommerceDiagnosticsService
                 'key' => 'orders_foundation',
                 'title' => 'Create test orders and snapshots',
                 'summary' => 'Record at least one test order and capture snapshots so order state changes can be demonstrated during review.',
+            ],
+            'promotion_foundation' => [
+                'key' => 'promotion_foundation',
+                'title' => 'Prepare collection ads and promoted posts',
+                'summary' => 'Create at least one campaign and generate a prepared preview so ad review evidence exists for collection ads, shops ads, or promoted posts.',
             ],
             default => null,
         };

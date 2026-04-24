@@ -11,6 +11,7 @@ use App\Http\Controllers\WorkspaceMetaCollectionController;
 use App\Http\Controllers\WorkspaceMetaCommerceController;
 use App\Http\Controllers\WorkspaceMetaProductSetController;
 use App\Http\Controllers\WorkspaceMetaOrderController;
+use App\Http\Controllers\WorkspaceMetaPromotionController;
 use App\Http\Controllers\WorkspaceSettingsController;
 use Illuminate\Support\Facades\Route;
 
@@ -127,6 +128,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/settings/commerce/orders', [WorkspaceMetaOrderController::class, 'store'])->name('settings.commerce.orders.store');
     Route::patch('/settings/commerce/orders/{order}/status', [WorkspaceMetaOrderController::class, 'updateStatus'])->name('settings.commerce.orders.status.update');
     Route::post('/settings/commerce/orders/{order}/snapshot', [WorkspaceMetaOrderController::class, 'snapshot'])->name('settings.commerce.orders.snapshots.store');
+    Route::post('/settings/commerce/promotions', [WorkspaceMetaPromotionController::class, 'store'])->name('settings.commerce.promotions.store');
+    Route::post('/settings/commerce/promotions/{campaign}/prepare', [WorkspaceMetaPromotionController::class, 'prepare'])->name('settings.commerce.promotions.prepare');
+    Route::patch('/settings/commerce/promotions/{campaign}/status', [WorkspaceMetaPromotionController::class, 'updateStatus'])->name('settings.commerce.promotions.status.update');
+    Route::delete('/settings/commerce/promotions/{campaign}', [WorkspaceMetaPromotionController::class, 'destroy'])->name('settings.commerce.promotions.delete');
     Route::post('/settings/commerce/catalogs/{catalog}/products/sync', [WorkspaceMetaCommerceController::class, 'syncProducts'])->name('settings.commerce.catalogs.products.sync');
     Route::post('/settings/commerce/product-sets', [WorkspaceMetaProductSetController::class, 'store'])->name('settings.commerce.product-sets.store');
     Route::patch('/settings/commerce/product-sets/{productSet}/products', [WorkspaceMetaProductSetController::class, 'syncProducts'])->name('settings.commerce.product-sets.products.sync');

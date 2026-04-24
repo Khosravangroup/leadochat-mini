@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Catalog;
 use App\Models\CommerceOrder;
+use App\Models\CommercePromotionCampaign;
 use App\Models\OauthToken;
 use App\Models\ProviderConnection;
 use App\Models\ProviderPermission;
@@ -169,6 +170,7 @@ class MetaCommerceDiagnosticsTest extends TestCase
             'name' => 'Diagnostics Collection',
             'provider_connection_id' => $connection->id,
         ]);
+        $collection = $connection->catalogCollections()->first();
 
         $order = CommerceOrder::create([
             'workspace_id' => $workspace->id,
@@ -206,6 +208,26 @@ class MetaCommerceDiagnosticsTest extends TestCase
             'payload' => ['note' => 'Created for diagnostics test.'],
         ]);
 
+        CommercePromotionCampaign::create([
+            'workspace_id' => $workspace->id,
+            'provider_connection_id' => $connection->id,
+            'catalog_collection_id' => $collection?->id,
+            'social_post_id' => null,
+            'campaign_type' => 'collection_ad',
+            'objective' => 'sales',
+            'name' => 'Diagnostics Collection Campaign',
+            'status' => 'draft',
+            'destination_url' => 'https://example.com/shop/diagnostics',
+            'budget_amount' => 100,
+            'currency' => 'USD',
+            'meta_sync_status' => 'prepared',
+            'meta' => [
+                'last_prepared_preview' => [
+                    'ok' => true,
+                ],
+            ],
+        ]);
+
         $response = $this
             ->actingAs($user)
             ->withSession(['_token' => 'test-csrf-token'])
@@ -236,13 +258,15 @@ class MetaCommerceDiagnosticsTest extends TestCase
         $this->assertSame(1, $diagnostics['shop']['local_stats']['order_count']);
         $this->assertSame(1, $diagnostics['shop']['local_stats']['test_order_count']);
         $this->assertSame(1, $diagnostics['shop']['local_stats']['order_snapshot_count']);
+        $this->assertSame(1, $diagnostics['shop']['local_stats']['promotion_campaign_count']);
+        $this->assertSame(1, $diagnostics['shop']['local_stats']['prepared_promotion_campaign_count']);
         $this->assertSame(3, $diagnostics['checkout_urls']['checked_count']);
         $this->assertSame(0, $diagnostics['checkout_urls']['invalid_count']);
         $this->assertSame('ready', $diagnostics['review']['status']);
-        $this->assertSame(9, $diagnostics['review']['counts']['ok']);
+        $this->assertSame(10, $diagnostics['review']['counts']['ok']);
         $this->assertSame(0, $diagnostics['review']['counts']['warn']);
         $this->assertSame(0, $diagnostics['review']['counts']['fail']);
-        $this->assertCount(10, $diagnostics['review']['evidence']);
+        $this->assertCount(11, $diagnostics['review']['evidence']);
         $this->assertSame('Instagram business account', $diagnostics['review']['evidence'][0]['label']);
         $this->assertSame('channel_health', $diagnostics['readiness'][0]['key']);
         $this->assertSame('ok', $diagnostics['readiness'][0]['status']);
@@ -495,6 +519,7 @@ class MetaCommerceDiagnosticsTest extends TestCase
             'name' => 'Packet Collection',
             'provider_connection_id' => $connection->id,
         ]);
+        $packetCollection = $connection->catalogCollections()->first();
 
         $order = CommerceOrder::create([
             'workspace_id' => $workspace->id,
@@ -532,6 +557,20 @@ class MetaCommerceDiagnosticsTest extends TestCase
             'payload' => ['note' => 'Created for packet test.'],
         ]);
 
+        CommercePromotionCampaign::create([
+            'workspace_id' => $workspace->id,
+            'provider_connection_id' => $connection->id,
+            'catalog_collection_id' => $packetCollection?->id,
+            'campaign_type' => 'collection_ad',
+            'objective' => 'sales',
+            'name' => 'Packet Promotion Campaign',
+            'status' => 'active',
+            'destination_url' => 'https://example.com/shop/packet',
+            'budget_amount' => 120,
+            'currency' => 'USD',
+            'meta_sync_status' => 'prepared',
+        ]);
+
         $response = $this
             ->actingAs($user)
             ->withSession(['_token' => 'test-csrf-token'])
@@ -549,7 +588,9 @@ class MetaCommerceDiagnosticsTest extends TestCase
         $this->assertSame(1, $packet['catalogs']['discovered_count']);
         $this->assertSame(1, $packet['orders']['order_count']);
         $this->assertSame(1, $packet['orders']['snapshot_count']);
-        $this->assertCount(8, $packet['demo_script']);
+        $this->assertSame(1, $packet['promotions']['campaign_count']);
+        $this->assertSame(1, $packet['promotions']['prepared_campaign_count']);
+        $this->assertCount(9, $packet['demo_script']);
         $this->assertSame(1, count($connection->meta['meta_commerce_review_packet_history']));
 
         $download = $this
@@ -565,5 +606,6 @@ class MetaCommerceDiagnosticsTest extends TestCase
         $this->assertSame('ready', data_get($downloadedPacket, 'summary.status'));
         $this->assertSame('Packet Catalog', data_get($downloadedPacket, 'catalogs.live_catalogs.0.name'));
         $this->assertSame(1, data_get($downloadedPacket, 'orders.order_count'));
+        $this->assertSame(1, data_get($downloadedPacket, 'promotions.campaign_count'));
     }
 }

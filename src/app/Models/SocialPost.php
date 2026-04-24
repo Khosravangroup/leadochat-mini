@@ -57,4 +57,10 @@ class SocialPost extends Model
             ->orderByDesc('is_cover')
             ->orderBy('id');
     }
+
+    public function promotionCampaigns(): HasMany
+    {
+        return $this->hasMany(CommercePromotionCampaign::class)
+            ->orderByDesc('id');
+    }
 }

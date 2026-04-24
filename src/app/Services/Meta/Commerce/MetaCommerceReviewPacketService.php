@@ -24,6 +24,10 @@ class MetaCommerceReviewPacketService
             ->with(['items', 'snapshots'])
             ->limit(5)
             ->get();
+        $recentCampaigns = $connection->commercePromotionCampaigns()
+            ->with(['collection.productSets', 'socialPost'])
+            ->limit(5)
+            ->get();
 
         $catalogs = collect($shop['meta_catalogs'] ?? [])
             ->filter(fn ($catalog) => is_array($catalog))
@@ -121,6 +125,26 @@ class MetaCommerceReviewPacketService
                     'snapshot_count' => $order->snapshots->count(),
                 ])->values()->all(),
             ],
+            'promotions' => [
+                'campaign_count' => $orderStats['promotion_campaign_count'] ?? 0,
+                'prepared_campaign_count' => $orderStats['prepared_promotion_campaign_count'] ?? 0,
+                'promoted_post_campaign_count' => $orderStats['promoted_post_campaign_count'] ?? 0,
+                'collection_ad_campaign_count' => $orderStats['collection_ad_campaign_count'] ?? 0,
+                'shops_ad_campaign_count' => $orderStats['shops_ad_campaign_count'] ?? 0,
+                'recent_campaigns' => $recentCampaigns->map(fn ($campaign) => [
+                    'id' => $campaign->id,
+                    'name' => $campaign->name,
+                    'campaign_type' => $campaign->campaign_type,
+                    'status' => $campaign->status,
+                    'objective' => $campaign->objective,
+                    'meta_sync_status' => $campaign->meta_sync_status,
+                    'collection_name' => $campaign->collection?->name,
+                    'social_post_id' => $campaign->social_post_id,
+                    'product_tag_count' => is_array($campaign->socialPost?->raw)
+                        ? count((array) ($campaign->socialPost->raw['product_tags'] ?? []))
+                        : 0,
+                ])->values()->all(),
+            ],
             'review_evidence' => [
                 'items' => array_values((array) ($review['evidence'] ?? [])),
                 'blockers' => array_values((array) ($review['blockers'] ?? [])),
@@ -182,11 +206,16 @@ class MetaCommerceReviewPacketService
             ],
             [
                 'step' => 7,
+                'title' => 'Show ad and promotion groundwork',
+                'summary' => 'Open the promotion campaigns list, show a prepared collection ad or promoted post payload preview, and explain how campaign assets map to synced commerce objects.',
+            ],
+            [
+                'step' => 8,
                 'title' => 'Show checkout handoff proof',
                 'summary' => 'Demonstrate the HTTPS checkout URLs and explain how Instagram commerce traffic is handed off to the external store.',
             ],
             [
-                'step' => 8,
+                'step' => 9,
                 'title' => 'Reference the Meta discovery snapshot',
                 'summary' => count((array) ($discovery['catalogs'] ?? [])) > 0
                     ? 'The saved discovery snapshot includes ' . count((array) ($discovery['catalogs'] ?? [])) . ' discovered Meta catalog(s).'
@@ -209,6 +238,7 @@ class MetaCommerceReviewPacketService
                 'Product tagging eligibility',
                 'Catalog structure with product sets and collections',
                 'Test order flows and order snapshots',
+                'Collection ads, shops ads, and promoted post groundwork',
                 'Localized products, offers, and checkout flow links',
             ],
             'status_message' => $review['headline'] ?? null,

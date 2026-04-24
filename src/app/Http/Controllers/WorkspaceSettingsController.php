@@ -7,8 +7,10 @@ use App\Models\CatalogCollection;
 use App\Models\CatalogProduct;
 use App\Models\CatalogProductSet;
 use App\Models\CommerceOrder;
+use App\Models\CommercePromotionCampaign;
 use App\Models\WorkspaceTag;
 use App\Models\ProviderConnection;
+use App\Models\SocialPost;
 use App\Models\User;
 use App\Models\WorkspaceDepartment;
 use Illuminate\Contracts\View\View;
@@ -63,6 +65,9 @@ class WorkspaceSettingsController extends Controller
         $commerceCollections = collect();
         $commerceOrders = collect();
         $commerceOrderStats = [];
+        $commercePromotionCampaigns = collect();
+        $commercePromotablePosts = collect();
+        $commercePromotionStats = [];
 
         if ($workspace && $section === 'tags') {
             $workspaceTags = WorkspaceTag::query()
@@ -243,6 +248,49 @@ class WorkspaceSettingsController extends Controller
                     ->get()
                     ->sum('snapshots_count'),
             ];
+
+            $commercePromotablePosts = SocialPost::query()
+                ->where('workspace_id', $workspace->id)
+                ->where('provider', 'instagram')
+                ->where('status', '!=', 'deleted')
+                ->with('providerConnection')
+                ->latest('posted_at')
+                ->latest('id')
+                ->limit(60)
+                ->get();
+
+            $commercePromotionCampaigns = CommercePromotionCampaign::query()
+                ->where('workspace_id', $workspace->id)
+                ->with([
+                    'providerConnection',
+                    'collection.productSets.products',
+                    'socialPost.providerConnection',
+                ])
+                ->orderByDesc('id')
+                ->limit(20)
+                ->get();
+
+            $commercePromotionStats = [
+                'campaign_count' => CommercePromotionCampaign::query()
+                    ->where('workspace_id', $workspace->id)
+                    ->count(),
+                'prepared_count' => CommercePromotionCampaign::query()
+                    ->where('workspace_id', $workspace->id)
+                    ->whereIn('meta_sync_status', ['prepared', 'prepared_with_warnings'])
+                    ->count(),
+                'collection_ad_count' => CommercePromotionCampaign::query()
+                    ->where('workspace_id', $workspace->id)
+                    ->where('campaign_type', 'collection_ad')
+                    ->count(),
+                'promoted_post_count' => CommercePromotionCampaign::query()
+                    ->where('workspace_id', $workspace->id)
+                    ->where('campaign_type', 'promoted_post')
+                    ->count(),
+                'shops_ad_count' => CommercePromotionCampaign::query()
+                    ->where('workspace_id', $workspace->id)
+                    ->where('campaign_type', 'shops_ad')
+                    ->count(),
+            ];
         }
 
         return view('settings.index', [
@@ -264,6 +312,9 @@ class WorkspaceSettingsController extends Controller
             'commerceCollections' => $commerceCollections,
             'commerceOrders' => $commerceOrders,
             'commerceOrderStats' => $commerceOrderStats,
+            'commercePromotionCampaigns' => $commercePromotionCampaigns,
+            'commercePromotablePosts' => $commercePromotablePosts,
+            'commercePromotionStats' => $commercePromotionStats,
             'canManageTeam' => (bool) ($workspace && $user),
         ]);
     }

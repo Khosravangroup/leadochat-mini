@@ -71,4 +71,10 @@ class Workspace extends Model
             ->orderByDesc('placed_at')
             ->orderByDesc('id');
     }
+
+    public function commercePromotionCampaigns(): HasMany
+    {
+        return $this->hasMany(CommercePromotionCampaign::class)
+            ->orderByDesc('id');
+    }
 }

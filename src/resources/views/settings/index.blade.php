@@ -3226,16 +3226,16 @@
                             </div>
 
                             <div class="ws-commerce-card">
-                                <h3 class="ws-section-title">Phase 7 scope</h3>
+                                <h3 class="ws-section-title">Phase 8 scope</h3>
                                 <div class="ws-section-subtitle">
-                                    Close the commerce loop with test orders, status snapshots, and review-ready order evidence on top of the existing catalog and shop structure.
+                                    Add ad and promotion groundwork on top of the commerce stack with collection ads, promoted posts, shops-ad prep, and review-facing campaign evidence.
                                 </div>
                                 <div class="ws-commerce-list">
-                                    <span class="ws-commerce-pill ok">Test order flows</span>
-                                    <span class="ws-commerce-pill ok">Order status updates</span>
-                                    <span class="ws-commerce-pill ok">Order snapshots</span>
-                                    <span class="ws-commerce-pill ok">Packet-ready order proof</span>
-                                    <span class="ws-commerce-pill ok">Review demo steps</span>
+                                    <span class="ws-commerce-pill ok">Collection ads</span>
+                                    <span class="ws-commerce-pill ok">Promoted posts</span>
+                                    <span class="ws-commerce-pill ok">Shops ad prep</span>
+                                    <span class="ws-commerce-pill ok">Payload previews</span>
+                                    <span class="ws-commerce-pill ok">Review campaign proof</span>
                                 </div>
                             </div>
                         </div>
@@ -3267,6 +3267,7 @@
                                         $reviewPacketLocalShop = is_array($reviewPacket['local_shop'] ?? null) ? $reviewPacket['local_shop'] : [];
                                         $reviewPacketCheckout = is_array($reviewPacket['checkout'] ?? null) ? $reviewPacket['checkout'] : [];
                                         $reviewPacketOrders = is_array($reviewPacket['orders'] ?? null) ? $reviewPacket['orders'] : [];
+                                        $reviewPacketPromotions = is_array($reviewPacket['promotions'] ?? null) ? $reviewPacket['promotions'] : [];
                                         $reviewPacketEvidence = is_array($reviewPacket['review_evidence'] ?? null) ? $reviewPacket['review_evidence'] : [];
                                         $reviewPacketNotes = is_array($reviewPacket['review_notes'] ?? null) ? $reviewPacket['review_notes'] : [];
                                         $reviewPacketSteps = is_array($reviewPacket['demo_script'] ?? null) ? $reviewPacket['demo_script'] : [];
@@ -3494,6 +3495,12 @@
                                                                 · test {{ $reviewPacketOrders['test_order_count'] ?? 0 }}
                                                                 · snapshots {{ $reviewPacketOrders['snapshot_count'] ?? 0 }}
                                                             </span>
+                                                            <span class="ws-commerce-code">
+                                                                campaigns {{ $reviewPacketPromotions['campaign_count'] ?? 0 }}
+                                                                · prepared {{ $reviewPacketPromotions['prepared_campaign_count'] ?? 0 }}
+                                                                · collection ads {{ $reviewPacketPromotions['collection_ad_campaign_count'] ?? 0 }}
+                                                                · promoted posts {{ $reviewPacketPromotions['promoted_post_campaign_count'] ?? 0 }}
+                                                            </span>
                                                             @if (!empty($reviewPacketNotes['requested_scopes']))
                                                                 <span class="ws-commerce-code">
                                                                     scopes {{ implode(', ', (array) $reviewPacketNotes['requested_scopes']) }}
@@ -3543,6 +3550,8 @@
                                                                             · catalogs {{ $historyEntry['discovered_catalog_count'] ?? 0 }}
                                                                             · orders {{ $historyEntry['order_count'] ?? 0 }}
                                                                             · snapshots {{ $historyEntry['snapshot_count'] ?? 0 }}
+                                                                            · campaigns {{ $historyEntry['campaign_count'] ?? 0 }}
+                                                                            · prepared {{ $historyEntry['prepared_campaign_count'] ?? 0 }}
                                                                         </div>
                                                                         @if (!empty($historyEntry['headline']))
                                                                             <span class="ws-commerce-code">{{ $historyEntry['headline'] }}</span>
@@ -3641,7 +3650,9 @@
                                                                 product sets {{ $diagnosticShop['local_stats']['product_set_count'] ?? 0 }},
                                                                 collections {{ $diagnosticShop['local_stats']['collection_count'] ?? 0 }},
                                                                 orders {{ $diagnosticShop['local_stats']['order_count'] ?? 0 }},
-                                                                snapshots {{ $diagnosticShop['local_stats']['order_snapshot_count'] ?? 0 }}
+                                                                snapshots {{ $diagnosticShop['local_stats']['order_snapshot_count'] ?? 0 }},
+                                                                campaigns {{ $diagnosticShop['local_stats']['promotion_campaign_count'] ?? 0 }},
+                                                                prepared campaigns {{ $diagnosticShop['local_stats']['prepared_promotion_campaign_count'] ?? 0 }}
                                                             </span>
                                                         </div>
                                                     @endif
@@ -4135,6 +4146,240 @@
                                 @empty
                                     <div class="ws-empty">
                                         No orders recorded yet. Create a test order to start building review proof for checkout and order-state flows.
+                                    </div>
+                                @endforelse
+                            </div>
+                        </div>
+
+                        <div class="ws-commerce-grid">
+                            <div class="ws-commerce-card">
+                                <h3 class="ws-section-title">Create promotion campaign</h3>
+                                <div class="ws-section-subtitle">
+                                    Prepare collection ads, shops ads, and promoted posts from the same synced commerce assets already used across Leadochat.
+                                </div>
+
+                                <form method="POST" action="{{ route('settings.commerce.promotions.store') }}" class="ws-commerce-list" style="margin-top:14px;">
+                                    @csrf
+
+                                    <div class="ws-commerce-grid" style="grid-template-columns:repeat(2, minmax(0, 1fr));">
+                                        <select name="provider_connection_id" class="ws-commerce-select" required>
+                                            <option value="">Choose Instagram account</option>
+                                            @foreach (($commerceConnections ?? collect()) as $connection)
+                                                <option value="{{ $connection->id }}" @selected((string) old('provider_connection_id') === (string) $connection->id)>
+                                                    {{ $connection->provider_account_name ?: $connection->provider_account_id }}
+                                                </option>
+                                            @endforeach
+                                        </select>
+
+                                        <select name="campaign_type" class="ws-commerce-select" required>
+                                            @foreach (['collection_ad' => 'Collection ad', 'shops_ad' => 'Shops ad', 'promoted_post' => 'Promoted post'] as $value => $label)
+                                                <option value="{{ $value }}" @selected(old('campaign_type', 'collection_ad') === $value)>{{ $label }}</option>
+                                            @endforeach
+                                        </select>
+
+                                        <select name="objective" class="ws-commerce-select" required>
+                                            @foreach (['sales' => 'Sales', 'traffic' => 'Traffic', 'engagement' => 'Engagement', 'catalog_sales' => 'Catalog sales'] as $value => $label)
+                                                <option value="{{ $value }}" @selected(old('objective', 'sales') === $value)>{{ $label }}</option>
+                                            @endforeach
+                                        </select>
+
+                                        <select name="status" class="ws-commerce-select" required>
+                                            @foreach (['draft' => 'Draft', 'active' => 'Active', 'paused' => 'Paused', 'archived' => 'Archived'] as $value => $label)
+                                                <option value="{{ $value }}" @selected(old('status', 'draft') === $value)>{{ $label }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+
+                                    <input type="text" name="name" class="ws-commerce-input" maxlength="160" placeholder="Summer collection retargeting" value="{{ old('name') }}" required>
+
+                                    <textarea name="description" class="ws-commerce-textarea" maxlength="2000" placeholder="Optional internal campaign notes">{{ old('description') }}</textarea>
+
+                                    <div class="ws-commerce-grid" style="grid-template-columns:repeat(2, minmax(0, 1fr));">
+                                        <select name="catalog_collection_id" class="ws-commerce-select">
+                                            <option value="">Optional collection asset</option>
+                                            @foreach (($commerceCollections ?? collect()) as $collection)
+                                                <option value="{{ $collection->id }}" @selected((string) old('catalog_collection_id') === (string) $collection->id)>
+                                                    {{ $collection->name }}
+                                                    @if ($collection->providerConnection)
+                                                        · {{ $collection->providerConnection->provider_account_name ?: $collection->providerConnection->provider_account_id }}
+                                                    @endif
+                                                </option>
+                                            @endforeach
+                                        </select>
+
+                                        <select name="social_post_id" class="ws-commerce-select">
+                                            <option value="">Optional Instagram post asset</option>
+                                            @foreach (($commercePromotablePosts ?? collect()) as $post)
+                                                @php
+                                                    $postProductTagCount = is_array($post->raw ?? null) ? count((array) ($post->raw['product_tags'] ?? [])) : 0;
+                                                @endphp
+                                                <option value="{{ $post->id }}" @selected((string) old('social_post_id') === (string) $post->id)>
+                                                    {{ \Illuminate\Support\Str::limit($post->caption ?: ('Post #' . $post->id), 48) }}
+                                                    · tags {{ $postProductTagCount }}
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+
+                                    <div class="ws-commerce-grid" style="grid-template-columns:repeat(4, minmax(0, 1fr));">
+                                        <input type="number" step="0.01" min="0" name="budget_amount" class="ws-commerce-input" placeholder="Budget" value="{{ old('budget_amount', '0') }}" required>
+                                        <input type="text" name="currency" class="ws-commerce-input" maxlength="3" placeholder="USD" value="{{ old('currency', 'USD') }}" required>
+                                        <input type="text" name="call_to_action" class="ws-commerce-input" maxlength="60" placeholder="Shop now" value="{{ old('call_to_action') }}">
+                                        <input type="url" name="destination_url" class="ws-commerce-input" maxlength="2048" placeholder="https://example.com/shop" value="{{ old('destination_url') }}">
+                                    </div>
+
+                                    <div class="ws-commerce-grid" style="grid-template-columns:repeat(2, minmax(0, 1fr));">
+                                        <input type="datetime-local" name="starts_at" class="ws-commerce-input" value="{{ old('starts_at') }}">
+                                        <input type="datetime-local" name="ends_at" class="ws-commerce-input" value="{{ old('ends_at') }}">
+                                    </div>
+
+                                    <div>
+                                        <button type="submit" class="ws-commerce-button">Create promotion campaign</button>
+                                    </div>
+                                </form>
+                            </div>
+
+                            <div class="ws-commerce-card">
+                                <h3 class="ws-section-title">Promotion readiness</h3>
+                                <div class="ws-section-subtitle">
+                                    Prepared promotion previews make the ad foundation reviewable even before full ad delivery flows are added.
+                                </div>
+                                <div class="ws-commerce-list">
+                                    <span class="ws-commerce-pill ok">{{ (int) (($commercePromotionStats ?? [])['campaign_count'] ?? 0) }} campaigns</span>
+                                    <span class="ws-commerce-pill">{{ (int) (($commercePromotionStats ?? [])['prepared_count'] ?? 0) }} prepared</span>
+                                    <span class="ws-commerce-pill">{{ (int) (($commercePromotionStats ?? [])['collection_ad_count'] ?? 0) }} collection ads</span>
+                                    <span class="ws-commerce-pill">{{ (int) (($commercePromotionStats ?? [])['promoted_post_count'] ?? 0) }} promoted posts</span>
+                                    <span class="ws-commerce-pill">{{ (int) (($commercePromotionStats ?? [])['shops_ad_count'] ?? 0) }} shops ads</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="ws-commerce-card">
+                            <h3 class="ws-section-title">Promotion campaigns</h3>
+
+                            <div class="ws-commerce-order-list">
+                                @forelse (($commercePromotionCampaigns ?? collect()) as $campaign)
+                                    @php
+                                        $campaignPreview = is_array($campaign->meta ?? null) ? ($campaign->meta['last_prepared_preview'] ?? null) : null;
+                                        $campaignChecks = is_array($campaignPreview['checks'] ?? null) ? $campaignPreview['checks'] : [];
+                                        $campaignAssetSummary = is_array($campaignPreview['asset_summary'] ?? null) ? $campaignPreview['asset_summary'] : [];
+                                        $campaignPayloadPreview = is_array($campaignPreview['payload_preview'] ?? null) ? $campaignPreview['payload_preview'] : [];
+                                    @endphp
+
+                                    <div class="ws-commerce-order-item">
+                                        <div class="ws-commerce-head">
+                                            <div>
+                                                <div class="ws-commerce-title">{{ $campaign->name }}</div>
+                                                <div class="ws-commerce-meta">
+                                                    {{ ucfirst(str_replace('_', ' ', $campaign->campaign_type)) }}
+                                                    · {{ ucfirst(str_replace('_', ' ', $campaign->objective)) }}
+                                                    @if ($campaign->providerConnection)
+                                                        · {{ $campaign->providerConnection->provider_account_name ?: $campaign->providerConnection->provider_account_id }}
+                                                    @endif
+                                                </div>
+                                            </div>
+
+                                            <form method="POST" action="{{ route('settings.commerce.promotions.delete', $campaign) }}">
+                                                @csrf
+                                                @method('DELETE')
+                                                <button type="submit" class="ws-commerce-button" style="background:#b91c1c;">Delete</button>
+                                            </form>
+                                        </div>
+
+                                        <div class="ws-commerce-order-meta-row">
+                                            <span class="ws-commerce-pill">{{ ucfirst(str_replace('_', ' ', $campaign->status)) }}</span>
+                                            <span class="ws-commerce-pill">{{ str_replace('_', ' ', $campaign->meta_sync_status ?: 'not prepared') }}</span>
+                                            <span class="ws-commerce-pill">{{ $campaign->currency }} {{ number_format((float) $campaign->budget_amount, 2) }}</span>
+                                            @if ($campaign->collection)
+                                                <span class="ws-commerce-pill">Collection {{ $campaign->collection->name }}</span>
+                                            @endif
+                                            @if ($campaign->socialPost)
+                                                @php
+                                                    $promotionPostTagCount = is_array($campaign->socialPost->raw ?? null) ? count((array) ($campaign->socialPost->raw['product_tags'] ?? [])) : 0;
+                                                @endphp
+                                                <span class="ws-commerce-pill">Post tags {{ $promotionPostTagCount }}</span>
+                                            @endif
+                                        </div>
+
+                                        @if ($campaign->description)
+                                            <div class="ws-commerce-meta">{{ $campaign->description }}</div>
+                                        @endif
+
+                                        @if ($campaign->destination_url)
+                                            <span class="ws-commerce-code">{{ $campaign->destination_url }}</span>
+                                        @endif
+
+                                        @if ($campaign->meta_sync_error)
+                                            <span class="ws-commerce-code">{{ $campaign->meta_sync_error }}</span>
+                                        @endif
+
+                                        <div class="ws-commerce-grid">
+                                            <form method="POST" action="{{ route('settings.commerce.promotions.prepare', $campaign) }}" class="ws-commerce-list" style="margin-top:0;">
+                                                @csrf
+                                                <div>
+                                                    <button type="submit" class="ws-commerce-button" style="background:#1d4ed8;">Prepare preview</button>
+                                                </div>
+                                            </form>
+
+                                            <form method="POST" action="{{ route('settings.commerce.promotions.status.update', $campaign) }}" class="ws-commerce-list" style="margin-top:0;">
+                                                @csrf
+                                                @method('PATCH')
+                                                <select name="status" class="ws-commerce-select" required>
+                                                    @foreach (['draft' => 'Draft', 'active' => 'Active', 'paused' => 'Paused', 'archived' => 'Archived'] as $value => $label)
+                                                        <option value="{{ $value }}" @selected($campaign->status === $value)>{{ $label }}</option>
+                                                    @endforeach
+                                                </select>
+                                                <div>
+                                                    <button type="submit" class="ws-commerce-button">Update status</button>
+                                                </div>
+                                            </form>
+                                        </div>
+
+                                        @if ($campaignChecks !== [])
+                                            <details class="ws-commerce-details">
+                                                <summary>Preparation checks</summary>
+                                                <div class="ws-commerce-list">
+                                                    @foreach ($campaignChecks as $check)
+                                                        @php
+                                                            $campaignCheckClass = match ($check['status'] ?? 'warn') {
+                                                                'ok' => 'ok',
+                                                                'fail' => 'fail',
+                                                                default => '',
+                                                            };
+                                                        @endphp
+                                                        <div class="ws-commerce-check">
+                                                            <span class="ws-commerce-pill {{ $campaignCheckClass }}">
+                                                                {{ strtoupper($check['status'] ?? 'warn') }}
+                                                            </span>
+                                                            {{ str_replace('_', ' ', $check['key'] ?? 'check') }}
+                                                            <span class="ws-commerce-code">{{ $check['summary'] ?? '' }}</span>
+                                                        </div>
+                                                    @endforeach
+                                                </div>
+                                            </details>
+                                        @endif
+
+                                        @if ($campaignAssetSummary !== [] || $campaignPayloadPreview !== [])
+                                            <details class="ws-commerce-details">
+                                                <summary>Payload preview</summary>
+                                                <div class="ws-commerce-list">
+                                                    @if ($campaignAssetSummary !== [])
+                                                        <span class="ws-commerce-code">
+                                                            collection sets {{ $campaignAssetSummary['collection_product_set_count'] ?? 0 }}
+                                                            · collection products {{ $campaignAssetSummary['collection_product_count'] ?? 0 }}
+                                                            · post product tags {{ $campaignAssetSummary['social_post_product_tag_count'] ?? 0 }}
+                                                        </span>
+                                                    @endif
+                                                    @if ($campaignPayloadPreview !== [])
+                                                        <span class="ws-commerce-code">{{ json_encode($campaignPayloadPreview, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) }}</span>
+                                                    @endif
+                                                </div>
+                                            </details>
+                                        @endif
+                                    </div>
+                                @empty
+                                    <div class="ws-empty">
+                                        No promotion campaigns yet. Create one to prepare collection ads, shops ads, or promoted post flows for review.
                                     </div>
                                 @endforelse
                             </div>
