@@ -9,6 +9,31 @@
         if ($selectedConversation && request()->filled('reply')) {
             $replyTarget = $messages->firstWhere('id', (int) request('reply'));
         }
+
+        $availableCatalogProducts = ($catalogProducts ?? collect())
+            ->filter(function ($product) use ($selectedConversation) {
+                $catalogConnectionId = $product->catalog?->provider_connection_id;
+
+                return !$catalogConnectionId || (int) $catalogConnectionId === (int) ($selectedConversation?->provider_connection_id ?? 0);
+            })
+            ->values();
+
+        $catalogProductPayload = $availableCatalogProducts
+            ->map(function ($product) {
+                return [
+                    'id' => $product->id,
+                    'catalog_name' => $product->catalog?->name,
+                    'title' => $product->title,
+                    'description' => $product->description,
+                    'sku' => $product->sku,
+                    'price' => $product->price !== null ? (float) $product->price : null,
+                    'currency' => strtoupper((string) $product->currency),
+                    'image_url' => $product->image_url,
+                    'product_url' => $product->product_url,
+                    'availability' => $product->availability,
+                ];
+            })
+            ->values();
     @endphp
 
     <style>
@@ -130,13 +155,46 @@
             padding: 1rem 1.25rem;
         }
 
-        .lc-avatar {
+        .lc-avatar-wrap {
+            position: relative;
             width: 42px;
             height: 42px;
             min-width: 42px;
+            flex: 0 0 42px;
+        }
+
+        .lc-avatar {
+            width: 100%;
+            height: 100%;
+            min-width: 0;
             border-radius: 999px;
             object-fit: cover;
             background: #ddd;
+        }
+
+        .lc-channel-badge {
+            position: absolute;
+            right: -2px;
+            bottom: -2px;
+            width: 20px;
+            height: 20px;
+            border-radius: 999px;
+            border: 2px solid var(--lc-panel);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            box-shadow: 0 4px 10px rgba(15, 23, 42, .18);
+        }
+
+        .lc-channel-badge.instagram {
+            background: linear-gradient(135deg, #f58529 0%, #dd2a7b 55%, #515bd4 100%);
+        }
+
+        .lc-channel-badge svg {
+            width: 12px;
+            height: 12px;
+            display: block;
         }
 
         .lc-conversation-meta {
@@ -234,6 +292,30 @@
             gap: .28rem;
         }
 
+        .lc-story-reply-preview {
+            display: grid;
+            grid-template-columns: 54px minmax(0, 1fr);
+            gap: .55rem;
+            align-items: center;
+        }
+
+        .lc-story-reply-thumb {
+            width: 54px;
+            height: 96px;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #1e1b4b;
+            border: 1px solid #ddd6fe;
+        }
+
+        .lc-story-reply-thumb img,
+        .lc-story-reply-thumb video {
+            display: block;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
         .lc-comment-reply-box {
             margin-bottom: .45rem;
             border: 1px solid #bae6fd;
@@ -241,7 +323,7 @@
             border-radius: 8px;
             padding: .55rem .65rem;
             display: grid;
-            gap: .28rem;
+            gap: .45rem;
         }
 
         .lc-story-reply-title {
@@ -256,6 +338,20 @@
             font-weight: 700;
             color: #0369a1;
             line-height: 1.2;
+        }
+
+        .lc-comment-reply-cover {
+            overflow: hidden;
+            border-radius: 8px;
+            background: #dbeafe;
+            border: 1px solid #bae6fd;
+        }
+
+        .lc-comment-reply-cover img {
+            display: block;
+            width: 100%;
+            max-height: 180px;
+            object-fit: cover;
         }
 
         .lc-story-reply-meta {
@@ -303,6 +399,113 @@
             line-height: 1.35;
             color: #075985;
             word-break: break-word;
+        }
+
+        .lc-comment-reply-label {
+            display: block;
+            margin-bottom: .18rem;
+            font-size: .66rem;
+            font-weight: 800;
+            color: #0c4a6e;
+            text-transform: uppercase;
+            letter-spacing: .02em;
+        }
+
+        .lc-comment-private-reply-card {
+            margin-bottom: .45rem;
+            border: 1px solid #bae6fd;
+            background: linear-gradient(180deg, #f8fdff 0%, #eef8ff 100%);
+            border-radius: 12px;
+            padding: .7rem;
+            display: grid;
+            gap: .65rem;
+        }
+
+        .lc-comment-private-reply-top {
+            display: flex;
+            align-items: center;
+            gap: .4rem;
+            flex-wrap: wrap;
+        }
+
+        .lc-comment-private-reply-author {
+            font-size: .72rem;
+            font-weight: 700;
+            color: #0f172a;
+        }
+
+        .lc-comment-private-reply-layout {
+            display: grid;
+            grid-template-columns: 70px minmax(0, 1fr);
+            gap: .7rem;
+            align-items: start;
+        }
+
+        .lc-comment-private-reply-cover {
+            width: 70px;
+            height: 70px;
+            overflow: hidden;
+            border-radius: 10px;
+            border: 1px solid #bae6fd;
+            background: #dbeafe;
+        }
+
+        .lc-comment-private-reply-cover img {
+            display: block;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .lc-comment-private-reply-content {
+            min-width: 0;
+            display: grid;
+            gap: .42rem;
+        }
+
+        .lc-comment-private-reply-section {
+            min-width: 0;
+        }
+
+        .lc-comment-private-reply-kicker {
+            display: block;
+            margin-bottom: .16rem;
+            font-size: .64rem;
+            font-weight: 800;
+            color: #0369a1;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+        }
+
+        .lc-comment-private-reply-copy {
+            font-size: .77rem;
+            line-height: 1.45;
+            color: #0f172a;
+            word-break: break-word;
+        }
+
+        .lc-comment-private-reply-comment .lc-comment-private-reply-copy {
+            color: #075985;
+        }
+
+        .lc-comment-private-reply-response {
+            border-top: 1px solid #bae6fd;
+            padding-top: .5rem;
+        }
+
+        .lc-comment-private-reply-link {
+            display: inline-flex;
+            align-items: center;
+            min-height: 26px;
+            width: fit-content;
+            border-radius: 999px;
+            border: 1px solid #7dd3fc;
+            background: #ffffff;
+            padding: 0 .7rem;
+            font-size: .72rem;
+            font-weight: 700;
+            color: #0369a1;
+            text-decoration: none;
         }
 
         .lc-main {
@@ -371,14 +574,14 @@
         .lc-center-actions {
             display: flex;
             align-items: center;
-            gap: .5rem;
+            gap: .45rem;
             flex-wrap: wrap;
         }
 
         .lc-icon-btn {
-            width: 34px;
-            height: 34px;
-            border-radius: 10px;
+            width: 38px;
+            height: 38px;
+            border-radius: 8px;
             border: 1px solid var(--lc-border);
             background: var(--lc-panel);
             color: var(--lc-text-soft);
@@ -386,7 +589,43 @@
             align-items: center;
             justify-content: center;
             font-size: .9rem;
-            cursor: default;
+            cursor: pointer;
+            transition: background .18s ease, color .18s ease, border-color .18s ease, transform .18s ease;
+        }
+
+        .lc-icon-btn:hover,
+        .lc-icon-btn:focus-visible {
+            background: #f8fafc;
+            color: #0f172a;
+            border-color: #d6d3d1;
+            transform: translateY(-1px);
+            outline: none;
+        }
+
+        .lc-icon-btn svg {
+            width: 18px;
+            height: 18px;
+            stroke: currentColor;
+            stroke-width: 1.85;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            fill: none;
+        }
+
+        .lc-icon-btn.archive {
+            color: #1d4ed8;
+        }
+
+        .lc-icon-btn.restore {
+            color: #0f766e;
+        }
+
+        .lc-icon-btn.trash {
+            color: #dc2626;
+        }
+
+        .lc-icon-btn.refresh {
+            color: #4f46e5;
         }
 
         .lc-message-area {
@@ -438,7 +677,7 @@
 
         .lc-message-wrap {
             display: flex;
-            align-items: flex-end;
+            align-items: flex-start;
             gap: .65rem;
             max-width: 90%;
         }
@@ -458,13 +697,43 @@
         .lc-message-body {
             min-width: 0;
             max-width: 100%;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            gap: .16rem;
         }
 
         .lc-message-name {
-            margin: 0 0 .35rem;
+            margin: 0;
             font-size: .78rem;
             font-weight: 600;
             color: var(--lc-text-soft);
+        }
+
+        .lc-message-agent {
+            display: inline-flex;
+            align-items: center;
+            gap: .35rem;
+            align-self: flex-end;
+            max-width: 100%;
+            color: var(--lc-text-soft);
+        }
+
+        .lc-message-agent-avatar {
+            width: 20px;
+            height: 20px;
+            min-width: 20px;
+            border-radius: 999px;
+            object-fit: cover;
+            background: #ddd;
+        }
+
+        .lc-message-agent-name {
+            font-size: .76rem;
+            font-weight: 700;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .lc-bubble {
@@ -475,6 +744,9 @@
             line-height: 1.55;
             word-break: break-word;
             box-shadow: 0 1px 2px rgba(0,0,0,.03);
+            display: flex;
+            flex-direction: column;
+            gap: .45rem;
         }
 
         .lc-bubble.inbound {
@@ -487,6 +759,24 @@
             background: var(--lc-outgoing);
             border: 1px solid var(--lc-outgoing-border);
             color: var(--lc-text);
+        }
+
+        .lc-bubble-body {
+            min-width: 0;
+        }
+
+        .lc-bubble-footer {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: .38rem;
+            font-size: .69rem;
+            line-height: 1;
+            color: var(--lc-text-muted);
+        }
+
+        .lc-bubble.inbound .lc-bubble-footer {
+            color: #94a3b8;
         }
 
         .lc-reply {
@@ -566,6 +856,84 @@
         .lc-file-meta {
             min-width: 0;
             flex: 1;
+        }
+
+        .lc-product-card {
+            overflow: hidden;
+            border: 1px solid var(--lc-border);
+            border-radius: 14px;
+            background: var(--lc-panel);
+            min-width: 280px;
+            max-width: 360px;
+        }
+
+        .lc-product-card-media {
+            background: var(--lc-panel-soft);
+            aspect-ratio: 1.4 / 1;
+            display: grid;
+            place-items: center;
+            color: var(--lc-text-soft);
+            font-size: .82rem;
+            font-weight: 700;
+        }
+
+        .lc-product-card-media img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        .lc-product-card-body {
+            padding: .8rem;
+            display: grid;
+            gap: .45rem;
+        }
+
+        .lc-product-card-kicker {
+            display: inline-flex;
+            width: fit-content;
+            min-height: 22px;
+            align-items: center;
+            border-radius: 999px;
+            padding: 0 .5rem;
+            background: #ecfdf5;
+            border: 1px solid #bbf7d0;
+            color: #166534;
+            font-size: .68rem;
+            font-weight: 800;
+        }
+
+        .lc-product-card-title {
+            color: var(--lc-text);
+            font-size: .95rem;
+            line-height: 1.35;
+            font-weight: 800;
+        }
+
+        .lc-product-card-price {
+            color: #0f766e;
+            font-size: .9rem;
+            font-weight: 900;
+        }
+
+        .lc-product-card-desc {
+            color: var(--lc-text-soft);
+            font-size: .82rem;
+            line-height: 1.45;
+        }
+
+        .lc-product-card-link {
+            display: inline-flex;
+            justify-content: center;
+            min-height: 34px;
+            align-items: center;
+            border-radius: 10px;
+            background: var(--lc-primary);
+            color: #fff;
+            text-decoration: none;
+            font-size: .82rem;
+            font-weight: 800;
         }
 
         .lc-file-name {
@@ -947,7 +1315,7 @@
         }
 
         .lc-message-meta {
-            margin-top: .35rem;
+            margin-top: .05rem;
             display: flex;
             gap: .5rem;
             flex-wrap: wrap;
@@ -957,6 +1325,139 @@
 
         .lc-message-row.outbound .lc-message-meta {
             justify-content: flex-end;
+        }
+
+        .lc-reaction-strip {
+            display: flex;
+            gap: .18rem;
+            flex-wrap: wrap;
+            align-self: flex-end;
+            margin-top: 0;
+            margin-right: .55rem;
+            min-height: 0;
+            position: relative;
+            z-index: 2;
+            height: 0;
+            overflow: visible;
+        }
+
+        .lc-reaction-strip.has-reaction {
+            height: 22px;
+            margin-top: .12rem;
+        }
+
+        .lc-message-row.outbound .lc-reaction-strip {
+            justify-content: flex-end;
+            margin-right: .6rem;
+        }
+
+        .lc-reaction-pill {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 26px;
+            height: 22px;
+            border: 1px solid var(--lc-border);
+            border-radius: 999px;
+            background: var(--lc-panel);
+            padding: 0 6px;
+            font-size: .78rem;
+            line-height: 1;
+            box-shadow: 0 2px 8px rgba(15, 23, 42, .1);
+        }
+
+        .lc-reaction-pill.agent {
+            background: #fff;
+            border-color: rgba(114, 76, 218, .18);
+        }
+
+        .lc-reaction-form {
+            display: inline-flex;
+            position: relative;
+            margin: 0;
+        }
+
+        .lc-reaction-trigger {
+            border: 0;
+            background: transparent;
+            width: 24px;
+            height: 24px;
+            border-radius: 999px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--lc-text-muted);
+            font-size: .9rem;
+            cursor: pointer;
+            transition: background .12s ease, color .12s ease, transform .12s ease;
+        }
+
+        .lc-reaction-trigger:hover,
+        .lc-reaction-trigger.is-active,
+        .lc-reaction-form.is-open .lc-reaction-trigger {
+            background: #fff;
+            color: #d12f69;
+            box-shadow: 0 1px 4px rgba(15, 23, 42, .12);
+        }
+
+        .lc-reaction-picker {
+            position: absolute;
+            left: 50%;
+            bottom: calc(100% + 8px);
+            transform: translateX(-50%) translateY(4px) scale(.96);
+            transform-origin: bottom center;
+            display: flex;
+            align-items: center;
+            gap: .35rem;
+            min-height: 42px;
+            padding: 5px 7px;
+            border: 1px solid rgba(15, 23, 42, .08);
+            border-radius: 999px;
+            background: rgba(255, 255, 255, .98);
+            box-shadow: 0 10px 28px rgba(15, 23, 42, .18);
+            opacity: 0;
+            pointer-events: none;
+            z-index: 20;
+            transition: opacity .12s ease, transform .12s ease;
+        }
+
+        .lc-reaction-form.is-open .lc-reaction-picker {
+            opacity: 1;
+            pointer-events: auto;
+            transform: translateX(-50%) translateY(0) scale(1);
+        }
+
+        .lc-reaction-option {
+            width: 32px;
+            height: 32px;
+            border: 0;
+            border-radius: 999px;
+            background: transparent;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.3rem;
+            line-height: 1;
+            cursor: pointer;
+            transition: transform .12s ease, background .12s ease;
+        }
+
+        .lc-reaction-option:hover,
+        .lc-reaction-option:focus-visible {
+            background: #f4f4f5;
+            transform: translateY(-3px) scale(1.12);
+            outline: none;
+        }
+
+        .lc-reaction-error {
+            display: none;
+            color: var(--lc-danger);
+            font-size: .72rem;
+            font-weight: 600;
+        }
+
+        .lc-reaction-form.has-error + .lc-reaction-error {
+            display: inline;
         }
 
         .lc-status-icon {
@@ -986,35 +1487,35 @@
 
         .lc-composer-wrap {
             flex: 0 0 auto;
-            padding: .85rem 1rem 1rem;
+            padding: .6rem 1rem .8rem;
             background: var(--lc-panel);
             border-top: 1px solid var(--lc-border);
         }
 
         .lc-composer {
             border-top: 1px solid var(--lc-border);
-            padding-top: .7rem;
+            padding-top: .45rem;
         }
 
         .lc-message-types {
             display: flex;
             align-items: center;
-            gap: .4rem;
-            margin-bottom: .65rem;
+            gap: .32rem;
+            margin-bottom: .4rem;
             flex-wrap: wrap;
             color: var(--lc-text-soft);
-            font-size: .8rem;
+            font-size: .74rem;
         }
 
         .lc-message-type-pill {
             display: inline-flex;
             align-items: center;
-            height: 24px;
+            height: 21px;
             border-radius: 999px;
             border: 1px solid var(--lc-border);
             background: var(--lc-panel);
-            padding: 0 .6rem;
-            font-size: .72rem;
+            padding: 0 .52rem;
+            font-size: .67rem;
             font-weight: 600;
             color: var(--lc-text-soft);
         }
@@ -1028,12 +1529,12 @@
 
         .lc-editor-box textarea {
             width: 100%;
-            min-height: 68px;
+            min-height: 48px;
             border: 0;
             resize: none;
             outline: none;
-            padding: .8rem .9rem .6rem;
-            font-size: .95rem;
+            padding: .65rem .85rem .45rem;
+            font-size: .93rem;
             color: var(--lc-text);
             background: transparent;
         }
@@ -1048,7 +1549,7 @@
             justify-content: space-between;
             gap: .75rem;
             border-top: 1px solid var(--lc-border);
-            padding: .65rem .8rem;
+            padding: .52rem .75rem;
             flex-wrap: wrap;
         }
 
@@ -1063,7 +1564,7 @@
         .lc-editor-icon {
             font-size: 1rem;
             line-height: 1;
-            cursor: default;
+            cursor: pointer;
         }
 
         .lc-send {
@@ -1075,6 +1576,198 @@
             color: #fff;
             font-weight: 700;
             font-size: .9rem;
+        }
+
+        .lc-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 80;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+
+        .lc-modal.is-open {
+            display: flex;
+        }
+
+        .lc-modal-backdrop {
+            position: absolute;
+            inset: 0;
+            background: rgba(15, 23, 42, .44);
+            backdrop-filter: blur(2px);
+        }
+
+        .lc-modal-card {
+            position: relative;
+            width: min(100%, 420px);
+            border-radius: 14px;
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 20px 50px rgba(15, 23, 42, .18);
+            padding: 1rem;
+            display: grid;
+            gap: .8rem;
+        }
+
+        .lc-modal-title {
+            font-size: 1rem;
+            font-weight: 800;
+            color: #0f172a;
+        }
+
+        .lc-modal-body {
+            font-size: .9rem;
+            line-height: 1.55;
+            color: #475569;
+        }
+
+        .lc-modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: .55rem;
+        }
+
+        .lc-modal-btn {
+            min-height: 38px;
+            border-radius: 8px;
+            border: 1px solid #dbe3ec;
+            background: #fff;
+            padding: 0 .9rem;
+            font-size: .85rem;
+            font-weight: 700;
+            color: #334155;
+            cursor: pointer;
+        }
+
+        .lc-modal-btn.primary {
+            border-color: #724cda;
+            background: #724cda;
+            color: #fff;
+        }
+
+        .lc-product-modal-card {
+            width: min(100%, 760px);
+        }
+
+        .lc-product-picker-search {
+            width: 100%;
+            height: 40px;
+            border: 1px solid #cbd5e1;
+            border-radius: 10px;
+            padding: 0 .8rem;
+            font-size: .9rem;
+            outline: none;
+        }
+
+        .lc-product-picker-search:focus {
+            border-color: var(--lc-primary);
+            box-shadow: 0 0 0 3px rgba(114, 76, 218, .12);
+        }
+
+        .lc-product-picker-list {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: .75rem;
+            max-height: 360px;
+            overflow: auto;
+            padding-right: .15rem;
+        }
+
+        .lc-product-picker-item {
+            display: grid;
+            grid-template-columns: 64px minmax(0, 1fr);
+            gap: .7rem;
+            align-items: center;
+            border: 1px solid #e2e8f0;
+            background: #fff;
+            border-radius: 12px;
+            padding: .65rem;
+            text-align: left;
+            cursor: pointer;
+        }
+
+        .lc-product-picker-item:hover,
+        .lc-product-picker-item.is-selected {
+            border-color: var(--lc-primary);
+            background: var(--lc-primary-soft);
+        }
+
+        .lc-product-picker-thumb {
+            width: 64px;
+            height: 64px;
+            border-radius: 10px;
+            overflow: hidden;
+            background: #f1f5f9;
+            border: 1px solid #e2e8f0;
+            display: grid;
+            place-items: center;
+            color: #64748b;
+            font-size: .7rem;
+            font-weight: 800;
+        }
+
+        .lc-product-picker-thumb img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        .lc-product-picker-title {
+            font-size: .88rem;
+            font-weight: 800;
+            color: #0f172a;
+            line-height: 1.35;
+        }
+
+        .lc-product-picker-meta {
+            margin-top: .2rem;
+            color: #64748b;
+            font-size: .75rem;
+            line-height: 1.4;
+        }
+
+        .lc-product-picker-note {
+            width: 100%;
+            min-height: 74px;
+            border: 1px solid #cbd5e1;
+            border-radius: 10px;
+            padding: .7rem;
+            resize: vertical;
+            font-size: .88rem;
+            outline: none;
+        }
+
+        .lc-product-picker-empty {
+            border: 1px dashed #cbd5e1;
+            border-radius: 12px;
+            padding: 1rem;
+            color: #64748b;
+            font-size: .9rem;
+            line-height: 1.55;
+        }
+
+        .lc-product-picker-error {
+            display: none;
+            padding: .75rem .85rem;
+            border: 1px solid #fecaca;
+            border-radius: 8px;
+            background: #fff1f2;
+            color: #9f1239;
+            font-size: .8rem;
+            line-height: 1.5;
+        }
+
+        .lc-product-picker-error.is-visible {
+            display: block;
+        }
+
+        @media (max-width: 720px) {
+            .lc-product-picker-list {
+                grid-template-columns: 1fr;
+            }
         }
 
         .lc-aside {
@@ -1337,7 +2030,7 @@
             }
 
             .lc-composer-wrap {
-                padding: .75rem .9rem .85rem;
+                padding: .55rem .9rem .75rem;
             }
 
             .lc-sidebar-title {
@@ -1369,7 +2062,8 @@
             }
 
             .lc-message-avatar,
-            .lc-avatar {
+            .lc-avatar,
+            .lc-avatar-wrap {
                 width: 34px;
                 height: 34px;
                 min-width: 34px;
@@ -1385,8 +2079,8 @@
             }
 
             .lc-editor-box textarea {
-                min-height: 60px;
-                padding: .75rem .85rem .55rem;
+                min-height: 52px;
+                padding: .62rem .8rem .45rem;
             }
 
             .lc-editor-actions {
@@ -1455,11 +2149,23 @@
 
                         <a href="{{ route('inbox.show', ['conversation' => $conversation->id, 'view' => ($viewMode ?? 'inbox')]) }}" class="lc-conversation-item {{ $isSelected ? 'is-active' : '' }}">
                             <div class="lc-conversation-item-inner">
-                                <img
-                                    class="lc-avatar"
-                                    src="{{ $customer?->avatar_url ?? $conversation->avatar_url ?? 'https://ui-avatars.com/api/?name=User&background=e2e8f0&color=334155' }}"
-                                    alt="Avatar"
-                                >
+                                <div class="lc-avatar-wrap">
+                                    <img
+                                        class="lc-avatar"
+                                        src="{{ $customer?->avatar_url ?? $conversation->avatar_url ?? 'https://ui-avatars.com/api/?name=User&background=e2e8f0&color=334155' }}"
+                                        alt="Avatar"
+                                    >
+
+                                    @if ($conversation->provider === 'instagram')
+                                        <span class="lc-channel-badge instagram" aria-hidden="true">
+                                            <svg viewBox="0 0 24 24" fill="none">
+                                                <rect x="4.5" y="4.5" width="15" height="15" rx="4"></rect>
+                                                <circle cx="12" cy="12" r="3.2"></circle>
+                                                <circle cx="16.9" cy="7.3" r="1.1" fill="currentColor" stroke="none"></circle>
+                                            </svg>
+                                        </span>
+                                    @endif
+                                </div>
 
                                 <div class="lc-conversation-meta">
                                     <div class="lc-conversation-top">
@@ -1477,7 +2183,6 @@
                                     </div>
 
                                     <div class="lc-conversation-bottom">
-                                        <span class="lc-badge provider">{{ $conversation->provider }}</span>
                                         @if ($conversation->unread_count > 0)
                                             <span class="lc-badge unread">{{ $conversation->unread_count }}</span>
                                         @endif
@@ -1496,11 +2201,23 @@
                     @if ($selectedConversation)
                         <div class="lc-center-header">
                             <div class="lc-center-header-left">
-                                <img
-                                    class="lc-avatar"
-                                    src="{{ $selectedCustomer?->avatar_url ?? $selectedConversation->avatar_url ?? 'https://ui-avatars.com/api/?name=User&background=e2e8f0&color=334155' }}"
-                                    alt="Avatar"
-                                >
+                                <div class="lc-avatar-wrap">
+                                    <img
+                                        class="lc-avatar"
+                                        src="{{ $selectedCustomer?->avatar_url ?? $selectedConversation->avatar_url ?? 'https://ui-avatars.com/api/?name=User&background=e2e8f0&color=334155' }}"
+                                        alt="Avatar"
+                                    >
+
+                                    @if ($selectedConversation->provider === 'instagram')
+                                        <span class="lc-channel-badge instagram" aria-hidden="true">
+                                            <svg viewBox="0 0 24 24" fill="none">
+                                                <rect x="4.5" y="4.5" width="15" height="15" rx="4"></rect>
+                                                <circle cx="12" cy="12" r="3.2"></circle>
+                                                <circle cx="16.9" cy="7.3" r="1.1" fill="currentColor" stroke="none"></circle>
+                                            </svg>
+                                        </span>
+                                    @endif
+                                </div>
 
                                 <div class="lc-center-header-text">
                                     <div class="lc-chat-title">
@@ -1519,35 +2236,107 @@
 
                             <div class="lc-center-actions">
                                 @if (($viewMode ?? 'inbox') === 'trash')
-                                    <form method="POST" action="{{ route('inbox.restore', $selectedConversation) }}" onsubmit="return confirm('Restore this conversation?');" style="display:inline;">
+                                    <form
+                                        class="lc-conversation-action-form"
+                                        method="POST"
+                                        action="{{ route('inbox.restore', $selectedConversation) }}"
+                                        data-confirm-title="Restore conversation"
+                                        data-confirm-message="This conversation will return to the inbox."
+                                        data-confirm-submit="Restore"
+                                        style="display:inline;"
+                                    >
                                         @csrf
-                                        <button type="submit" class="lc-icon-btn" title="Restore">↩</button>
+                                        <button type="button" class="lc-icon-btn restore" title="Restore" aria-label="Restore conversation" data-lc-confirm-trigger>
+                                            <svg viewBox="0 0 24 24">
+                                                <path d="M9 14 4 9m0 0 5-5M4 9h8a7 7 0 1 1 0 14h-1"></path>
+                                            </svg>
+                                        </button>
                                     </form>
                                 @elseif (($viewMode ?? 'inbox') === 'archived')
-                                    <form method="POST" action="{{ route('inbox.unarchive', $selectedConversation) }}" onsubmit="return confirm('Unarchive this conversation?');" style="display:inline;">
+                                    <form
+                                        class="lc-conversation-action-form"
+                                        method="POST"
+                                        action="{{ route('inbox.unarchive', $selectedConversation) }}"
+                                        data-confirm-title="Unarchive conversation"
+                                        data-confirm-message="This conversation will return to the inbox."
+                                        data-confirm-submit="Unarchive"
+                                        style="display:inline;"
+                                    >
                                         @csrf
-                                        <button type="submit" class="lc-icon-btn" title="Unarchive">↩</button>
+                                        <button type="button" class="lc-icon-btn restore" title="Unarchive" aria-label="Unarchive conversation" data-lc-confirm-trigger>
+                                            <svg viewBox="0 0 24 24">
+                                                <path d="M9 14 4 9m0 0 5-5M4 9h8a7 7 0 1 1 0 14h-1"></path>
+                                            </svg>
+                                        </button>
                                     </form>
 
-                                    <form method="POST" action="{{ route('inbox.trash', $selectedConversation) }}" onsubmit="return confirm('Move this conversation to trash?');" style="display:inline;">
+                                    <form
+                                        class="lc-conversation-action-form"
+                                        method="POST"
+                                        action="{{ route('inbox.trash', $selectedConversation) }}"
+                                        data-confirm-title="Move to trash"
+                                        data-confirm-message="This conversation will be moved to trash."
+                                        data-confirm-submit="Move to trash"
+                                        style="display:inline;"
+                                    >
                                         @csrf
-                                        <button type="submit" class="lc-icon-btn" title="Trash">🗑</button>
+                                        <button type="button" class="lc-icon-btn trash" title="Trash" aria-label="Move conversation to trash" data-lc-confirm-trigger>
+                                            <svg viewBox="0 0 24 24">
+                                                <path d="M3 6h18"></path>
+                                                <path d="M8 6V4.75A1.75 1.75 0 0 1 9.75 3h4.5A1.75 1.75 0 0 1 16 4.75V6"></path>
+                                                <path d="M19 6l-.85 12.2A2 2 0 0 1 16.15 20H7.85a2 2 0 0 1-1.99-1.8L5 6"></path>
+                                                <path d="M10 10.25v5.5M14 10.25v5.5"></path>
+                                            </svg>
+                                        </button>
                                     </form>
                                 @else
-                                    <form method="POST" action="{{ route('inbox.archive', $selectedConversation) }}" onsubmit="return confirm('Archive this conversation?');" style="display:inline;">
+                                    <form
+                                        class="lc-conversation-action-form"
+                                        method="POST"
+                                        action="{{ route('inbox.archive', $selectedConversation) }}"
+                                        data-confirm-title="Archive conversation"
+                                        data-confirm-message="This conversation will be moved out of the active inbox."
+                                        data-confirm-submit="Archive"
+                                        style="display:inline;"
+                                    >
                                         @csrf
-                                        <button type="submit" class="lc-icon-btn" title="Archive">✓</button>
+                                        <button type="button" class="lc-icon-btn archive" title="Archive" aria-label="Archive conversation" data-lc-confirm-trigger>
+                                            <svg viewBox="0 0 24 24">
+                                                <path d="M4 7.5h16"></path>
+                                                <path d="M5.75 4h12.5A1.75 1.75 0 0 1 20 5.75v2.5A1.75 1.75 0 0 1 18.25 10H5.75A1.75 1.75 0 0 1 4 8.25v-2.5A1.75 1.75 0 0 1 5.75 4Z"></path>
+                                                <path d="M7 10v7.25A1.75 1.75 0 0 0 8.75 19h6.5A1.75 1.75 0 0 0 17 17.25V10"></path>
+                                                <path d="m10 13 2 2 2-2"></path>
+                                            </svg>
+                                        </button>
                                     </form>
 
-                                    <form method="POST" action="{{ route('inbox.trash', $selectedConversation) }}" onsubmit="return confirm('Move this conversation to trash?');" style="display:inline;">
+                                    <form
+                                        class="lc-conversation-action-form"
+                                        method="POST"
+                                        action="{{ route('inbox.trash', $selectedConversation) }}"
+                                        data-confirm-title="Move to trash"
+                                        data-confirm-message="This conversation will be moved to trash."
+                                        data-confirm-submit="Move to trash"
+                                        style="display:inline;"
+                                    >
                                         @csrf
-                                        <button type="submit" class="lc-icon-btn" title="Trash">🗑</button>
+                                        <button type="button" class="lc-icon-btn trash" title="Trash" aria-label="Move conversation to trash" data-lc-confirm-trigger>
+                                            <svg viewBox="0 0 24 24">
+                                                <path d="M3 6h18"></path>
+                                                <path d="M8 6V4.75A1.75 1.75 0 0 1 9.75 3h4.5A1.75 1.75 0 0 1 16 4.75V6"></path>
+                                                <path d="M19 6l-.85 12.2A2 2 0 0 1 16.15 20H7.85a2 2 0 0 1-1.99-1.8L5 6"></path>
+                                                <path d="M10 10.25v5.5M14 10.25v5.5"></path>
+                                            </svg>
+                                        </button>
                                     </form>
                                 @endif
 
-                                <button type="button" class="lc-icon-btn">⟳</button>
-                                <button type="button" class="lc-icon-btn">⇩</button>
-                                <button type="button" class="lc-icon-btn">⋯</button>
+                                <button type="button" id="lcRefreshConversationBtn" class="lc-icon-btn refresh" title="Refresh" aria-label="Refresh conversation">
+                                    <svg viewBox="0 0 24 24">
+                                        <path d="M21 12a9 9 0 1 1-2.64-6.36"></path>
+                                        <path d="M21 3v6h-6"></path>
+                                    </svg>
+                                </button>
                             </div>
                         </div>
 
@@ -1563,6 +2352,15 @@
                                         $reply = $message->replyToMessage;
                                         $sender = $message->senderParticipant;
                                         $messageMeta = is_array($message->meta) ? $message->meta : [];
+                                        $agentUserMeta = is_array($messageMeta['agent_user'] ?? null)
+                                            ? $messageMeta['agent_user']
+                                            : [];
+                                        $agentName = is_string($agentUserMeta['name'] ?? null) && trim($agentUserMeta['name']) !== ''
+                                            ? trim($agentUserMeta['name'])
+                                            : ($sender?->display_name ?? 'Agent');
+                                        $agentAvatarUrl = is_string($agentUserMeta['avatar_url'] ?? null) && trim($agentUserMeta['avatar_url']) !== ''
+                                            ? trim($agentUserMeta['avatar_url'])
+                                            : ($sender?->avatar_url ?? ('https://ui-avatars.com/api/?name=' . urlencode($agentName) . '&background=724cda&color=ffffff'));
                                         $isStoryReplyMessage = (bool) ($messageMeta['is_story_reply'] ?? false);
                                         $storyReplyContextType = is_string($messageMeta['message_context_type'] ?? null)
                                             ? $messageMeta['message_context_type']
@@ -1573,6 +2371,19 @@
                                         $storyReplyContext = is_array($messageMeta['story_context'] ?? null)
                                             ? $messageMeta['story_context']
                                             : [];
+                                        $storyPreview = is_array($messageMeta['story_preview'] ?? null)
+                                            ? $messageMeta['story_preview']
+                                            : [];
+                                        $storyPreviewMediaUrl = is_string($storyPreview['thumbnail_url'] ?? null) && $storyPreview['thumbnail_url'] !== ''
+                                            ? $storyPreview['thumbnail_url']
+                                            : (is_string($storyPreview['media_url'] ?? null) && $storyPreview['media_url'] !== ''
+                                                ? $storyPreview['media_url']
+                                                : (is_string($storyReplyContext['thumbnail_url'] ?? null) && $storyReplyContext['thumbnail_url'] !== ''
+                                                    ? $storyReplyContext['thumbnail_url']
+                                                    : (is_string($storyReplyContext['media_url'] ?? null) && $storyReplyContext['media_url'] !== ''
+                                                        ? $storyReplyContext['media_url']
+                                                        : (is_string($storyReplyContext['url'] ?? null) ? $storyReplyContext['url'] : null))));
+                                        $storyPreviewMediaType = strtoupper((string) ($storyPreview['media_type'] ?? 'IMAGE'));
                                         $storyReplyReferral = is_array($messageMeta['referral'] ?? null)
                                             ? $messageMeta['referral']
                                             : [];
@@ -1590,31 +2401,56 @@
                                         $commentReplyPostCaption = is_string($messageMeta['post_caption'] ?? null)
                                             ? $messageMeta['post_caption']
                                             : null;
-                                        $commentReplyPermalink = is_string($messageMeta['post_permalink'] ?? null)
+                                        $commentReplyPostCoverUrl = is_string($messageMeta['post_cover_url'] ?? null)
+                                            ? $messageMeta['post_cover_url']
+                                            : null;
+                                        $commentReplyPostPermalink = is_string($messageMeta['post_permalink'] ?? null)
                                             ? $messageMeta['post_permalink']
                                             : null;
-                                        $commentReplyProviderCommentId = is_string($messageMeta['provider_comment_id'] ?? null)
-                                            ? $messageMeta['provider_comment_id']
+                                        $renderCommentPrivateReplyCard = $isCommentReplyDmMessage && $isOutbound;
+                                        $agentReaction = is_array($messageMeta['agent_reaction'] ?? null)
+                                            ? $messageMeta['agent_reaction']
                                             : null;
-                                        $commentReplyProviderMediaId = is_string($messageMeta['provider_media_id'] ?? null)
-                                            ? $messageMeta['provider_media_id']
+                                        $customerReaction = is_array($messageMeta['customer_reaction'] ?? null)
+                                            ? $messageMeta['customer_reaction']
                                             : null;
+                                        $agentReactionEmoji = is_string($agentReaction['emoji'] ?? null) ? $agentReaction['emoji'] : null;
+                                        $customerReactionEmoji = is_string($customerReaction['emoji'] ?? null) ? $customerReaction['emoji'] : null;
+                                        $canReactFromInbox = ! $isOutbound
+                                            && $selectedConversation?->provider === 'instagram'
+                                            && filled($message->provider_message_id);
+                                        $productShareSnapshot = is_array($message->productShare?->product_snapshot ?? null)
+                                            ? $message->productShare->product_snapshot
+                                            : null;
+                                        $productCard = is_array($messageMeta['product_card'] ?? null)
+                                            ? $messageMeta['product_card']
+                                            : $productShareSnapshot;
                                     @endphp
 
-                                    <div class="lc-message-row {{ $isOutbound ? 'outbound' : 'inbound' }}">
+                                    <div
+                                        class="lc-message-row {{ $isOutbound ? 'outbound' : 'inbound' }}"
+                                        data-message-id="{{ $message->id }}"
+                                        data-provider-message-id="{{ $message->provider_message_id }}"
+                                    >
                                         <div class="lc-message-wrap">
                                             <img
                                                 class="lc-message-avatar"
-                                                src="{{ $sender?->avatar_url ?? ($isOutbound ? 'https://ui-avatars.com/api/?name=LC&background=724cda&color=ffffff' : 'https://ui-avatars.com/api/?name=User&background=e2e8f0&color=334155') }}"
+                                                src="{{ $isOutbound ? $agentAvatarUrl : ($sender?->avatar_url ?? 'https://ui-avatars.com/api/?name=User&background=e2e8f0&color=334155') }}"
                                                 alt="Avatar"
                                             >
 
                                             <div class="lc-message-body">
-                                                @unless ($isOutbound)
+                                                @if ($isOutbound)
+                                                    <div class="lc-message-agent">
+                                                        <div class="lc-message-agent-name">
+                                                            {{ $agentName }}
+                                                        </div>
+                                                    </div>
+                                                @else
                                                     <div class="lc-message-name">
                                                         {{ $sender?->display_name ?? 'User' }}
                                                     </div>
-                                                @endunless
+                                                @endif
 
                                                 @if ($isStoryReplyMessage)
                                                     <div style="margin-bottom: .35rem; display:flex; gap:.35rem; flex-wrap:wrap;">
@@ -1623,6 +2459,21 @@
 
                                                     <div class="lc-story-reply-box">
                                                         <div class="lc-story-reply-title">Instagram story context</div>
+
+                                                        @if ($storyPreviewMediaUrl)
+                                                            <div class="lc-story-reply-preview">
+                                                                <div class="lc-story-reply-thumb">
+                                                                    @if ($storyPreviewMediaType === 'VIDEO')
+                                                                        <video src="{{ $storyPreviewMediaUrl }}" muted playsinline preload="metadata"></video>
+                                                                    @else
+                                                                        <img src="{{ $storyPreviewMediaUrl }}" alt="Story thumbnail">
+                                                                    @endif
+                                                                </div>
+                                                                <div class="lc-story-reply-text">
+                                                                    Reply to your Instagram Story
+                                                                </div>
+                                                            </div>
+                                                        @endif
 
                                                         <div class="lc-story-reply-meta">
                                                             @if ($storyReplyContextType)
@@ -1646,148 +2497,277 @@
                                                     </div>
                                                 @endif
 
-                                                @if ($isCommentReplyDmMessage)
+                                                @if ($renderCommentPrivateReplyCard)
+                                                    <div class="lc-comment-private-reply-card">
+                                                        <div class="lc-comment-private-reply-top">
+                                                            <span class="lc-badge comment-reply">Comment DM reply</span>
+                                                            @if ($commentReplyAuthor)
+                                                                <span class="lc-comment-private-reply-author">{{ $commentReplyAuthor }}</span>
+                                                            @endif
+                                                        </div>
+
+                                                        <div class="lc-comment-private-reply-layout">
+                                                            @if ($commentReplyPostCoverUrl)
+                                                                <div class="lc-comment-private-reply-cover">
+                                                                    <img src="{{ $commentReplyPostCoverUrl }}" alt="Instagram post cover">
+                                                                </div>
+                                                            @endif
+
+                                                            <div class="lc-comment-private-reply-content">
+                                                                @if ($commentReplyPostCaption)
+                                                                    <div class="lc-comment-private-reply-section">
+                                                                        <span class="lc-comment-private-reply-kicker">Post caption</span>
+                                                                        <div class="lc-comment-private-reply-copy">{{ $commentReplyPostCaption }}</div>
+                                                                    </div>
+                                                                @endif
+
+                                                                @if ($commentReplyText)
+                                                                    <div class="lc-comment-private-reply-section lc-comment-private-reply-comment">
+                                                                        <span class="lc-comment-private-reply-kicker">Comment</span>
+                                                                        <div class="lc-comment-private-reply-copy">{{ $commentReplyText }}</div>
+                                                                    </div>
+                                                                @endif
+
+                                                                <div class="lc-comment-private-reply-section lc-comment-private-reply-response">
+                                                                    <span class="lc-comment-private-reply-kicker">Reply</span>
+                                                                    <div class="lc-comment-private-reply-copy">{{ $message->text_body }}</div>
+                                                                </div>
+
+                                                                @if ($commentReplyPostPermalink)
+                                                                    <a href="{{ $commentReplyPostPermalink }}" target="_blank" rel="noopener noreferrer" class="lc-comment-private-reply-link">
+                                                                        Open post
+                                                                    </a>
+                                                                @endif
+                                                            </div>
+                                                        </div>
+                                                        <div class="lc-bubble-footer">
+                                                            <span>{{ optional($message->created_at)->format('M d, Y H:i') }}</span>
+
+                                                            @if ($message->status === 'sent')
+                                                                <span class="lc-status-icon sent" aria-label="sent">✓</span>
+                                                            @elseif ($message->status === 'delivered')
+                                                                <span class="lc-status-icon delivered" aria-label="delivered">✓✓</span>
+                                                            @elseif ($message->status === 'read')
+                                                                <span class="lc-status-icon read" aria-label="read">✓✓</span>
+                                                            @elseif ($message->status === 'failed')
+                                                                <span class="lc-status-icon failed" aria-label="failed">!</span>
+                                                            @endif
+                                                        </div>
+                                                    </div>
+                                                @elseif ($isCommentReplyDmMessage)
                                                     <div style="margin-bottom: .35rem; display:flex; gap:.35rem; flex-wrap:wrap;">
                                                         <span class="lc-badge comment-reply">Comment DM reply</span>
                                                     </div>
 
                                                     <div class="lc-comment-reply-box">
-                                                        <div class="lc-comment-reply-title">Instagram comment context</div>
-
-                                                        <div class="lc-story-reply-meta">
-                                                            @if ($commentReplyAuthor)
-                                                                <span class="lc-comment-reply-pill">Author: {{ $commentReplyAuthor }}</span>
-                                                            @endif
-
-                                                            @if ($commentReplyProviderCommentId)
-                                                                <span class="lc-comment-reply-pill">Comment ID: {{ $commentReplyProviderCommentId }}</span>
-                                                            @endif
-
-                                                            @if ($commentReplyProviderMediaId)
-                                                                <span class="lc-comment-reply-pill">Post ID: {{ $commentReplyProviderMediaId }}</span>
-                                                            @endif
-                                                        </div>
+                                                        @if ($commentReplyPostCoverUrl)
+                                                            <div class="lc-comment-reply-cover">
+                                                                <img src="{{ $commentReplyPostCoverUrl }}" alt="Instagram post cover">
+                                                            </div>
+                                                        @endif
 
                                                         @if ($commentReplyText)
                                                             <div class="lc-comment-reply-text">
-                                                                Comment: {{ $commentReplyText }}
+                                                                <span class="lc-comment-reply-label">Comment</span>
+                                                                {{ $commentReplyText }}
                                                             </div>
                                                         @endif
 
                                                         @if ($commentReplyPostCaption)
                                                             <div class="lc-comment-reply-text">
-                                                                Post: {{ $commentReplyPostCaption }}
-                                                            </div>
-                                                        @endif
-
-                                                        @if ($commentReplyPermalink)
-                                                            <div class="lc-comment-reply-text">
-                                                                <a href="{{ $commentReplyPermalink }}" target="_blank" rel="noopener" style="color:#0369a1; font-weight:700; text-decoration:none;">
-                                                                    Open Instagram post
-                                                                </a>
+                                                                <span class="lc-comment-reply-label">Post caption</span>
+                                                                {{ $commentReplyPostCaption }}
                                                             </div>
                                                         @endif
                                                     </div>
                                                 @endif
 
-                                                <div class="lc-bubble {{ $isOutbound ? 'outbound' : 'inbound' }}">
-                                                    @if ($reply)
-                                                        <div class="lc-reply">
-                                                            Reply to: {{ $reply->text_body ?: ($reply->message_type . ' message') }}
-                                                        </div>
-                                                    @endif
+                                                @unless ($renderCommentPrivateReplyCard)
+                                                    <div class="lc-bubble {{ $isOutbound ? 'outbound' : 'inbound' }}">
+                                                        <div class="lc-bubble-body">
+                                                            @if ($reply)
+                                                                <div class="lc-reply">
+                                                                    Reply to: {{ $reply->text_body ?: ($reply->message_type . ' message') }}
+                                                                </div>
+                                                            @endif
 
-                                                    @if ($message->message_type === 'text')
-                                                        <div>{{ $message->text_body }}</div>
-                                                    @endif
-
-                                                    @if ($message->message_type === 'image')
-                                                        @foreach ($message->attachments as $attachment)
-                                                            <div class="lc-image-card">
-                                                                <img src="{{ $attachment->url }}" alt="Image attachment">
-                                                            </div>
-                                                        @endforeach
-
-                                                        @if ($message->caption)
-                                                            <div>{{ $message->caption }}</div>
-                                                        @endif
-                                                    @endif
-
-                                                    @if ($message->message_type === 'file')
-                                                        @foreach ($message->attachments as $attachment)
-                                                            <div class="lc-file-card">
-                                                                <div class="lc-file-icon">📎</div>
-                                                                <div class="lc-file-meta">
-                                                                    <div class="lc-file-name">
-                                                                        <a href="{{ $attachment->url }}" target="_blank" style="color: inherit; text-decoration: none;">
-                                                                            {{ $attachment->file_name ?: 'Attachment' }}
-                                                                        </a>
+                                                            @if ($productCard)
+                                                                <div class="lc-product-card">
+                                                                    <div class="lc-product-card-media">
+                                                                        @if (!empty($productCard['image_url']))
+                                                                            <img src="{{ $productCard['image_url'] }}" alt="{{ $productCard['title'] ?? 'Product' }}">
+                                                                        @else
+                                                                            Product image
+                                                                        @endif
                                                                     </div>
-                                                                    <div class="lc-file-sub">
-                                                                        {{ $attachment->mime_type ?: 'file' }}
-                                                                        @if ($attachment->file_size)
-                                                                            • {{ number_format($attachment->file_size / 1024, 1) }} KB
+                                                                    <div class="lc-product-card-body">
+                                                                        <span class="lc-product-card-kicker">Catalog product</span>
+                                                                        <div class="lc-product-card-title">{{ $productCard['title'] ?? 'Product' }}</div>
+
+                                                                        @if (($productCard['price'] ?? null) !== null)
+                                                                            <div class="lc-product-card-price">
+                                                                                {{ strtoupper($productCard['currency'] ?? 'USD') }} {{ number_format((float) $productCard['price'], 2) }}
+                                                                            </div>
+                                                                        @endif
+
+                                                                        @if (!empty($productCard['description']))
+                                                                            <div class="lc-product-card-desc">{{ $productCard['description'] }}</div>
+                                                                        @endif
+
+                                                                        @if (!empty($messageMeta['product_note']))
+                                                                            <div class="lc-product-card-desc">Note: {{ $messageMeta['product_note'] }}</div>
+                                                                        @endif
+
+                                                                        @if (!empty($productCard['product_url']))
+                                                                            <a href="{{ $productCard['product_url'] }}" target="_blank" rel="noopener noreferrer" class="lc-product-card-link">
+                                                                                View product
+                                                                            </a>
                                                                         @endif
                                                                     </div>
                                                                 </div>
-                                                            </div>
-                                                        @endforeach
+                                                            @elseif ($message->message_type === 'text')
+                                                                <div>{{ $message->text_body }}</div>
+                                                            @endif
 
-                                                        @if ($message->caption)
-                                                            <div>{{ $message->caption }}</div>
-                                                        @endif
-                                                    @endif
+                                                            @if ($message->message_type === 'image')
+                                                                @foreach ($message->attachments as $attachment)
+                                                                    <div class="lc-image-card">
+                                                                        <img src="{{ $attachment->url }}" alt="Image attachment">
+                                                                    </div>
+                                                                @endforeach
 
-                                                    @if ($message->message_type === 'video')
-                                                        @foreach ($message->attachments as $attachment)
-                                                            <div class="lc-image-card">
-                                                                <video controls playsinline style="display:block;width:100%;max-height:360px;background:#000;">
-                                                                    <source src="{{ $attachment->url }}" type="{{ $attachment->mime_type }}">
-                                                                </video>
-                                                            </div>
-                                                        @endforeach
+                                                                @if ($message->caption)
+                                                                    <div>{{ $message->caption }}</div>
+                                                                @endif
+                                                            @endif
 
-                                                        @if ($message->caption)
-                                                            <div>{{ $message->caption }}</div>
-                                                        @endif
-                                                    @endif
+                                                            @if ($message->message_type === 'file')
+                                                                @foreach ($message->attachments as $attachment)
+                                                                    <div class="lc-file-card">
+                                                                        <div class="lc-file-icon">📎</div>
+                                                                        <div class="lc-file-meta">
+                                                                            <div class="lc-file-name">
+                                                                                <a href="{{ $attachment->url }}" target="_blank" style="color: inherit; text-decoration: none;">
+                                                                                    {{ $attachment->file_name ?: 'Attachment' }}
+                                                                                </a>
+                                                                            </div>
+                                                                            <div class="lc-file-sub">
+                                                                                {{ $attachment->mime_type ?: 'file' }}
+                                                                                @if ($attachment->file_size)
+                                                                                    • {{ number_format($attachment->file_size / 1024, 1) }} KB
+                                                                                @endif
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                @endforeach
 
-                                                    @if ($message->message_type === 'voice')
-                                                        @foreach ($message->attachments as $attachment)
-                                                            <div class="lc-voice-card">
-                                                                <div class="lc-voice-title">Voice message</div>
-                                                                <div class="lc-voice-sub">Duration: {{ $attachment->duration_seconds ?? '-' }} sec</div>
-                                                                <audio controls>
-                                                                    <source src="{{ $attachment->url }}" type="{{ $attachment->mime_type }}">
-                                                                </audio>
-                                                            </div>
-                                                        @endforeach
-                                                    @endif
+                                                                @if ($message->caption)
+                                                                    <div>{{ $message->caption }}</div>
+                                                                @endif
+                                                            @endif
 
+                                                            @if ($message->message_type === 'video')
+                                                                @foreach ($message->attachments as $attachment)
+                                                                    <div class="lc-image-card">
+                                                                        <video controls playsinline style="display:block;width:100%;max-height:360px;background:#000;">
+                                                                            <source src="{{ $attachment->url }}" type="{{ $attachment->mime_type }}">
+                                                                        </video>
+                                                                    </div>
+                                                                @endforeach
 
+                                                                @if ($message->caption)
+                                                                    <div>{{ $message->caption }}</div>
+                                                                @endif
+                                                            @endif
+
+                                                            @if ($message->message_type === 'voice')
+                                                                @foreach ($message->attachments as $attachment)
+                                                                    <div class="lc-voice-card">
+                                                                        <div class="lc-voice-title">Voice message</div>
+                                                                        <div class="lc-voice-sub">Duration: {{ $attachment->duration_seconds ?? '-' }} sec</div>
+                                                                        <audio controls>
+                                                                            <source src="{{ $attachment->url }}" type="{{ $attachment->mime_type }}">
+                                                                        </audio>
+                                                                    </div>
+                                                                @endforeach
+                                                            @endif
+                                                        </div>
+
+                                                        <div class="lc-bubble-footer">
+                                                            <span>{{ optional($message->created_at)->format('M d, Y H:i') }}</span>
+
+                                                            @if ($isOutbound)
+                                                                @if ($message->status === 'sent')
+                                                                    <span class="lc-status-icon sent" aria-label="sent">✓</span>
+                                                                @elseif ($message->status === 'delivered')
+                                                                    <span class="lc-status-icon delivered" aria-label="delivered">✓✓</span>
+                                                                @elseif ($message->status === 'read')
+                                                                    <span class="lc-status-icon read" aria-label="read">✓✓</span>
+                                                                @elseif ($message->status === 'failed')
+                                                                    <span class="lc-status-icon failed" aria-label="failed">!</span>
+                                                                @endif
+                                                            @endif
+                                                        </div>
+                                                    </div>
+                                                @endunless
+
+                                                <div class="lc-reaction-strip {{ $customerReactionEmoji || $agentReactionEmoji ? 'has-reaction' : '' }}" aria-live="polite">
+                                                    <span
+                                                        class="lc-reaction-pill customer"
+                                                        title="Reaction"
+                                                        data-reaction-actor="customer"
+                                                        style="{{ $customerReactionEmoji ? '' : 'display:none;' }}"
+                                                    >{{ $customerReactionEmoji }}</span>
+
+                                                    <span
+                                                        class="lc-reaction-pill agent"
+                                                        title="Reaction"
+                                                        data-reaction-actor="agent"
+                                                        style="{{ $agentReactionEmoji ? '' : 'display:none;' }}"
+                                                    >{{ $agentReactionEmoji }}</span>
                                                 </div>
 
                                                 <div class="lc-message-meta">
-                                                    <span>{{ optional($message->created_at)->format('M d, Y H:i') }}</span>
-
-                                                    @if ($isOutbound)
-                                                        @if ($message->status === 'sent')
-                                                            <span class="lc-status-icon sent" aria-label="sent">✓</span>
-                                                        @elseif ($message->status === 'delivered')
-                                                            <span class="lc-status-icon delivered" aria-label="delivered">✓✓</span>
-                                                        @elseif ($message->status === 'read')
-                                                            <span class="lc-status-icon read" aria-label="read">✓✓</span>
-                                                        @elseif ($message->status === 'failed')
-                                                            <span class="lc-status-icon failed" aria-label="failed">!</span>
-                                                        @endif
-                                                    @endif
-
                                                     <a
                                                         href="{{ route('inbox.show', ['conversation' => $selectedConversation->id, 'reply' => $message->id]) }}"
                                                         style="color: var(--lc-primary); text-decoration: none; font-weight: 600;"
                                                     >
                                                         Reply
                                                     </a>
+
+                                                    @if ($canReactFromInbox)
+                                                        <form
+                                                            method="POST"
+                                                            action="{{ route('inbox.messages.reaction', ['conversation' => $selectedConversation->id, 'message' => $message->id]) }}"
+                                                            class="lc-reaction-form"
+                                                            data-message-id="{{ $message->id }}"
+                                                        >
+                                                            @csrf
+                                                            <input type="hidden" name="reaction" value="love">
+                                                            <input type="hidden" name="action" value="{{ $agentReactionEmoji ? 'unreact' : 'react' }}">
+                                                            <button
+                                                                type="button"
+                                                                class="lc-reaction-trigger {{ $agentReactionEmoji ? 'is-active' : '' }}"
+                                                                aria-label="{{ $agentReactionEmoji ? 'Remove reaction' : 'React' }}"
+                                                                aria-expanded="false"
+                                                                title="{{ $agentReactionEmoji ? 'Remove reaction' : 'React' }}"
+                                                            >
+                                                                {{ $agentReactionEmoji ? $agentReactionEmoji : '♡' }}
+                                                            </button>
+                                                            <div class="lc-reaction-picker" role="menu" aria-label="Message reactions">
+                                                                <button
+                                                                    type="submit"
+                                                                    class="lc-reaction-option"
+                                                                    name="reaction"
+                                                                    value="love"
+                                                                    data-reaction-emoji="❤️"
+                                                                    title="{{ $agentReactionEmoji ? 'Remove heart' : 'Heart' }}"
+                                                                    aria-label="{{ $agentReactionEmoji ? 'Remove heart reaction' : 'React with heart' }}"
+                                                                >❤️</button>
+                                                            </div>
+                                                        </form>
+                                                        <span class="lc-reaction-error"></span>
+                                                    @endif
                                                 </div>
                                             </div>
                                         </div>
@@ -1803,6 +2783,7 @@
                                     <span class="lc-message-type-pill">Reply</span>
                                     <span class="lc-message-type-pill">Note</span>
                                     <span class="lc-message-type-pill">Update</span>
+                                    <span class="lc-message-type-pill">Catalog</span>
                                 </div>
 
                                 @if ($errors->has('message_text'))
@@ -1823,12 +2804,12 @@
                                     </div>
                                 @endif
 
-                                <form method="POST" action="{{ route('inbox.messages.store', $selectedConversation) }}" enctype="multipart/form-data">
+                                <form id="lcMessageForm" class="lc-message-form" method="POST" action="{{ route('inbox.messages.store', $selectedConversation) }}" enctype="multipart/form-data">
                                     @csrf
                                     <input type="hidden" name="reply_to_message_id" value="{{ $replyTarget?->id }}">
 
                                     @if ($replyTarget)
-                                        <div style="margin-bottom: 10px; border-left: 3px solid var(--lc-primary); background: rgba(114, 76, 218, .06); border-radius: 10px; padding: 10px 12px;">
+                                        <div data-reply-preview style="margin-bottom: 10px; border-left: 3px solid var(--lc-primary); background: rgba(114, 76, 218, .06); border-radius: 10px; padding: 10px 12px;">
                                             <div style="font-size: 12px; color: var(--lc-text-soft); margin-bottom: 4px; font-weight: 700;">
                                                 Replying to
                                             </div>
@@ -1884,10 +2865,20 @@
                                                         name="attachment_files[]"
                                                         id="lcAttachmentInput"
                                                         class="lc-hidden-file-input"
+                                                        accept="image/*,video/*,audio/*,application/pdf"
                                                         multiple
                                                     >
                                                 </label>
                                                 <span class="lc-editor-icon">💬</span>
+                                                <button
+                                                    type="button"
+                                                    id="lcProductPickerBtn"
+                                                    class="lc-editor-icon"
+                                                    title="Send catalog product"
+                                                    style="border:0;background:transparent;padding:0;cursor:pointer;"
+                                                >
+                                                    🛍️
+                                                </button>
                                                 <button
                                                     type="button"
                                                     id="lcStartRecordingBtn"
@@ -1952,6 +2943,7 @@
 
                                 <form
                                     id="lcVoiceForm"
+                                    class="lc-voice-form"
                                     method="POST"
                                     action="{{ route('inbox.messages.voice', $selectedConversation) }}"
                                     enctype="multipart/form-data"
@@ -1962,23 +2954,6 @@
                                     <input type="hidden" name="duration_seconds" id="lcVoiceDurationInput">
                                 </form>
 
-                                <form method="POST" action="{{ route('inbox.messages.mock_incoming', $selectedConversation) }}" style="margin-top: 10px;">
-                                    @csrf
-                                    <div style="display:flex; gap:10px; flex-wrap:wrap;">
-                                        <input
-                                            type="text"
-                                            name="incoming_text"
-                                            placeholder="Mock incoming text..."
-                                            style="flex:1; min-width:220px; height:40px; border:1px solid #e2e1db; border-radius:10px; padding:0 12px;"
-                                        >
-                                        <button
-                                            type="submit"
-                                            style="height:40px; border:0; border-radius:10px; background:#e2e1db; color:#37352f; font-weight:700; padding:0 16px;"
-                                        >
-                                            Mock Incoming
-                                        </button>
-                                    </div>
-                                </form>
                             </div>
                         </div>
                     @else
@@ -2305,6 +3280,245 @@
             </div>
         </div>
     </div>
+
+    <div id="lcConfirmModal" class="lc-modal" aria-hidden="true">
+        <div class="lc-modal-backdrop" data-confirm-close></div>
+
+        <div class="lc-modal-card" role="dialog" aria-modal="true" aria-labelledby="lcConfirmModalTitle">
+            <div id="lcConfirmModalTitle" class="lc-modal-title">Confirm action</div>
+            <div id="lcConfirmModalBody" class="lc-modal-body">Please confirm this action.</div>
+
+            <div class="lc-modal-actions">
+                <button type="button" id="lcConfirmModalCancel" class="lc-modal-btn">Cancel</button>
+                <button type="button" id="lcConfirmModalSubmit" class="lc-modal-btn primary">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    @if ($selectedConversation)
+        <div id="lcProductPickerModal" class="lc-modal" aria-hidden="true">
+            <div class="lc-modal-backdrop" data-product-picker-close></div>
+
+            <div class="lc-modal-card lc-product-modal-card" role="dialog" aria-modal="true" aria-labelledby="lcProductPickerTitle">
+                <div id="lcProductPickerTitle" class="lc-modal-title">Send catalog product</div>
+                <div class="lc-modal-body">
+                    Select a product to send in this direct message. Leadochat will save it as a product card and send the customer a clean product summary.
+                </div>
+
+                <form
+                    id="lcProductPickerForm"
+                    method="POST"
+                    action="{{ route('inbox.catalog-products.send', $selectedConversation) }}"
+                    style="display:grid; gap:.8rem;"
+                >
+                    @csrf
+                    <input type="hidden" name="catalog_product_id" id="lcProductPickerProductId">
+
+                    <input
+                        type="text"
+                        id="lcProductPickerSearch"
+                        class="lc-product-picker-search"
+                        placeholder="Search catalog products..."
+                    >
+
+                    <div id="lcProductPickerList" class="lc-product-picker-list"></div>
+                    <div id="lcProductPickerEmpty" class="lc-product-picker-empty" style="display:none;">
+                        No products are available for this conversation yet. Add products in Settings → Catalogs.
+                    </div>
+
+                    <div id="lcProductPickerError" class="lc-product-picker-error" role="alert"></div>
+
+                    <textarea
+                        name="note"
+                        id="lcProductPickerNote"
+                        class="lc-product-picker-note"
+                        placeholder="Optional note for the customer..."
+                    ></textarea>
+
+                    <div class="lc-modal-actions">
+                        <button type="button" class="lc-modal-btn" data-product-picker-close>Cancel</button>
+                        <button type="submit" id="lcProductPickerSend" class="lc-modal-btn primary" disabled>Send product</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    @endif
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const modal = document.getElementById('lcConfirmModal');
+            const modalTitle = document.getElementById('lcConfirmModalTitle');
+            const modalBody = document.getElementById('lcConfirmModalBody');
+            const modalCancel = document.getElementById('lcConfirmModalCancel');
+            const modalSubmit = document.getElementById('lcConfirmModalSubmit');
+
+            if (!modal || !modalTitle || !modalBody || !modalCancel || !modalSubmit) {
+                return;
+            }
+
+            let pendingForm = null;
+            let modalOpenedAt = 0;
+            let openerElement = null;
+            let isSubmittingConfirmedAction = false;
+            const confirmDelayMs = 900;
+
+            const closeModal = () => {
+                modal.classList.remove('is-open');
+                modal.setAttribute('aria-hidden', 'true');
+                modalSubmit.disabled = false;
+                pendingForm = null;
+                modalOpenedAt = 0;
+
+                if (openerElement && document.contains(openerElement)) {
+                    openerElement.focus({ preventScroll: true });
+                }
+
+                openerElement = null;
+            };
+
+            const submitConfirmedForm = async (form) => {
+                if (!form || isSubmittingConfirmedAction) {
+                    return;
+                }
+
+                if (!form.matches('.lc-conversation-action-form')) {
+                    HTMLFormElement.prototype.submit.call(form);
+                    return;
+                }
+
+                isSubmittingConfirmedAction = true;
+                modalSubmit.disabled = true;
+
+                if (openerElement instanceof HTMLButtonElement) {
+                    openerElement.disabled = true;
+                }
+
+                try {
+                    const actionUrl = form.getAttribute('action') || form.action;
+                    const response = await fetch(actionUrl, {
+                        method: 'POST',
+                        body: new FormData(form),
+                        headers: {
+                            Accept: 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest',
+                        },
+                        credentials: 'same-origin',
+                    });
+
+                    const data = await response.json().catch(() => ({}));
+
+                    if (!response.ok || data.ok === false) {
+                        throw new Error(data.error || data.message || 'Action failed.');
+                    }
+
+                    window.location.assign(data.redirect_url || @json(route('inbox.index')));
+                } catch (error) {
+                    modalBody.textContent = error?.message || 'Action failed.';
+                    modalSubmit.disabled = false;
+
+                    if (openerElement instanceof HTMLButtonElement) {
+                        openerElement.disabled = false;
+                    }
+
+                    isSubmittingConfirmedAction = false;
+                }
+            };
+
+            const openModal = (form, trigger = null) => {
+                pendingForm = form;
+                openerElement = trigger?.submitter || trigger?.target?.closest?.('[data-lc-confirm-trigger]') || trigger?.target?.querySelector?.('[data-lc-confirm-trigger]') || document.activeElement;
+                modalOpenedAt = Date.now();
+                isSubmittingConfirmedAction = false;
+                modalTitle.textContent = form.getAttribute('data-confirm-title') || 'Confirm action';
+                modalBody.textContent = form.getAttribute('data-confirm-message') || 'Please confirm this action.';
+                modalSubmit.textContent = form.getAttribute('data-confirm-submit') || 'Confirm';
+                modalSubmit.disabled = true;
+                modal.classList.add('is-open');
+                modal.setAttribute('aria-hidden', 'false');
+
+                setTimeout(function () {
+                    if (pendingForm === form && modal.classList.contains('is-open') && !isSubmittingConfirmedAction) {
+                        modalSubmit.disabled = false;
+                    }
+                }, confirmDelayMs);
+
+                requestAnimationFrame(function () {
+                    modalCancel.focus({ preventScroll: true });
+                });
+            };
+
+            document.addEventListener('click', function (event) {
+                const trigger = event.target.closest('[data-lc-confirm-trigger]');
+
+                if (!trigger) {
+                    return;
+                }
+
+                const form = trigger.closest('form[data-confirm-title]');
+
+                if (!form) {
+                    return;
+                }
+
+                event.preventDefault();
+                event.stopPropagation();
+                event.stopImmediatePropagation();
+                openModal(form, event);
+            }, true);
+
+            document.addEventListener('submit', function (event) {
+                const form = event.target.closest('form[data-confirm-title]');
+
+                if (!form) {
+                    return;
+                }
+
+                if (form.dataset.confirmed === '1') {
+                    delete form.dataset.confirmed;
+                    return;
+                }
+
+                event.preventDefault();
+                event.stopPropagation();
+                event.stopImmediatePropagation();
+                openModal(form, event);
+            });
+
+            modal.addEventListener('click', function (event) {
+                if (event.target.closest('[data-confirm-close]')) {
+                    closeModal();
+                }
+            });
+
+            modalCancel.addEventListener('click', function (event) {
+                event.preventDefault();
+                event.stopPropagation();
+                closeModal();
+            });
+
+            modalSubmit.addEventListener('click', function (event) {
+                event.preventDefault();
+                event.stopPropagation();
+
+                if (!pendingForm) {
+                    closeModal();
+                    return;
+                }
+
+                if (Date.now() - modalOpenedAt < confirmDelayMs) {
+                    return;
+                }
+
+                submitConfirmedForm(pendingForm);
+            });
+
+            document.addEventListener('keydown', function (event) {
+                if (event.key === 'Escape' && modal.classList.contains('is-open')) {
+                    closeModal();
+                }
+            });
+        });
+    </script>
 
     <script>
         document.addEventListener('DOMContentLoaded', function () {
@@ -2757,6 +3971,11 @@
                 renderPreviewList();
             });
 
+            document.addEventListener('lc:composer-clear', function () {
+                selectedFiles = [];
+                renderPreviewList();
+            });
+
             window.addEventListener('beforeunload', releaseObjectUrls);
         });
     </script>
@@ -3008,7 +4227,16 @@
                 voiceFormInput.files = transfer.files;
                 voiceDurationInput.value = String(recordingSeconds);
                 recordingSend.disabled = true;
-                voiceForm.submit();
+                if (typeof voiceForm.requestSubmit === 'function') {
+                    voiceForm.requestSubmit();
+                } else {
+                    voiceForm.submit();
+                }
+            });
+
+            document.addEventListener('lc:voice-sent', function () {
+                clearRecordedPreview();
+                resetRecordingUi();
             });
 
             speedButtons.forEach((button) => {
@@ -3507,12 +4735,673 @@
     <script>
         (function () {
             const workspaceId = @json($workspace?->id);
+            const selectedConversationId = @json($selectedConversation?->id);
+            const snapshotUrl = @json(route('inbox.realtime.snapshot'));
+            let lastSnapshotKey = null;
+            let refreshTimer = null;
+            let pollTimer = null;
+            let isRefreshingPane = false;
+            let refreshQueued = false;
+            const messageArea = document.getElementById('lcMessageArea');
+            const refreshConversationBtn = document.getElementById('lcRefreshConversationBtn');
+            const cssEscape = function (value) {
+                if (window.CSS && typeof window.CSS.escape === 'function') {
+                    return window.CSS.escape(value);
+                }
+
+                return String(value).replace(/["\\]/g, '\\$&');
+            };
+
+            const isNearBottom = function () {
+                if (!messageArea) {
+                    return true;
+                }
+
+                return messageArea.scrollHeight - messageArea.scrollTop - messageArea.clientHeight < 120;
+            };
+
+            const scrollMessagesToBottom = function () {
+                if (messageArea) {
+                    messageArea.scrollTop = messageArea.scrollHeight;
+                }
+            };
+
+            const buildSnapshotKey = function (snapshot) {
+                if (selectedConversationId) {
+                    return JSON.stringify({
+                        conversation_last_message_at: snapshot.conversation_last_message_at || null,
+                        conversation_message_count: snapshot.conversation_message_count || null,
+                    });
+                }
+
+                return JSON.stringify({
+                    latest_conversation_timestamp: snapshot.latest_conversation_timestamp || null,
+                });
+            };
+
+            const schedulePaneRefresh = function (options = {}) {
+                clearTimeout(refreshTimer);
+                refreshTimer = setTimeout(function () {
+                    refreshConversationPane(options);
+                }, options.delay || 250);
+            };
+
+            const refreshConversationPane = async function (options = {}) {
+                if (isRefreshingPane) {
+                    refreshQueued = true;
+                    return;
+                }
+
+                isRefreshingPane = true;
+                const shouldStick = options.scrollToBottom || isNearBottom();
+
+                try {
+                    const response = await fetch(window.location.href, {
+                        headers: {
+                            Accept: 'text/html',
+                            'X-Requested-With': 'XMLHttpRequest',
+                        },
+                        credentials: 'same-origin',
+                    });
+
+                    if (!response.ok) {
+                        return;
+                    }
+
+                    const html = await response.text();
+                    const doc = new DOMParser().parseFromString(html, 'text/html');
+
+                    ['.lc-message-stack', '.lc-conversation-list'].forEach((selector) => {
+                        const current = document.querySelector(selector);
+                        const next = doc.querySelector(selector);
+
+                        if (current && next) {
+                            current.innerHTML = next.innerHTML;
+                        }
+                    });
+
+                    if (shouldStick) {
+                        requestAnimationFrame(scrollMessagesToBottom);
+                    }
+
+                    lastSnapshotKey = null;
+                } catch (error) {
+                    // Keep the current view stable; the next realtime tick can try again.
+                } finally {
+                    isRefreshingPane = false;
+
+                    if (refreshQueued) {
+                        refreshQueued = false;
+                        schedulePaneRefresh({ scrollToBottom: true });
+                    }
+                }
+            };
+
+            const startSnapshotPolling = function () {
+                if (!snapshotUrl || pollTimer) {
+                    return;
+                }
+
+                pollTimer = setInterval(async function () {
+                    try {
+                        const url = new URL(snapshotUrl, window.location.origin);
+
+                        if (selectedConversationId) {
+                            url.searchParams.set('conversation_id', selectedConversationId);
+                        }
+
+                        const response = await fetch(url.toString(), {
+                            headers: {
+                                Accept: 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest',
+                            },
+                        });
+
+                        if (!response.ok) {
+                            return;
+                        }
+
+                        const snapshot = await response.json();
+                        const snapshotKey = buildSnapshotKey(snapshot);
+
+                        if (lastSnapshotKey && snapshotKey !== lastSnapshotKey) {
+                            schedulePaneRefresh({ scrollToBottom: true });
+                            return;
+                        }
+
+                        lastSnapshotKey = snapshotKey;
+                    } catch (error) {
+                        // Websocket remains the primary realtime path; polling is only a quiet fallback.
+                    }
+                }, 3000);
+            };
+
+            startSnapshotPolling();
+
+            if (refreshConversationBtn) {
+                refreshConversationBtn.addEventListener('click', function () {
+                    schedulePaneRefresh({ scrollToBottom: false, delay: 10 });
+                });
+            }
+
+            const catalogProducts = @json($catalogProductPayload);
+            const productPickerBtn = document.getElementById('lcProductPickerBtn');
+            const productPickerModal = document.getElementById('lcProductPickerModal');
+            const productPickerForm = document.getElementById('lcProductPickerForm');
+            const productPickerList = document.getElementById('lcProductPickerList');
+            const productPickerEmpty = document.getElementById('lcProductPickerEmpty');
+            const productPickerSearch = document.getElementById('lcProductPickerSearch');
+            const productPickerProductId = document.getElementById('lcProductPickerProductId');
+            const productPickerSend = document.getElementById('lcProductPickerSend');
+            const productPickerError = document.getElementById('lcProductPickerError');
+
+            const escapeHtml = function (value) {
+                const element = document.createElement('div');
+                element.textContent = value === null || value === undefined ? '' : String(value);
+
+                return element.innerHTML;
+            };
+
+            const formatProductPrice = function (product) {
+                if (product.price === null || product.price === undefined) {
+                    return 'No price';
+                }
+
+                return `${product.currency || 'USD'} ${Number(product.price).toFixed(2)}`;
+            };
+
+            const setProductPickerError = function (message) {
+                if (!productPickerError) {
+                    return;
+                }
+
+                const text = (message || '').trim();
+                productPickerError.textContent = text;
+                productPickerError.classList.toggle('is-visible', Boolean(text));
+            };
+
+            const closeProductPicker = function () {
+                if (!productPickerModal) {
+                    return;
+                }
+
+                productPickerModal.classList.remove('is-open');
+                productPickerModal.setAttribute('aria-hidden', 'true');
+            };
+
+            const selectCatalogProduct = function (productId) {
+                if (!productPickerProductId || !productPickerSend) {
+                    return;
+                }
+
+                productPickerProductId.value = productId ? String(productId) : '';
+                productPickerSend.disabled = !productId;
+                setProductPickerError('');
+
+                productPickerList?.querySelectorAll('.lc-product-picker-item').forEach((item) => {
+                    item.classList.toggle('is-selected', item.dataset.productId === String(productId));
+                });
+            };
+
+            const renderCatalogProducts = function () {
+                if (!productPickerList || !productPickerEmpty) {
+                    return;
+                }
+
+                const term = (productPickerSearch?.value || '').trim().toLowerCase();
+                const filteredProducts = catalogProducts.filter((product) => {
+                    const haystack = [
+                        product.title,
+                        product.description,
+                        product.sku,
+                        product.catalog_name,
+                    ].filter(Boolean).join(' ').toLowerCase();
+
+                    return term === '' || haystack.includes(term);
+                });
+
+                productPickerList.innerHTML = '';
+                productPickerEmpty.style.display = filteredProducts.length ? 'none' : 'block';
+
+                filteredProducts.forEach((product) => {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = 'lc-product-picker-item';
+                    button.dataset.productId = String(product.id);
+                    const availability = (product.availability || 'in_stock').replace(/_/g, ' ');
+                    button.innerHTML = `
+                        <div class="lc-product-picker-thumb">
+                            ${product.image_url ? `<img src="${escapeHtml(product.image_url)}" alt="">` : 'No image'}
+                        </div>
+                        <div>
+                            <div class="lc-product-picker-title">${escapeHtml(product.title || 'Product')}</div>
+                            <div class="lc-product-picker-meta">${escapeHtml(formatProductPrice(product))} · ${escapeHtml(availability)}</div>
+                            <div class="lc-product-picker-meta">${escapeHtml(product.catalog_name || 'Catalog')}${product.sku ? ` · SKU: ${escapeHtml(product.sku)}` : ''}</div>
+                        </div>
+                    `;
+                    button.addEventListener('click', function () {
+                        selectCatalogProduct(product.id);
+                    });
+                    productPickerList.appendChild(button);
+                });
+
+                if (productPickerProductId?.value) {
+                    selectCatalogProduct(productPickerProductId.value);
+                }
+            };
+
+            if (productPickerBtn && productPickerModal) {
+                productPickerBtn.addEventListener('click', function () {
+                    setProductPickerError('');
+                    renderCatalogProducts();
+                    selectCatalogProduct(null);
+                    productPickerModal.classList.add('is-open');
+                    productPickerModal.setAttribute('aria-hidden', 'false');
+                    productPickerSearch?.focus({ preventScroll: true });
+                });
+            }
+
+            document.querySelectorAll('[data-product-picker-close]').forEach((button) => {
+                button.addEventListener('click', closeProductPicker);
+            });
+
+            productPickerSearch?.addEventListener('input', renderCatalogProducts);
+
+            const closeReactionPickers = function (except = null) {
+                document.querySelectorAll('.lc-reaction-form.is-open').forEach((form) => {
+                    if (form === except) {
+                        return;
+                    }
+
+                    form.classList.remove('is-open');
+                    form.querySelector('.lc-reaction-trigger')?.setAttribute('aria-expanded', 'false');
+                });
+            };
+
+            const updateReactionTrigger = function (form, emoji) {
+                if (!form) {
+                    return;
+                }
+
+                const trigger = form.querySelector('.lc-reaction-trigger');
+                const actionInput = form.querySelector('input[name="action"]');
+                const hasReaction = Boolean(emoji);
+
+                if (trigger) {
+                    trigger.textContent = hasReaction ? emoji : '♡';
+                    trigger.classList.toggle('is-active', hasReaction);
+                    trigger.title = hasReaction ? 'Remove reaction' : 'React';
+                    trigger.setAttribute('aria-label', hasReaction ? 'Remove reaction' : 'React');
+                }
+
+                if (actionInput) {
+                    actionInput.value = hasReaction ? 'unreact' : 'react';
+                }
+            };
+
+            const setReactionError = function (form, message = '') {
+                if (!form) {
+                    return;
+                }
+
+                const error = form.nextElementSibling && form.nextElementSibling.classList.contains('lc-reaction-error')
+                    ? form.nextElementSibling
+                    : null;
+
+                form.classList.toggle('has-error', Boolean(message));
+
+                if (error) {
+                    error.textContent = message;
+                }
+            };
+
+            const updateMessageReaction = function (payload) {
+                const messageId = payload.message_id ? String(payload.message_id) : null;
+                const providerMessageId = payload.provider_message_id ? String(payload.provider_message_id) : null;
+                const actor = payload.actor || (payload.direction === 'inbound' ? 'customer' : 'agent');
+                const action = payload.action || payload.reaction_action || 'react';
+                const emoji = action === 'unreact' ? null : (payload.emoji || null);
+                const row = messageId
+                    ? document.querySelector(`[data-message-id="${cssEscape(messageId)}"]`)
+                    : (
+                        providerMessageId
+                            ? document.querySelector(`[data-provider-message-id="${cssEscape(providerMessageId)}"]`)
+                            : null
+                    );
+
+                if (!row) {
+                    return false;
+                }
+
+                const pill = row.querySelector(`[data-reaction-actor="${cssEscape(actor)}"]`);
+
+                if (pill) {
+                    if (emoji) {
+                        pill.textContent = emoji;
+                        pill.style.display = '';
+                    } else {
+                        pill.textContent = '';
+                        pill.style.display = 'none';
+                    }
+                }
+
+                const reactionStrip = row.querySelector('.lc-reaction-strip');
+
+                if (reactionStrip) {
+                    const hasReaction = Array.from(reactionStrip.querySelectorAll('.lc-reaction-pill'))
+                        .some((reactionPill) => reactionPill.style.display !== 'none' && reactionPill.textContent.trim() !== '');
+
+                    reactionStrip.classList.toggle('has-reaction', hasReaction);
+                }
+
+                if (actor === 'agent') {
+                    updateReactionTrigger(row.querySelector('.lc-reaction-form'), emoji);
+                }
+
+                return true;
+            };
+
+            document.addEventListener('click', function (event) {
+                const trigger = event.target.closest('.lc-reaction-trigger');
+
+                if (trigger) {
+                    const form = trigger.closest('.lc-reaction-form');
+                    const shouldOpen = !form.classList.contains('is-open');
+
+                    closeReactionPickers(form);
+                    form.classList.toggle('is-open', shouldOpen);
+                    trigger.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+                    setReactionError(form, '');
+                    return;
+                }
+
+                if (!event.target.closest('.lc-reaction-form')) {
+                    closeReactionPickers();
+                }
+            });
+
+            document.addEventListener('keydown', function (event) {
+                if (event.key === 'Escape') {
+                    closeReactionPickers();
+                    closeProductPicker();
+                }
+            });
+
+            document.addEventListener('submit', async function (event) {
+                if (event.defaultPrevented) {
+                    return;
+                }
+
+                const submittedForm = event.target instanceof HTMLFormElement ? event.target : null;
+                const actionForm = submittedForm && submittedForm.matches('.lc-conversation-action-form')
+                    ? submittedForm
+                    : null;
+
+                if (actionForm) {
+                    event.preventDefault();
+
+                    const submitButton = event.submitter || actionForm.querySelector('button[type="submit"]');
+                    const originalDisabled = submitButton ? submitButton.disabled : false;
+
+                    if (submitButton) {
+                        submitButton.disabled = true;
+                    }
+
+                    try {
+                        const actionUrl = actionForm.getAttribute('action') || actionForm.action;
+                        const response = await fetch(actionUrl, {
+                            method: 'POST',
+                            body: new FormData(actionForm),
+                            headers: {
+                                Accept: 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest',
+                            },
+                            credentials: 'same-origin',
+                        });
+
+                        const data = await response.json().catch(() => ({}));
+
+                        if (!response.ok || data.ok === false) {
+                            window.alert(data.error || data.message || 'Action failed.');
+                            return;
+                        }
+
+                        window.location.assign(data.redirect_url || @json(route('inbox.index')));
+                    } catch (error) {
+                        window.alert('Action failed.');
+                    } finally {
+                        if (submitButton) {
+                            submitButton.disabled = originalDisabled;
+                        }
+                    }
+
+                    return;
+                }
+
+                const reactionForm = submittedForm && submittedForm.matches('.lc-reaction-form')
+                    ? submittedForm
+                    : null;
+
+                if (reactionForm) {
+                    event.preventDefault();
+
+                    const option = event.submitter?.closest('.lc-reaction-option');
+                    const button = option || reactionForm.querySelector('.lc-reaction-option');
+
+                    if (reactionForm.dataset.saving === '1') {
+                        return;
+                    }
+
+                    if (option && option.value) {
+                        const reactionInput = reactionForm.querySelector('input[name="reaction"]');
+
+                        if (reactionInput) {
+                            reactionInput.value = option.value;
+                        }
+                    }
+
+                    reactionForm.dataset.saving = '1';
+                    setReactionError(reactionForm, '');
+
+                    if (button) {
+                        button.disabled = true;
+                    }
+
+                    try {
+                        const reactionUrl = reactionForm.getAttribute('action') || reactionForm.action;
+                        const response = await fetch(reactionUrl, {
+                            method: 'POST',
+                            body: new FormData(reactionForm),
+                            headers: {
+                                Accept: 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest',
+                            },
+                            credentials: 'same-origin',
+                        });
+
+                        const data = await response.json().catch(() => ({}));
+
+                        if (!response.ok || data.ok === false) {
+                            setReactionError(reactionForm, data.error || data.message || 'Reaction failed.');
+                            return;
+                        }
+
+                        updateMessageReaction(data);
+                        closeReactionPickers();
+                    } catch (error) {
+                        setReactionError(reactionForm, 'Reaction failed.');
+                    } finally {
+                        reactionForm.dataset.saving = '0';
+
+                        if (button) {
+                            button.disabled = false;
+                        }
+                    }
+
+                    return;
+                }
+
+                const productForm = submittedForm && submittedForm.id === 'lcProductPickerForm'
+                    ? submittedForm
+                    : null;
+
+                if (productForm) {
+                    event.preventDefault();
+
+                    if (!productPickerProductId?.value) {
+                        setProductPickerError('Select a product first.');
+                        return;
+                    }
+
+                    const button = productPickerSend || productForm.querySelector('button[type="submit"]');
+                    const originalText = button ? button.textContent : null;
+
+                    setProductPickerError('');
+
+                    if (button) {
+                        button.disabled = true;
+                        button.textContent = 'Sending...';
+                    }
+
+                    try {
+                        const response = await fetch(productForm.action, {
+                            method: 'POST',
+                            body: new FormData(productForm),
+                            headers: {
+                                Accept: 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest',
+                            },
+                            credentials: 'same-origin',
+                        });
+
+                        const data = await response.json().catch(() => ({}));
+
+                        if (!response.ok || data.ok === false) {
+                            setProductPickerError(data.error || data.message || 'Product send failed.');
+                            return;
+                        }
+
+                        productForm.reset();
+                        selectCatalogProduct(null);
+                        closeProductPicker();
+                        schedulePaneRefresh({ scrollToBottom: true, delay: 50 });
+                    } catch (error) {
+                        setProductPickerError('Product send failed.');
+                    } finally {
+                        if (button) {
+                            button.disabled = false;
+                            button.textContent = originalText || 'Send product';
+                        }
+                    }
+
+                    return;
+                }
+
+                const messageForm = event.target.closest('.lc-message-form');
+                const voiceForm = event.target.closest('.lc-voice-form');
+                const form = messageForm || voiceForm;
+
+                if (!form) {
+                    return;
+                }
+
+                event.preventDefault();
+
+                const button = form.querySelector('button[type="submit"]')
+                    || (voiceForm ? document.getElementById('lcRecordingSend') : null);
+                const originalText = button ? button.textContent : null;
+
+                if (button) {
+                    button.disabled = true;
+                    button.textContent = 'Sending...';
+                }
+
+                let messageSent = false;
+
+                try {
+                    const response = await fetch(form.action, {
+                        method: 'POST',
+                        body: new FormData(form),
+                        headers: {
+                            Accept: 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest',
+                        },
+                        credentials: 'same-origin',
+                    });
+
+                    const data = await response.json().catch(() => ({}));
+
+                    if (!response.ok) {
+                        if (button) {
+                            button.disabled = false;
+                            button.textContent = originalText || 'Send';
+                        }
+
+                        window.alert(data.error || data.message || 'Message failed.');
+                        return;
+                    }
+
+                    messageSent = true;
+
+                    if (messageForm) {
+                        form.reset();
+                        const replyInput = form.querySelector('input[name="reply_to_message_id"]');
+                        const replyPreview = form.querySelector('[data-reply-preview]');
+
+                        if (replyInput) {
+                            replyInput.value = '';
+                        }
+
+                        if (replyPreview) {
+                            replyPreview.remove();
+                        }
+
+                        if (window.history && window.history.replaceState) {
+                            const cleanUrl = new URL(window.location.href);
+                            cleanUrl.searchParams.delete('reply');
+                            window.history.replaceState({}, '', cleanUrl.toString());
+                        }
+
+                        document.dispatchEvent(new CustomEvent('lc:composer-clear'));
+                    }
+
+                    if (voiceForm) {
+                        document.dispatchEvent(new CustomEvent('lc:voice-sent'));
+                    }
+
+                    schedulePaneRefresh({ scrollToBottom: true, delay: 50 });
+                } catch (error) {
+                    if (button) {
+                        button.disabled = false;
+                        button.textContent = originalText || 'Send';
+                    }
+
+                    window.alert('Message failed.');
+                } finally {
+                    if (button && !(voiceForm && messageSent)) {
+                        button.disabled = false;
+                        button.textContent = originalText || 'Send';
+                    }
+                }
+            });
 
             if (!workspaceId || !window.Echo) {
                 return;
             }
 
-            let reloadTimer = null;
+            if (window.Echo.connector && window.Echo.connector.pusher && window.Echo.connector.pusher.connection) {
+                window.Echo.connector.pusher.connection.bind('connected', function () {
+                    document.documentElement.dataset.lcRealtime = 'connected';
+                });
+
+                window.Echo.connector.pusher.connection.bind('disconnected', function () {
+                    document.documentElement.dataset.lcRealtime = 'disconnected';
+                });
+
+                window.Echo.connector.pusher.connection.bind('error', function () {
+                    document.documentElement.dataset.lcRealtime = 'error';
+                });
+            }
 
             window.Echo.private(`workspace.${workspaceId}`)
                 .listen('.workspace.updated', function (event) {
@@ -3520,10 +5409,22 @@
                         return;
                     }
 
-                    clearTimeout(reloadTimer);
-                    reloadTimer = setTimeout(function () {
-                        window.location.reload();
-                    }, 700);
+                    if (event.action === 'instagram_message_reaction_updated') {
+                        if (updateMessageReaction(event.payload || {})) {
+                            return;
+                        }
+                    }
+
+                    if (
+                        selectedConversationId &&
+                        event.payload &&
+                        Number(event.payload.conversation_id) !== Number(selectedConversationId)
+                    ) {
+                        schedulePaneRefresh({ scrollToBottom: false });
+                        return;
+                    }
+
+                    schedulePaneRefresh({ scrollToBottom: true });
                 });
         })();
     </script>

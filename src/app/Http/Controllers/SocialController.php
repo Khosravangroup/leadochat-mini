@@ -3,16 +3,21 @@
 namespace App\Http\Controllers;
 
 use App\Events\WorkspaceRealtimeUpdated;
+use App\Models\CatalogProduct;
 use App\Models\ProviderConnection;
+use App\Models\Message;
 use App\Models\SocialComment;
 use App\Models\SocialPost;
 use App\Models\SocialStory;
 use App\Services\Meta\Instagram\InstagramService;
 use Illuminate\Contracts\View\View;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
-
+use Illuminate\Support\Str;
+use Symfony\Component\Process\Process;
 
 class SocialController extends Controller
 {
@@ -25,25 +30,91 @@ class SocialController extends Controller
         $instagramConnections = ProviderConnection::query()
             ->where('workspace_id', $workspace->id)
             ->where('provider', 'instagram')
+            ->where('status', 'connected')
             ->latest('id')
             ->get();
 
-        $activeConnection = $instagramConnections->firstWhere('status', 'connected')
-            ?? $instagramConnections->first();
+        $requestedConnectionId = $request->integer('instagram_account') ?: null;
+        $activeConnection = $requestedConnectionId
+            ? $instagramConnections->firstWhere('id', $requestedConnectionId)
+            : null;
+        $activeConnection ??= $instagramConnections->first();
 
-        $postCount = SocialPost::query()
+        $postCountQuery = SocialPost::query()
             ->where('workspace_id', $workspace->id)
             ->where('provider', 'instagram')
-            ->count();
+            ->where('status', '!=', 'deleted');
 
-        $commentCount = SocialComment::query()
+        $commentCountQuery = SocialComment::query()
+            ->where('workspace_id', $workspace->id)
+            ->where('provider', 'instagram');
+
+        $storyCountQuery = SocialStory::query()
+            ->where('workspace_id', $workspace->id)
+            ->where('provider', 'instagram');
+
+        if ($activeConnection) {
+            $postCountQuery->where('provider_connection_id', $activeConnection->id);
+            $commentCountQuery->where('provider_connection_id', $activeConnection->id);
+            $storyCountQuery->where('provider_connection_id', $activeConnection->id);
+        }
+
+        $instagramAccountTabs = $instagramConnections->map(function (ProviderConnection $connection) use ($workspace) {
+            return [
+                'id' => $connection->id,
+                'name' => $connection->provider_account_name ?: ('Instagram account #' . $connection->id),
+                'handle' => $connection->provider_account_name,
+                'provider_account_id' => $connection->provider_account_id,
+                'post_count' => SocialPost::query()
+                    ->where('workspace_id', $workspace->id)
+                    ->where('provider', 'instagram')
+                    ->where('provider_connection_id', $connection->id)
+                    ->where('status', '!=', 'deleted')
+                    ->count(),
+                'comment_count' => SocialComment::query()
+                    ->where('workspace_id', $workspace->id)
+                    ->where('provider', 'instagram')
+                    ->where('provider_connection_id', $connection->id)
+                    ->where('status', '!=', 'deleted')
+                    ->count(),
+                'story_count' => SocialStory::query()
+                    ->where('workspace_id', $workspace->id)
+                    ->where('provider', 'instagram')
+                    ->where('provider_connection_id', $connection->id)
+                    ->where('status', '!=', 'deleted')
+                    ->count(),
+            ];
+        })->values();
+
+        $postTagProducts = collect();
+
+        if ($activeConnection) {
+            $postTagProducts = CatalogProduct::query()
+                ->where('is_active', true)
+                ->whereIn('meta_sync_status', ['queued', 'synced'])
+                ->where(function ($query) {
+                    $query->whereNotNull('external_product_id')
+                        ->orWhereNotNull('sku');
+                })
+                ->whereHas('catalog', function ($query) use ($workspace, $activeConnection) {
+                    $query->where('workspace_id', $workspace->id)
+                        ->where('status', 'active')
+                        ->where(function ($catalogQuery) use ($activeConnection) {
+                            $catalogQuery->whereNull('provider_connection_id')
+                                ->orWhere('provider_connection_id', $activeConnection->id);
+                        });
+                })
+                ->with('catalog')
+                ->orderBy('title')
+                ->limit(100)
+                ->get();
+        }
+
+        $totalConnectedPosts = SocialPost::query()
             ->where('workspace_id', $workspace->id)
             ->where('provider', 'instagram')
-            ->count();
-
-        $storyCount = SocialStory::query()
-            ->where('workspace_id', $workspace->id)
-            ->where('provider', 'instagram')
+            ->whereIn('provider_connection_id', $instagramConnections->pluck('id'))
+            ->where('status', '!=', 'deleted')
             ->count();
 
         return [
@@ -52,11 +123,15 @@ class SocialController extends Controller
             'tab' => $tab,
             'pageTitle' => $pageTitle,
             'instagramConnections' => $instagramConnections,
+            'instagramAccountTabs' => $instagramAccountTabs,
             'activeInstagramConnection' => $activeConnection,
+            'selectedInstagramAccountId' => $activeConnection?->id,
+            'totalConnectedInstagramPosts' => $totalConnectedPosts,
+            'postTagProducts' => $postTagProducts,
             'socialCounts' => [
-                'posts' => $postCount,
-                'comments' => $commentCount,
-                'stories' => $storyCount,
+                'posts' => $postCountQuery->count(),
+                'comments' => $commentCountQuery->where('status', '!=', 'deleted')->count(),
+                'stories' => $storyCountQuery->count(),
             ],
         ];
     }
@@ -114,6 +189,8 @@ class SocialController extends Controller
         $posts = SocialPost::query()
             ->where('workspace_id', $workspace->id)
             ->where('provider', 'instagram')
+            ->when($activeConnection, fn ($query) => $query->where('provider_connection_id', $activeConnection->id))
+            ->where('status', '!=', 'deleted')
             ->latest('posted_at')
             ->latest('id')
             ->get();
@@ -133,11 +210,22 @@ class SocialController extends Controller
         $posts = SocialPost::query()
             ->where('workspace_id', $workspace->id)
             ->where('provider', 'instagram')
+            ->when($activeConnection, fn ($query) => $query->where('provider_connection_id', $activeConnection->id))
+            ->where('status', '!=', 'deleted')
             ->with([
                 'mediaItems',
                 'comments' => function ($query) {
                     $query->where('provider', 'instagram')
+                        ->whereNull('parent_provider_comment_id')
                         ->where('status', '!=', 'deleted')
+                        ->with([
+                            'childComments' => function ($childQuery) {
+                                $childQuery->where('provider', 'instagram')
+                                    ->where('status', '!=', 'deleted')
+                                    ->oldest('commented_at')
+                                    ->oldest('id');
+                            },
+                        ])
                         ->latest('commented_at')
                         ->latest('id');
                 },
@@ -165,6 +253,7 @@ class SocialController extends Controller
         $pageData['syncResult'] = $syncResult;
         $pageData['syncError'] = $syncError;
         $pageData['commentSyncErrors'] = $commentSyncErrors;
+        $pageData['postPublishEnabled'] = (bool) ($activeConnection && $activeConnection->status === 'connected');
         $pageData['socialCounts']['posts'] = $posts->count();
 
         return $pageData;
@@ -190,6 +279,8 @@ class SocialController extends Controller
             $posts = SocialPost::query()
                 ->where('workspace_id', $workspace->id)
                 ->where('provider', 'instagram')
+                ->where('provider_connection_id', $activeConnection->id)
+                ->where('status', '!=', 'deleted')
                 ->latest('posted_at')
                 ->latest('id')
                 ->get();
@@ -208,8 +299,18 @@ class SocialController extends Controller
         $comments = SocialComment::query()
             ->where('workspace_id', $workspace->id)
             ->where('provider', 'instagram')
+            ->when($activeConnection, fn ($query) => $query->where('provider_connection_id', $activeConnection->id))
+            ->whereNull('parent_provider_comment_id')
             ->where('status', '!=', 'deleted')
-            ->with('socialPost')
+            ->with([
+                'socialPost',
+                'childComments' => function ($query) {
+                    $query->where('provider', 'instagram')
+                        ->where('status', '!=', 'deleted')
+                        ->oldest('commented_at')
+                        ->oldest('id');
+                },
+            ])
             ->latest('commented_at')
             ->latest('id')
             ->limit(100)
@@ -222,6 +323,8 @@ class SocialController extends Controller
         $pageData['socialCounts']['comments'] = SocialComment::query()
             ->where('workspace_id', $workspace->id)
             ->where('provider', 'instagram')
+            ->when($activeConnection, fn ($query) => $query->where('provider_connection_id', $activeConnection->id))
+            ->where('status', '!=', 'deleted')
             ->count();
 
         return $pageData;
@@ -233,14 +336,49 @@ class SocialController extends Controller
 
         abort_unless($workspace, 404);
 
-        $connection = ProviderConnection::query()
+        $connections = ProviderConnection::query()
             ->where('workspace_id', $workspace->id)
             ->where('provider', 'instagram')
             ->where('status', 'connected')
             ->latest('id')
-            ->first();
+            ->get();
+
+        $requestedConnectionId = $request->integer('instagram_account') ?: null;
+        $connection = $requestedConnectionId
+            ? $connections->firstWhere('id', $requestedConnectionId)
+            : null;
+        $connection ??= $connections->first();
 
         abort_unless($connection, 404, 'Connected Instagram account not found for the current workspace.');
+
+        return $connection;
+    }
+
+    protected function resolveWorkspacePost(Request $request, SocialPost $post): SocialPost
+    {
+        $workspace = $request->user()?->currentWorkspace();
+
+        abort_unless($workspace, 404);
+        abort_unless(
+            $post->workspace_id === $workspace->id && $post->provider === 'instagram',
+            404
+        );
+
+        return $post;
+    }
+
+    protected function resolveInstagramConnectionForPost(Request $request, SocialPost $post): ProviderConnection
+    {
+        $post = $this->resolveWorkspacePost($request, $post);
+
+        $connection = ProviderConnection::query()
+            ->where('workspace_id', $post->workspace_id)
+            ->where('provider', 'instagram')
+            ->where('status', 'connected')
+            ->whereKey($post->provider_connection_id)
+            ->first();
+
+        abort_unless($connection, 404, 'Connected Instagram account not found for this post.');
 
         return $connection;
     }
@@ -258,14 +396,41 @@ class SocialController extends Controller
         return $comment;
     }
 
-    protected function redirectToInstagramPosts(): RedirectResponse
+    protected function resolveInstagramConnectionForComment(Request $request, SocialComment $comment): ProviderConnection
     {
-        return redirect()->route('social.instagram.posts');
+        $comment = $this->resolveWorkspaceComment($request, $comment);
+
+        $connection = ProviderConnection::query()
+            ->where('workspace_id', $comment->workspace_id)
+            ->where('provider', 'instagram')
+            ->where('status', 'connected')
+            ->whereKey($comment->provider_connection_id)
+            ->first();
+
+        abort_unless($connection, 404, 'Connected Instagram account not found for this comment.');
+
+        return $connection;
     }
 
-    protected function redirectToInstagramStories(): RedirectResponse
+    protected function instagramAccountRouteParams(Request $request, array $extra = []): array
     {
-        return redirect()->route('social.instagram.stories');
+        $accountId = $request->input('instagram_account', $request->query('instagram_account'));
+
+        if ($accountId !== null && $accountId !== '') {
+            $extra['instagram_account'] = (int) $accountId;
+        }
+
+        return $extra;
+    }
+
+    protected function redirectToInstagramPosts(Request $request): RedirectResponse
+    {
+        return redirect()->route('social.instagram.posts', $this->instagramAccountRouteParams($request));
+    }
+
+    protected function redirectToInstagramStories(Request $request): RedirectResponse
+    {
+        return redirect()->route('social.instagram.stories', $this->instagramAccountRouteParams($request));
     }
     protected function buildCommentReplyActorMeta(Request $request): array
     {
@@ -302,13 +467,20 @@ class SocialController extends Controller
             'reply_actor_id' => $user?->id,
             'reply_actor_name' => $replyActorName,
             'reply_actor_email' => $user?->email,
+            'reply_actor_avatar_url' => $user?->avatar_url,
+            'agent_user' => $user?->id ? [
+                'id' => $user->id,
+                'name' => $replyActorName ?: 'Agent',
+                'email' => $user->email,
+                'avatar_url' => $user->avatar_url,
+            ] : null,
         ];
     }
 
     protected function respondWithInstagramPosts(Request $request, ?string $successMessage = null, ?string $errorMessage = null): View|RedirectResponse
     {
         if (! $request->ajax()) {
-            $response = $this->redirectToInstagramPosts();
+            $response = $this->redirectToInstagramPosts($request);
 
             if ($successMessage !== null) {
                 $response = $response->with('social_success', $successMessage);
@@ -341,7 +513,7 @@ class SocialController extends Controller
     protected function respondWithInstagramComments(Request $request, ?string $successMessage = null, ?string $errorMessage = null): View|RedirectResponse
     {
         if (! $request->ajax()) {
-            $response = redirect()->route('social.instagram.comments');
+            $response = redirect()->route('social.instagram.comments', $this->instagramAccountRouteParams($request));
 
             if ($successMessage !== null) {
                 $response = $response->with('social_success', $successMessage);
@@ -404,6 +576,54 @@ class SocialController extends Controller
         return view('social.instagram.index', $this->loadInstagramPostsData($request, $pageData));
     }
 
+    public function instagramRealtimePosts(Request $request): JsonResponse
+    {
+        $pageData = $this->buildInstagramPageData($request, 'posts', 'Social — Instagram Posts');
+        $activeConnection = $pageData['activeInstagramConnection'] ?? null;
+        $workspace = $pageData['workspace'];
+        $syncError = null;
+
+        if ($activeConnection && $activeConnection->status === 'connected') {
+            try {
+                app(InstagramService::class)->syncMediaFeed($activeConnection, [
+                    'limit' => 24,
+                ]);
+            } catch (\Throwable $exception) {
+                $syncError = $exception->getMessage();
+            }
+        }
+
+        $posts = SocialPost::query()
+            ->where('workspace_id', $workspace->id)
+            ->where('provider', 'instagram')
+            ->when($activeConnection, fn ($query) => $query->where('provider_connection_id', $activeConnection->id))
+            ->where('status', '!=', 'deleted')
+            ->withCount([
+                'comments as visible_comments_count' => function ($query) {
+                    $query->where('provider', 'instagram')
+                        ->where('status', '!=', 'deleted');
+                },
+            ])
+            ->latest('posted_at')
+            ->latest('id')
+            ->limit(24)
+            ->get();
+
+        return response()->json([
+            'ok' => $syncError === null,
+            'sync_error' => $syncError,
+            'instagram_account' => $activeConnection?->id,
+            'posts' => $posts->map(fn (SocialPost $post) => [
+                'id' => $post->id,
+                'provider_media_id' => $post->provider_media_id,
+                'like_count' => (int) $post->like_count,
+                'comments_count' => (int) ($post->visible_comments_count ?? $post->comments_count),
+                'status' => $post->status,
+                'updated_at' => optional($post->updated_at)->toIso8601String(),
+            ])->values(),
+        ], $syncError === null ? 200 : 207);
+    }
+
     public function instagramComments(Request $request): View
     {
         $pageData = $this->buildInstagramPageData(
@@ -430,20 +650,190 @@ class SocialController extends Controller
     {
         $workspace = $pageData['workspace'];
         $activeConnection = $pageData['activeInstagramConnection'] ?? null;
+        $syncResult = null;
+        $syncError = null;
+
+        if ($activeConnection && $activeConnection->status === 'connected') {
+            try {
+                $syncResult = app(InstagramService::class)->syncStories($activeConnection, [
+                    'limit' => 25,
+                ]);
+
+                $this->storeSyncedStories($workspace, $activeConnection, $syncResult['stories'] ?? []);
+            } catch (\Throwable $exception) {
+                $syncError = $exception->getMessage();
+            }
+        }
+
+        $this->archiveExpiredStories($workspace, $activeConnection);
 
         $stories = SocialStory::query()
             ->where('workspace_id', $workspace->id)
             ->where('provider', 'instagram')
+            ->when($activeConnection, fn ($query) => $query->where('provider_connection_id', $activeConnection->id))
+            ->whereNotIn('status', ['deleted', 'removed'])
             ->latest('posted_at')
             ->latest('id')
             ->get();
 
-        $pageData['stories'] = $stories;
-        $pageData['storySyncError'] = null;
+        $activeStories = $stories
+            ->filter(fn (SocialStory $story) => strtolower((string) $story->status) !== 'archived'
+                && (! $story->expires_at || $story->expires_at->isFuture()))
+            ->values();
+
+        $archivedStories = $stories
+            ->filter(fn (SocialStory $story) => strtolower((string) $story->status) === 'archived'
+                || ($story->expires_at && $story->expires_at->isPast()))
+            ->values();
+
+        $pageData['stories'] = $activeStories;
+        $pageData['archivedStories'] = $archivedStories;
+        $pageData['storyEngagements'] = $this->buildStoryEngagements($workspace, $stories);
+        $pageData['storySyncError'] = $syncError;
+        $pageData['storySyncResult'] = $syncResult;
         $pageData['storyPublishEnabled'] = (bool) ($activeConnection && $activeConnection->status === 'connected');
-        $pageData['socialCounts']['stories'] = $stories->count();
+        $pageData['socialCounts']['stories'] = $activeStories->count();
+        $pageData['socialCounts']['story_archives'] = $archivedStories->count();
 
         return $pageData;
+    }
+
+    protected function archiveExpiredStories(object $workspace, ?ProviderConnection $connection): void
+    {
+        SocialStory::query()
+            ->where('workspace_id', $workspace->id)
+            ->where('provider', 'instagram')
+            ->when($connection, fn ($query) => $query->where('provider_connection_id', $connection->id))
+            ->whereNotIn('status', ['archived', 'deleted', 'removed'])
+            ->whereNotNull('expires_at')
+            ->where('expires_at', '<=', now())
+            ->get()
+            ->each(function (SocialStory $story) {
+                $story->status = 'archived';
+                $story->raw = array_merge(is_array($story->raw) ? $story->raw : [], [
+                    'archived_from' => 'story_expired',
+                    'archived_at' => now()->toIso8601String(),
+                ]);
+                $story->save();
+            });
+    }
+
+    protected function buildStoryEngagements(object $workspace, $stories): array
+    {
+        $storyIds = $stories
+            ->pluck('provider_story_id')
+            ->filter()
+            ->map(fn ($id) => (string) $id)
+            ->values();
+
+        if ($storyIds->isEmpty()) {
+            return [];
+        }
+
+        $messages = Message::query()
+            ->where('messages.provider', 'instagram')
+            ->where('messages.direction', 'inbound')
+            ->whereHas('conversation', fn ($query) => $query->where('workspace_id', $workspace->id))
+            ->with('senderParticipant')
+            ->latest('messages.created_at')
+            ->limit(500)
+            ->get()
+            ->filter(function (Message $message) use ($storyIds) {
+                $meta = is_array($message->meta) ? $message->meta : [];
+
+                return in_array((string) ($meta['story_id'] ?? ''), $storyIds->all(), true);
+            });
+
+        $engagements = [];
+        $likeEmojis = ['❤️', '❤', '😍', '🔥', '👏', '🙌', '👍'];
+
+        foreach ($storyIds as $storyId) {
+            $engagements[$storyId] = [
+                'reply_count' => 0,
+                'like_count' => 0,
+                'likers' => [],
+            ];
+        }
+
+        foreach ($messages as $message) {
+            $meta = is_array($message->meta) ? $message->meta : [];
+            $storyId = (string) ($meta['story_id'] ?? '');
+
+            if ($storyId === '' || ! isset($engagements[$storyId])) {
+                continue;
+            }
+
+            $engagements[$storyId]['reply_count']++;
+
+            $text = trim((string) ($message->text_body ?? ''));
+            $reaction = is_array($meta['reaction'] ?? null) ? $meta['reaction'] : [];
+            $looksLikeLike = in_array($text, $likeEmojis, true)
+                || in_array((string) ($reaction['emoji'] ?? ''), $likeEmojis, true)
+                || in_array((string) ($reaction['reaction'] ?? ''), ['love', 'like'], true);
+
+            if (! $looksLikeLike) {
+                continue;
+            }
+
+            $participant = $message->senderParticipant;
+            $actorKey = (string) ($participant?->provider_user_id ?? $participant?->id ?? $message->id);
+
+            if (! isset($engagements[$storyId]['likers'][$actorKey])) {
+                $engagements[$storyId]['likers'][$actorKey] = [
+                    'name' => $participant?->display_name ?: $participant?->handle ?: 'Instagram user',
+                    'handle' => $participant?->handle,
+                    'avatar_url' => $participant?->avatar_url,
+                ];
+            }
+        }
+
+        foreach ($engagements as $storyId => $engagement) {
+            $engagements[$storyId]['likers'] = array_values($engagement['likers']);
+            $engagements[$storyId]['like_count'] = count($engagements[$storyId]['likers']);
+        }
+
+        return $engagements;
+    }
+
+    protected function storeSyncedStories(object $workspace, ProviderConnection $connection, array $remoteStories): void
+    {
+        foreach ($remoteStories as $remoteStory) {
+            if (! is_array($remoteStory)) {
+                continue;
+            }
+
+            $providerStoryId = trim((string) ($remoteStory['id'] ?? ''));
+
+            if ($providerStoryId === '') {
+                continue;
+            }
+
+            $postedAt = ! empty($remoteStory['timestamp'])
+                ? \Illuminate\Support\Carbon::parse($remoteStory['timestamp'])
+                : now();
+
+            $story = SocialStory::query()->firstOrNew([
+                'provider' => 'instagram',
+                'provider_story_id' => $providerStoryId,
+            ]);
+
+            $story->workspace_id = $workspace->id;
+            $story->provider_connection_id = $connection->id;
+            $story->provider = 'instagram';
+            $story->provider_story_id = $providerStoryId;
+            $story->media_url = $remoteStory['media_url'] ?? $story->media_url;
+            $story->thumbnail_url = $remoteStory['thumbnail_url'] ?? $story->thumbnail_url;
+            $story->posted_at = $postedAt;
+            $story->expires_at = $postedAt->copy()->addHours(24);
+            $story->status = 'published';
+            $story->raw = array_merge(is_array($story->raw) ? $story->raw : [], [
+                'source' => 'instagram_stories_sync',
+                'remote_story' => $remoteStory,
+                'media_type' => $remoteStory['media_type'] ?? null,
+                'permalink' => $remoteStory['permalink'] ?? null,
+            ]);
+            $story->save();
+        }
     }
 
     protected function detectStoryFileKind(?\Illuminate\Http\UploadedFile $file): ?string
@@ -476,18 +866,760 @@ class SocialController extends Controller
         $path = (string) parse_url($url, PHP_URL_PATH);
         $extension = strtolower((string) pathinfo($path, PATHINFO_EXTENSION));
 
-        if (in_array($extension, ['jpg', 'jpeg', 'png', 'webp', 'gif'], true)) {
+        if (in_array($extension, ['jpg', 'jpeg'], true)) {
             return 'IMAGE';
         }
 
-        if (in_array($extension, ['mp4', 'mov', 'm4v', 'webm'], true)) {
+        if (in_array($extension, ['mp4', 'mov'], true)) {
             return 'VIDEO';
         }
 
         return null;
     }
 
-    public function publishInstagramStory(Request $request): RedirectResponse
+    protected function validateStoryUploadForInstagram(?\Illuminate\Http\UploadedFile $file, string $mediaType): ?string
+    {
+        if (! $file) {
+            return null;
+        }
+
+        $mime = strtolower((string) ($file->getMimeType() ?? ''));
+        $size = (int) $file->getSize();
+
+        if ($mediaType === 'IMAGE') {
+            if ($size > 8 * 1024 * 1024) {
+                return 'Instagram Story image source uploads must be 8 MB or smaller before conversion.';
+            }
+
+            return null;
+        }
+
+        if ($size > 100 * 1024 * 1024) {
+            return 'Instagram Story video source uploads must be 100 MB or smaller before conversion.';
+        }
+
+        return null;
+    }
+
+    protected function detectPostFileKind(?\Illuminate\Http\UploadedFile $file): ?string
+    {
+        if (! $file) {
+            return null;
+        }
+
+        $mime = strtolower((string) ($file->getMimeType() ?? ''));
+
+        if (str_starts_with($mime, 'image/')) {
+            return 'IMAGE';
+        }
+
+        if (str_starts_with($mime, 'video/')) {
+            return 'VIDEO';
+        }
+
+        return null;
+    }
+
+    protected function detectPostUrlKind(?string $url): ?string
+    {
+        $url = trim((string) $url);
+
+        if ($url === '') {
+            return null;
+        }
+
+        $path = (string) parse_url($url, PHP_URL_PATH);
+        $extension = strtolower((string) pathinfo($path, PATHINFO_EXTENSION));
+
+        if (in_array($extension, ['jpg', 'jpeg'], true)) {
+            return 'IMAGE';
+        }
+
+        if (in_array($extension, ['mp4', 'mov'], true)) {
+            return 'VIDEO';
+        }
+
+        return null;
+    }
+
+    protected function validatePostUploadForInstagram(?\Illuminate\Http\UploadedFile $file, string $mediaType): ?string
+    {
+        if (! $file) {
+            return null;
+        }
+
+        $size = (int) $file->getSize();
+
+        if ($mediaType === 'IMAGE') {
+            if ($size > 20 * 1024 * 1024) {
+                return 'Instagram feed image source uploads must be 20 MB or smaller before conversion.';
+            }
+
+            return null;
+        }
+
+        if ($size > 120 * 1024 * 1024) {
+            return 'Instagram feed video source uploads must be 120 MB or smaller. Use a public MP4/MOV URL for larger Reels.';
+        }
+
+        $duration = $this->probeVideoDurationSeconds($file->getRealPath());
+
+        if ($duration !== null && ($duration < 3 || $duration > 900)) {
+            return 'Instagram feed video posts must be between 3 seconds and 15 minutes.';
+        }
+
+        return null;
+    }
+
+    protected function validateInstagramCaptionRules(string $caption): ?string
+    {
+        if (mb_strlen($caption) > 2200) {
+            return 'Instagram captions must be 2,200 characters or shorter.';
+        }
+
+        preg_match_all('/#[\pL\pN_]+/u', $caption, $hashtags);
+        if (count($hashtags[0] ?? []) > 30) {
+            return 'Instagram captions can include up to 30 hashtags.';
+        }
+
+        preg_match_all('/(?<![\pL\pN_.])@[\pL\pN._]+/u', $caption, $mentions);
+        if (count($mentions[0] ?? []) > 20) {
+            return 'Instagram captions can include up to 20 @mentions.';
+        }
+
+        return null;
+    }
+
+    protected function preparePostUploadForInstagram(
+        \Illuminate\Http\UploadedFile $file,
+        string $mediaType,
+        string $aspect,
+        string $fit,
+        float $zoom,
+        float $offsetX,
+        float $offsetY
+    ): array {
+        return $mediaType === 'VIDEO'
+            ? $this->preparePostVideoUploadForInstagram($file, $fit)
+            : $this->preparePostImageUploadForInstagram($file, $aspect, $fit, $zoom, $offsetX, $offsetY);
+    }
+
+    protected function preparePostImageUploadForInstagram(
+        \Illuminate\Http\UploadedFile $file,
+        string $aspect,
+        string $fit,
+        float $zoom,
+        float $offsetX,
+        float $offsetY
+    ): array {
+        $source = @imagecreatefromstring((string) file_get_contents($file->getRealPath()));
+
+        if (! $source) {
+            throw new \RuntimeException('Unsupported image file. Please upload a standard image file.');
+        }
+
+        [$targetWidth, $targetHeight] = match ($aspect) {
+            'portrait' => [1080, 1350],
+            'landscape' => [1080, 566],
+            default => [1080, 1080],
+        };
+
+        $sourceWidth = imagesx($source);
+        $sourceHeight = imagesy($source);
+        $canvas = imagecreatetruecolor($targetWidth, $targetHeight);
+        $background = imagecolorallocate($canvas, 255, 255, 255);
+        imagefill($canvas, 0, 0, $background);
+
+        $baseScale = $fit === 'contain'
+            ? min($targetWidth / $sourceWidth, $targetHeight / $sourceHeight)
+            : max($targetWidth / $sourceWidth, $targetHeight / $sourceHeight);
+        $scale = max(0.5, min($zoom, 2.5)) * $baseScale;
+        $drawWidth = (int) round($sourceWidth * $scale);
+        $drawHeight = (int) round($sourceHeight * $scale);
+        $drawX = (int) round(($targetWidth - $drawWidth) / 2 + (($offsetX / 100) * ($targetWidth / 2)));
+        $drawY = (int) round(($targetHeight - $drawHeight) / 2 + (($offsetY / 100) * ($targetHeight / 2)));
+
+        imagecopyresampled($canvas, $source, $drawX, $drawY, 0, 0, $drawWidth, $drawHeight, $sourceWidth, $sourceHeight);
+
+        $storedPath = 'social/posts/' . Str::uuid() . '.jpg';
+        $absolutePath = Storage::disk('public')->path($storedPath);
+
+        if (! is_dir(dirname($absolutePath))) {
+            mkdir(dirname($absolutePath), 0775, true);
+        }
+
+        foreach ([90, 85, 80, 75, 70] as $quality) {
+            imagejpeg($canvas, $absolutePath, $quality);
+
+            if (is_file($absolutePath) && filesize($absolutePath) <= 8 * 1024 * 1024) {
+                break;
+            }
+        }
+
+        imagedestroy($source);
+        imagedestroy($canvas);
+
+        if (! is_file($absolutePath) || filesize($absolutePath) > 8 * 1024 * 1024) {
+            throw new \RuntimeException('Converted image is still larger than Instagram’s 8 MB feed image limit.');
+        }
+
+        return [
+            'stored_path' => $storedPath,
+            'media_url' => url(Storage::url($storedPath)),
+            'media_type' => 'IMAGE',
+            'mime_type' => 'image/jpeg',
+            'normalized' => true,
+        ];
+    }
+
+    protected function preparePostVideoUploadForInstagram(\Illuminate\Http\UploadedFile $file, string $fit): array
+    {
+        $storedPath = 'social/posts/' . Str::uuid() . '.mp4';
+        $absolutePath = Storage::disk('public')->path($storedPath);
+
+        if (! is_dir(dirname($absolutePath))) {
+            mkdir(dirname($absolutePath), 0775, true);
+        }
+
+        $filter = $fit === 'contain'
+            ? 'scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black,setsar=1,format=yuv420p'
+            : 'scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,format=yuv420p';
+
+        $process = new Process([
+            'ffmpeg',
+            '-y',
+            '-i',
+            $file->getRealPath(),
+            '-map',
+            '0:v:0',
+            '-map',
+            '0:a?',
+            '-t',
+            '900',
+            '-vf',
+            $filter,
+            '-r',
+            '30',
+            '-c:v',
+            'libx264',
+            '-profile:v',
+            'main',
+            '-level',
+            '4.1',
+            '-preset',
+            'veryfast',
+            '-crf',
+            '23',
+            '-pix_fmt',
+            'yuv420p',
+            '-c:a',
+            'aac',
+            '-ar',
+            '48000',
+            '-ac',
+            '2',
+            '-b:a',
+            '128k',
+            '-shortest',
+            '-movflags',
+            '+faststart',
+            $absolutePath,
+        ]);
+        $process->setTimeout(900);
+        $process->run();
+
+        if (! $process->isSuccessful()) {
+            throw new \RuntimeException('Video conversion failed. Please try an MP4 or MOV file.');
+        }
+
+        return [
+            'stored_path' => $storedPath,
+            'media_url' => url(Storage::url($storedPath)),
+            'media_type' => 'VIDEO',
+            'mime_type' => 'video/mp4',
+            'normalized' => true,
+        ];
+    }
+
+    protected function probeVideoDurationSeconds(?string $path): ?float
+    {
+        if (! $path || ! is_file($path)) {
+            return null;
+        }
+
+        $process = new Process([
+            'ffprobe',
+            '-v',
+            'error',
+            '-show_entries',
+            'format=duration',
+            '-of',
+            'default=noprint_wrappers=1:nokey=1',
+            $path,
+        ]);
+        $process->setTimeout(30);
+        $process->run();
+
+        if (! $process->isSuccessful()) {
+            return null;
+        }
+
+        $duration = (float) trim($process->getOutput());
+
+        return $duration > 0 ? $duration : null;
+    }
+
+    protected function prepareStoryUploadForInstagram(
+        \Illuminate\Http\UploadedFile $file,
+        string $mediaType,
+        string $fit,
+        float $zoom,
+        float $offsetX,
+        float $offsetY
+    ): array {
+        return $mediaType === 'VIDEO'
+            ? $this->prepareStoryVideoUploadForInstagram($file, $fit)
+            : $this->prepareStoryImageUploadForInstagram($file, $fit, $zoom, $offsetX, $offsetY);
+    }
+
+    protected function prepareStoryImageUploadForInstagram(
+        \Illuminate\Http\UploadedFile $file,
+        string $fit,
+        float $zoom,
+        float $offsetX,
+        float $offsetY
+    ): array {
+        $source = @imagecreatefromstring((string) file_get_contents($file->getRealPath()));
+
+        if (! $source) {
+            throw new \RuntimeException('Unsupported image file. Please upload a standard image file.');
+        }
+
+        $sourceWidth = imagesx($source);
+        $sourceHeight = imagesy($source);
+        $targetWidth = 1080;
+        $targetHeight = 1920;
+        $canvas = imagecreatetruecolor($targetWidth, $targetHeight);
+        $background = imagecolorallocate($canvas, 0, 0, 0);
+        imagefill($canvas, 0, 0, $background);
+
+        $baseScale = $fit === 'contain'
+            ? min($targetWidth / $sourceWidth, $targetHeight / $sourceHeight)
+            : max($targetWidth / $sourceWidth, $targetHeight / $sourceHeight);
+        $scale = max(0.5, min($zoom, 2.5)) * $baseScale;
+        $drawWidth = (int) round($sourceWidth * $scale);
+        $drawHeight = (int) round($sourceHeight * $scale);
+        $drawX = (int) round(($targetWidth - $drawWidth) / 2 + (($offsetX / 100) * ($targetWidth / 2)));
+        $drawY = (int) round(($targetHeight - $drawHeight) / 2 + (($offsetY / 100) * ($targetHeight / 2)));
+
+        imagecopyresampled($canvas, $source, $drawX, $drawY, 0, 0, $drawWidth, $drawHeight, $sourceWidth, $sourceHeight);
+
+        $storedPath = 'social/stories/' . Str::uuid() . '.jpg';
+        $absolutePath = Storage::disk('public')->path($storedPath);
+
+        if (! is_dir(dirname($absolutePath))) {
+            mkdir(dirname($absolutePath), 0775, true);
+        }
+
+        imagejpeg($canvas, $absolutePath, 90);
+        imagedestroy($source);
+        imagedestroy($canvas);
+
+        return [
+            'stored_path' => $storedPath,
+            'media_url' => url(Storage::url($storedPath)),
+            'media_type' => 'IMAGE',
+            'mime_type' => 'image/jpeg',
+            'normalized' => true,
+        ];
+    }
+
+    protected function prepareStoryVideoUploadForInstagram(\Illuminate\Http\UploadedFile $file, string $fit): array
+    {
+        $storedPath = 'social/stories/' . Str::uuid() . '.mp4';
+        $absolutePath = Storage::disk('public')->path($storedPath);
+
+        if (! is_dir(dirname($absolutePath))) {
+            mkdir(dirname($absolutePath), 0775, true);
+        }
+
+        $filter = $fit === 'contain'
+            ? 'scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black,setsar=1,format=yuv420p'
+            : 'scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,format=yuv420p';
+
+        $process = new Process([
+            'ffmpeg',
+            '-y',
+            '-i',
+            $file->getRealPath(),
+            '-map',
+            '0:v:0',
+            '-map',
+            '0:a?',
+            '-t',
+            '60',
+            '-vf',
+            $filter,
+            '-r',
+            '30',
+            '-c:v',
+            'libx264',
+            '-profile:v',
+            'main',
+            '-level',
+            '4.1',
+            '-preset',
+            'veryfast',
+            '-crf',
+            '23',
+            '-pix_fmt',
+            'yuv420p',
+            '-c:a',
+            'aac',
+            '-ar',
+            '44100',
+            '-ac',
+            '2',
+            '-shortest',
+            '-movflags',
+            '+faststart',
+            $absolutePath,
+        ]);
+        $process->setTimeout(300);
+        $process->run();
+
+        if (! $process->isSuccessful()) {
+            throw new \RuntimeException('Video conversion failed. Please try an MP4 or MOV file.');
+        }
+
+        return [
+            'stored_path' => $storedPath,
+            'media_url' => url(Storage::url($storedPath)),
+            'media_type' => 'VIDEO',
+            'mime_type' => 'video/mp4',
+            'normalized' => true,
+        ];
+    }
+
+    protected function storyResponsePayload(SocialStory $story): array
+    {
+        $raw = is_array($story->raw) ? $story->raw : [];
+
+        return [
+            'id' => $story->id,
+            'provider_story_id' => $story->provider_story_id,
+            'media_url' => $story->media_url,
+            'thumbnail_url' => $story->thumbnail_url,
+            'media_type' => $raw['media_type'] ?? $raw['remote_story']['media_type'] ?? null,
+            'status' => $story->status,
+            'posted_at' => optional($story->posted_at)->toIso8601String(),
+            'expires_at' => optional($story->expires_at)->toIso8601String(),
+            'permalink' => $raw['permalink'] ?? $raw['remote_story']['permalink'] ?? null,
+        ];
+    }
+
+    public function publishInstagramPost(Request $request): RedirectResponse|JsonResponse
+    {
+        $connection = $this->resolveWorkspaceInstagramConnection($request);
+        $workspace = $request->user()?->currentWorkspace();
+
+        abort_unless($workspace, 404);
+
+        $validated = $request->validate([
+            'post_media_type' => ['required', 'in:IMAGE,VIDEO'],
+            'post_file' => ['nullable', 'file', 'mimetypes:image/jpeg,image/png,image/webp,image/gif,image/bmp,video/mp4,video/quicktime,video/webm,video/x-msvideo,video/x-matroska', 'max:122880'],
+            'post_media_url' => ['nullable', 'url', 'max:2048'],
+            'post_caption' => ['nullable', 'string', 'max:2200'],
+            'post_alt_text' => ['nullable', 'string', 'max:1000'],
+            'post_aspect' => ['nullable', 'string', 'in:square,portrait,landscape'],
+            'post_fit' => ['nullable', 'string', 'in:cover,contain'],
+            'post_zoom' => ['nullable', 'numeric', 'min:0.5', 'max:2.5'],
+            'post_offset_x' => ['nullable', 'numeric', 'min:-100', 'max:100'],
+            'post_offset_y' => ['nullable', 'numeric', 'min:-100', 'max:100'],
+            'post_product_tags' => ['nullable', 'array', 'max:5'],
+            'post_product_tags.*.product_id' => ['required', 'integer'],
+            'post_product_tags.*.x' => ['nullable', 'numeric', 'min:0', 'max:1'],
+            'post_product_tags.*.y' => ['nullable', 'numeric', 'min:0', 'max:1'],
+            'post_confirmed' => ['accepted'],
+        ]);
+
+        $requestedMediaType = (string) $validated['post_media_type'];
+        $uploadedFile = $request->file('post_file');
+        $uploadedFileKind = $this->detectPostFileKind($uploadedFile);
+        $mediaUrlKind = $this->detectPostUrlKind($validated['post_media_url'] ?? null);
+        $uploadValidationError = $this->validatePostUploadForInstagram($uploadedFile, $requestedMediaType);
+        $caption = trim((string) ($validated['post_caption'] ?? ''));
+        $altText = trim((string) ($validated['post_alt_text'] ?? ''));
+        $captionValidationError = $this->validateInstagramCaptionRules($caption);
+        $postAspect = (string) ($validated['post_aspect'] ?? 'square');
+        $postFit = (string) ($validated['post_fit'] ?? 'cover');
+        $postZoom = (float) ($validated['post_zoom'] ?? 1);
+        $postOffsetX = (float) ($validated['post_offset_x'] ?? 0);
+        $postOffsetY = (float) ($validated['post_offset_y'] ?? 0);
+        $selectedProductTags = array_values($validated['post_product_tags'] ?? []);
+
+        if (! $uploadedFile && empty($validated['post_media_url'])) {
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => 'Post file or media URL is required.'], 422);
+            }
+
+            return redirect()->route('social.instagram.posts', ['instagram_account' => $connection->id])
+                ->with('social_error', 'Post file or media URL is required.')
+                ->withInput();
+        }
+
+        foreach ([
+            $uploadValidationError,
+            $captionValidationError,
+        ] as $validationError) {
+            if ($validationError === null) {
+                continue;
+            }
+
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => $validationError], 422);
+            }
+
+            return redirect()->route('social.instagram.posts', ['instagram_account' => $connection->id])
+                ->with('social_error', $validationError)
+                ->withInput();
+        }
+
+        if ($uploadedFile && $uploadedFileKind !== null && $uploadedFileKind !== $requestedMediaType) {
+            $message = 'Selected post file type does not match the selected media type.';
+
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => $message], 422);
+            }
+
+            return redirect()->route('social.instagram.posts', ['instagram_account' => $connection->id])
+                ->with('social_error', $message)
+                ->withInput();
+        }
+
+        if (! $uploadedFile && ! empty($validated['post_media_url']) && $mediaUrlKind !== null && $mediaUrlKind !== $requestedMediaType) {
+            $message = 'Media URL type does not match the selected post media type.';
+
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => $message], 422);
+            }
+
+            return redirect()->route('social.instagram.posts', ['instagram_account' => $connection->id])
+                ->with('social_error', $message)
+                ->withInput();
+        }
+
+        $resolvedMediaUrl = null;
+        $storedPath = null;
+
+        if ($request->hasFile('post_file')) {
+            $preparedUpload = $this->preparePostUploadForInstagram(
+                $request->file('post_file'),
+                $requestedMediaType,
+                $postAspect,
+                $postFit,
+                $postZoom,
+                $postOffsetX,
+                $postOffsetY
+            );
+            $storedPath = $preparedUpload['stored_path'];
+            $resolvedMediaUrl = $preparedUpload['media_url'];
+        } elseif (! empty($validated['post_media_url'])) {
+            $resolvedMediaUrl = $validated['post_media_url'];
+        }
+
+        if (! $resolvedMediaUrl) {
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => 'Post file or media URL is required.'], 422);
+            }
+
+            return redirect()->route('social.instagram.posts', ['instagram_account' => $connection->id])
+                ->with('social_error', 'Post file or media URL is required.')
+                ->withInput();
+        }
+
+        if (! $uploadedFile && ! empty($validated['post_media_url']) && $mediaUrlKind === null) {
+            $message = $requestedMediaType === 'IMAGE'
+                ? 'Feed image URLs must end with .jpg or .jpeg for Instagram publishing.'
+                : 'Feed video URLs must end with .mp4 or .mov for Instagram publishing.';
+
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => $message], 422);
+            }
+
+            return redirect()->route('social.instagram.posts', ['instagram_account' => $connection->id])
+                ->with('social_error', $message)
+                ->withInput();
+        }
+
+        $productTags = $this->resolvePostProductTags(
+            (int) $workspace->id,
+            (int) $connection->id,
+            $selectedProductTags,
+            $requestedMediaType
+        );
+
+        if ($selectedProductTags !== [] && $productTags === []) {
+            $message = 'Selected products are not ready for Meta product tagging yet.';
+
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => $message], 422);
+            }
+
+            return redirect()->route('social.instagram.posts', ['instagram_account' => $connection->id])
+                ->with('social_error', $message)
+                ->withInput();
+        }
+
+        try {
+            Log::info('Instagram post publish started.', [
+                'workspace_id' => $workspace->id,
+                'provider_connection_id' => $connection->id,
+                'media_type' => $requestedMediaType,
+                'has_uploaded_file' => $uploadedFile !== null,
+                'uploaded_file_size' => $uploadedFile?->getSize(),
+                'uploaded_file_mime' => $uploadedFile?->getMimeType(),
+                'stored_path' => $storedPath,
+                'product_tag_count' => count($productTags),
+            ]);
+
+            $result = app(InstagramService::class)->publishPost($connection, [
+                'media_type' => $requestedMediaType,
+                'media_url' => $resolvedMediaUrl,
+                'caption' => $caption,
+                'alt_text' => $requestedMediaType === 'IMAGE' ? $altText : '',
+                'product_tags' => $productTags,
+            ]);
+
+            Log::info('Instagram post publish finished.', [
+                'workspace_id' => $workspace->id,
+                'provider_connection_id' => $connection->id,
+                'media_type' => $requestedMediaType,
+                'creation_id' => $result['creation_id'] ?? null,
+                'provider_media_id' => $result['id'] ?? null,
+                'container_status' => $result['container_status'] ?? null,
+                'container_status_attempts' => $result['container_status_attempts'] ?? null,
+                'product_tag_count' => count($result['product_tags'] ?? []),
+            ]);
+
+            $this->broadcastSocialUpdate($request, 'instagram_post_published', [
+                'provider_media_id' => $result['id'] ?? null,
+                'provider_connection_id' => $connection->id,
+            ]);
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'ok' => true,
+                    'message' => 'Post published successfully.',
+                    'post' => $result['post'] ?? null,
+                    'publish_steps' => [
+                        'container_id' => $result['creation_id'] ?? null,
+                        'container_status' => $result['container_status'] ?? null,
+                        'provider_media_id' => $result['id'] ?? null,
+                        'product_tags' => $result['product_tags'] ?? [],
+                    ],
+                ]);
+            }
+
+            return redirect()->route('social.instagram.posts', ['instagram_account' => $connection->id])
+                ->with('social_success', 'Post published successfully.');
+        } catch (\Throwable $exception) {
+            Log::warning('Instagram post publish failed.', [
+                'workspace_id' => $workspace->id,
+                'provider_connection_id' => $connection->id,
+                'media_type' => $requestedMediaType,
+                'has_uploaded_file' => $uploadedFile !== null,
+                'uploaded_file_size' => $uploadedFile?->getSize(),
+                'uploaded_file_mime' => $uploadedFile?->getMimeType(),
+                'stored_path' => $storedPath,
+                'product_tag_count' => count($productTags),
+                'error' => $exception->getMessage(),
+            ]);
+
+            $message = 'Publish post failed: ' . $exception->getMessage();
+
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => $message], 422);
+            }
+
+            return redirect()->route('social.instagram.posts', ['instagram_account' => $connection->id])
+                ->with('social_error', $message)
+                ->withInput();
+        }
+    }
+
+    protected function resolvePostProductTags(int $workspaceId, int $connectionId, array $selectedTags, string $mediaType): array
+    {
+        if ($selectedTags === []) {
+            return [];
+        }
+
+        $selectedTags = array_slice(array_values(array_filter($selectedTags, 'is_array')), 0, 5);
+        $productIds = array_values(array_filter(array_map(
+            fn (array $tag) => (int) ($tag['product_id'] ?? 0),
+            $selectedTags
+        )));
+
+        if ($productIds === []) {
+            return [];
+        }
+
+        $products = CatalogProduct::query()
+            ->whereIn('id', $productIds)
+            ->where('is_active', true)
+            ->whereIn('meta_sync_status', ['queued', 'synced'])
+            ->whereHas('catalog', function ($query) use ($workspaceId, $connectionId) {
+                $query->where('workspace_id', $workspaceId)
+                    ->where('status', 'active')
+                    ->where(function ($catalogQuery) use ($connectionId) {
+                        $catalogQuery->whereNull('provider_connection_id')
+                            ->orWhere('provider_connection_id', $connectionId);
+                    });
+            })
+            ->get()
+            ->keyBy('id');
+
+        $tags = [];
+        $seenProductIds = [];
+
+        foreach ($selectedTags as $selectedTag) {
+            $productId = (int) ($selectedTag['product_id'] ?? 0);
+            $product = $products->get($productId);
+
+            if (! $product) {
+                continue;
+            }
+
+            $metaProductId = trim((string) ($product->external_product_id ?: $product->sku));
+
+            if ($metaProductId === '' || isset($seenProductIds[$metaProductId])) {
+                continue;
+            }
+
+            $tag = [
+                'product_id' => $metaProductId,
+            ];
+
+            if (strtoupper($mediaType) === 'IMAGE') {
+                $tag['x'] = $this->normalizePostProductTagCoordinate($selectedTag['x'] ?? 0.5);
+                $tag['y'] = $this->normalizePostProductTagCoordinate($selectedTag['y'] ?? 0.5);
+            }
+
+            $tags[] = $tag;
+            $seenProductIds[$metaProductId] = true;
+        }
+
+        return $tags;
+    }
+
+    protected function normalizePostProductTagCoordinate(mixed $value): float
+    {
+        $coordinate = is_numeric($value) ? (float) $value : 0.5;
+
+        return max(0.0, min(1.0, $coordinate));
+    }
+
+    public function publishInstagramStory(Request $request): RedirectResponse|JsonResponse
     {
         $connection = $this->resolveWorkspaceInstagramConnection($request);
         $workspace = $request->user()?->currentWorkspace();
@@ -496,30 +1628,61 @@ class SocialController extends Controller
 
         $validated = $request->validate([
             'media_type' => ['required', 'in:IMAGE,VIDEO'],
-            'story_file' => ['nullable', 'file', 'mimetypes:image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/webm', 'max:51200'],
+            'story_file' => ['nullable', 'file', 'mimetypes:image/jpeg,image/png,image/webp,image/gif,image/bmp,video/mp4,video/quicktime,video/webm,video/x-msvideo,video/x-matroska', 'max:102400'],
             'media_url' => ['nullable', 'url', 'max:2048'],
-            'caption' => ['nullable', 'string', 'max:2200'],
+            'story_fit' => ['nullable', 'string', 'in:cover,contain'],
+            'story_zoom' => ['nullable', 'numeric', 'min:0.5', 'max:2.5'],
+            'story_offset_x' => ['nullable', 'numeric', 'min:-100', 'max:100'],
+            'story_offset_y' => ['nullable', 'numeric', 'min:-100', 'max:100'],
+            'story_confirmed' => ['accepted'],
         ]);
 
         $requestedMediaType = (string) $validated['media_type'];
         $uploadedFile = $request->file('story_file');
         $uploadedFileKind = $this->detectStoryFileKind($uploadedFile);
         $mediaUrlKind = $this->detectStoryUrlKind($validated['media_url'] ?? null);
+        $uploadValidationError = $this->validateStoryUploadForInstagram($uploadedFile, $requestedMediaType);
+        $storyFit = (string) ($validated['story_fit'] ?? 'cover');
+        $storyZoom = (float) ($validated['story_zoom'] ?? 1);
+        $storyOffsetX = (float) ($validated['story_offset_x'] ?? 0);
+        $storyOffsetY = (float) ($validated['story_offset_y'] ?? 0);
 
         if (! $uploadedFile && empty($validated['media_url'])) {
-            return redirect()->route('social.instagram.stories')
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => 'Story file or media URL is required.'], 422);
+            }
+
+            return $this->redirectToInstagramStories($request)
                 ->with('social_error', 'Story file or media URL is required.')
                 ->withInput();
         }
 
+        if ($uploadValidationError !== null) {
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => $uploadValidationError], 422);
+            }
+
+            return $this->redirectToInstagramStories($request)
+                ->with('social_error', $uploadValidationError)
+                ->withInput();
+        }
+
         if ($uploadedFile && $uploadedFileKind !== null && $uploadedFileKind !== $requestedMediaType) {
-            return redirect()->route('social.instagram.stories')
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => 'Selected story file type does not match the selected media type.'], 422);
+            }
+
+            return $this->redirectToInstagramStories($request)
                 ->with('social_error', 'Selected story file type does not match the selected media type.')
                 ->withInput();
         }
 
         if (! $uploadedFile && !empty($validated['media_url']) && $mediaUrlKind !== null && $mediaUrlKind !== $requestedMediaType) {
-            return redirect()->route('social.instagram.stories')
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => 'Media URL type does not match the selected media type.'], 422);
+            }
+
+            return $this->redirectToInstagramStories($request)
                 ->with('social_error', 'Media URL type does not match the selected media type.')
                 ->withInput();
         }
@@ -528,29 +1691,66 @@ class SocialController extends Controller
         $storedPath = null;
 
         if ($request->hasFile('story_file')) {
-            $storedPath = $request->file('story_file')->store('social/stories', 'public');
-            $resolvedMediaUrl = Storage::disk('public')->url($storedPath);
+            $preparedUpload = $this->prepareStoryUploadForInstagram(
+                $request->file('story_file'),
+                $requestedMediaType,
+                $storyFit,
+                $storyZoom,
+                $storyOffsetX,
+                $storyOffsetY
+            );
+            $storedPath = $preparedUpload['stored_path'];
+            $resolvedMediaUrl = $preparedUpload['media_url'];
         } elseif (!empty($validated['media_url'])) {
             $resolvedMediaUrl = $validated['media_url'];
         }
 
         if (! $resolvedMediaUrl) {
-            return redirect()->route('social.instagram.stories')
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => 'Story file or media URL is required.'], 422);
+            }
+
+            return $this->redirectToInstagramStories($request)
                 ->with('social_error', 'Story file or media URL is required.')
                 ->withInput();
         }
 
         if (! $uploadedFile && !empty($validated['media_url']) && $mediaUrlKind === null) {
-            return redirect()->route('social.instagram.stories')
-                ->with('social_error', 'Media URL must end with a supported image or video extension.')
+            $message = 'Media URL must end with .jpg, .jpeg, .mp4, or .mov.';
+
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => $message], 422);
+            }
+
+            return $this->redirectToInstagramStories($request)
+                ->with('social_error', $message)
                 ->withInput();
         }
 
         try {
+            Log::info('Instagram story publish started.', [
+                'workspace_id' => $workspace->id,
+                'provider_connection_id' => $connection->id,
+                'media_type' => $requestedMediaType,
+                'has_uploaded_file' => $uploadedFile !== null,
+                'uploaded_file_size' => $uploadedFile?->getSize(),
+                'uploaded_file_mime' => $uploadedFile?->getMimeType(),
+                'stored_path' => $storedPath,
+            ]);
+
             $result = app(InstagramService::class)->publishStory($connection, [
                 'media_type' => $validated['media_type'],
                 'media_url' => $resolvedMediaUrl,
-                'caption' => $validated['caption'] ?? null,
+            ]);
+
+            Log::info('Instagram story publish finished.', [
+                'workspace_id' => $workspace->id,
+                'provider_connection_id' => $connection->id,
+                'media_type' => $requestedMediaType,
+                'creation_id' => $result['creation_id'] ?? null,
+                'provider_story_id' => $result['id'] ?? null,
+                'container_status' => $result['container_status'] ?? null,
+                'container_status_attempts' => $result['container_status_attempts'] ?? null,
             ]);
 
             $providerStoryId = (string) ($result['id'] ?? '');
@@ -575,19 +1775,63 @@ class SocialController extends Controller
             $story->raw = array_merge($result, [
                 'uploaded_file_path' => $storedPath,
                 'resolved_media_url' => $resolvedMediaUrl,
+                'media_type' => $requestedMediaType,
+                'published_from' => 'leadochat_social_stories',
+                'preview_settings' => [
+                    'fit' => $storyFit,
+                    'zoom' => $storyZoom,
+                    'offset_x' => $storyOffsetX,
+                    'offset_y' => $storyOffsetY,
+                ],
             ]);
             $story->save();
 
-            return redirect()->route('social.instagram.stories')
+            $this->broadcastSocialUpdate($request, 'instagram_story_published', [
+                'story_id' => $story->id,
+                'provider_story_id' => $story->provider_story_id,
+                'provider_connection_id' => $connection->id,
+            ]);
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'ok' => true,
+                    'message' => 'Story published successfully.',
+                    'story' => $this->storyResponsePayload($story),
+                    'publish_steps' => [
+                        'container_id' => $result['creation_id'] ?? null,
+                        'container_status' => $result['container_status'] ?? null,
+                        'provider_story_id' => $story->provider_story_id,
+                    ],
+                ]);
+            }
+
+            return $this->redirectToInstagramStories($request)
                 ->with('social_success', 'Story published successfully.');
         } catch (\Throwable $exception) {
-            return redirect()->route('social.instagram.stories')
-                ->with('social_error', 'Publish story failed: ' . $exception->getMessage())
+            Log::warning('Instagram story publish failed.', [
+                'workspace_id' => $workspace->id,
+                'provider_connection_id' => $connection->id,
+                'media_type' => $requestedMediaType,
+                'has_uploaded_file' => $uploadedFile !== null,
+                'uploaded_file_size' => $uploadedFile?->getSize(),
+                'uploaded_file_mime' => $uploadedFile?->getMimeType(),
+                'stored_path' => $storedPath,
+                'error' => $exception->getMessage(),
+            ]);
+
+            $message = 'Publish story failed: ' . $exception->getMessage();
+
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => $message], 422);
+            }
+
+            return $this->redirectToInstagramStories($request)
+                ->with('social_error', $message)
                 ->withInput();
         }
     }
 
-    public function deleteInstagramStory(Request $request, SocialStory $story): RedirectResponse
+    public function deleteInstagramStory(Request $request, SocialStory $story): RedirectResponse|JsonResponse
     {
         $workspace = $request->user()?->currentWorkspace();
 
@@ -598,19 +1842,68 @@ class SocialController extends Controller
         );
 
         try {
-            $story->status = 'deleted';
+            $story->status = 'removed';
+            $story->raw = array_merge(is_array($story->raw) ? $story->raw : [], [
+                'removed_from_leadochat_list_at' => now()->toIso8601String(),
+                'removed_from_leadochat_list_by' => $request->user()?->id,
+            ]);
             $story->save();
 
-            return $this->redirectToInstagramStories()->with('social_success', 'Story record deleted successfully.');
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'ok' => true,
+                    'message' => 'Story removed from the Leadochat list.',
+                    'story_id' => $story->id,
+                ]);
+            }
+
+            return $this->redirectToInstagramStories($request)->with('social_success', 'Story record deleted successfully.');
         } catch (\Throwable $exception) {
-            return $this->redirectToInstagramStories()->with('social_error', 'Delete story failed: ' . $exception->getMessage());
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => 'Remove story failed: ' . $exception->getMessage(),
+                ], 422);
+            }
+
+            return $this->redirectToInstagramStories($request)->with('social_error', 'Delete story failed: ' . $exception->getMessage());
+        }
+    }
+
+    public function deleteInstagramPost(Request $request, SocialPost $post): View|RedirectResponse
+    {
+        $post = $this->resolveWorkspacePost($request, $post);
+        $connection = $this->resolveInstagramConnectionForPost($request, $post);
+
+        try {
+            $deleteResult = app(InstagramService::class)->deleteMedia($connection, $post->provider_media_id);
+
+            $post->status = 'deleted';
+            $post->raw = array_merge(
+                is_array($post->raw) ? $post->raw : [],
+                [
+                    'deleted_from_social_at' => now()->toIso8601String(),
+                    'delete_result' => $deleteResult,
+                ]
+            );
+            $post->save();
+
+            $this->broadcastSocialUpdate($request, 'instagram_post_deleted', [
+                'social_post_id' => $post->id,
+                'provider_media_id' => $post->provider_media_id,
+                'provider_connection_id' => $post->provider_connection_id,
+            ]);
+
+            return $this->respondWithInstagramPosts($request, 'Post deleted successfully.');
+        } catch (\Throwable $exception) {
+            return $this->respondWithInstagramPosts($request, null, 'Delete post failed: ' . $exception->getMessage());
         }
     }
 
     public function replyInstagramComment(Request $request, SocialComment $comment): View|RedirectResponse
     {
         $comment = $this->resolveWorkspaceComment($request, $comment);
-        $connection = $this->resolveWorkspaceInstagramConnection($request);
+        $connection = $this->resolveInstagramConnectionForComment($request, $comment);
         $replyText = trim((string) $request->input('reply_text', ''));
 
         if ($replyText === '') {
@@ -644,7 +1937,7 @@ class SocialController extends Controller
     public function replyInstagramCommentViaDm(Request $request, SocialComment $comment): View|RedirectResponse
     {
         $comment = $this->resolveWorkspaceComment($request, $comment);
-        $connection = $this->resolveWorkspaceInstagramConnection($request);
+        $connection = $this->resolveInstagramConnectionForComment($request, $comment);
         $replyText = trim((string) $request->input('reply_text', ''));
 
         if ($replyText === '') {
@@ -654,6 +1947,7 @@ class SocialController extends Controller
         try {
             $sendResult = app(InstagramService::class)->replyToCommentViaDm($connection, $comment, $replyText, [
                 'messaging_type' => 'RESPONSE',
+                'agent_meta' => $this->buildCommentReplyActorMeta($request),
             ]);
 
             $comment->replied_via_dm_at = now();
@@ -685,7 +1979,7 @@ class SocialController extends Controller
     public function hideInstagramComment(Request $request, SocialComment $comment): View|RedirectResponse
     {
         $comment = $this->resolveWorkspaceComment($request, $comment);
-        $connection = $this->resolveWorkspaceInstagramConnection($request);
+        $connection = $this->resolveInstagramConnectionForComment($request, $comment);
 
         try {
             app(InstagramService::class)->hideComment($connection, $comment->provider_comment_id);
@@ -706,7 +2000,7 @@ class SocialController extends Controller
     public function unhideInstagramComment(Request $request, SocialComment $comment): View|RedirectResponse
     {
         $comment = $this->resolveWorkspaceComment($request, $comment);
-        $connection = $this->resolveWorkspaceInstagramConnection($request);
+        $connection = $this->resolveInstagramConnectionForComment($request, $comment);
 
         try {
             app(InstagramService::class)->unhideComment($connection, $comment->provider_comment_id);
@@ -727,7 +2021,7 @@ class SocialController extends Controller
     public function deleteInstagramComment(Request $request, SocialComment $comment): View|RedirectResponse
     {
         $comment = $this->resolveWorkspaceComment($request, $comment);
-        $connection = $this->resolveWorkspaceInstagramConnection($request);
+        $connection = $this->resolveInstagramConnectionForComment($request, $comment);
 
         try {
             app(InstagramService::class)->deleteComment($connection, $comment->provider_comment_id);

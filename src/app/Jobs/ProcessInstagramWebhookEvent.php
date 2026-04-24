@@ -6,6 +6,7 @@ use App\Events\WorkspaceRealtimeUpdated;
 use App\Models\ProviderConnection;
 use App\Models\SocialComment;
 use App\Models\SocialPost;
+use App\Models\SocialStory;
 use App\Models\WebhookEvent;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -15,6 +16,7 @@ use App\Models\Conversation;
 use App\Models\ConversationParticipant;
 use App\Models\Message;
 use App\Models\MessageAttachment;
+use App\Services\Meta\Instagram\InstagramService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -34,6 +36,18 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
         $value = Arr::get($change, 'value', []);
 
         if (in_array($field, ['messages', 'standby'], true)) {
+            if ($this->hasMessageReactionPayload($value)) {
+                return 'message_reaction';
+            }
+
+            if (filled(Arr::get($value, 'read.mid')) || filled(Arr::get($value, 'messaging.0.read.mid'))) {
+                return 'message_read';
+            }
+
+            if (filled(Arr::get($value, 'message_edit.mid')) || filled(Arr::get($value, 'messaging.0.message_edit.mid'))) {
+                return 'message_edit';
+            }
+
             if (is_array(Arr::get($value, 'messages')) && !empty(Arr::get($value, 'messages'))) {
                 return 'message';
             }
@@ -62,6 +76,185 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
         return $field !== '' ? $field : 'unknown';
     }
 
+    protected function hasMessageReactionPayload(array $value): bool
+    {
+        return is_array(Arr::get($value, 'message.reaction'))
+            || is_array(Arr::get($value, 'messaging.0.message.reaction'))
+            || is_array(Arr::get($value, 'reaction'))
+            || is_array(Arr::get($value, 'messaging.0.reaction'));
+    }
+
+    protected function normalizeReadReceiptPayload(array $change, array $entry): array
+    {
+        $value = Arr::get($change, 'value', []);
+        $messagingItems = Arr::get($value, 'messaging', []);
+        $readNode = Arr::get($value, 'read', []);
+
+        if ((! is_array($readNode) || empty($readNode)) && is_array($messagingItems)) {
+            $readNode = Arr::get($messagingItems, '0.read', []);
+        }
+
+        $senderId = (string) (Arr::get($value, 'from.id')
+            ?? Arr::get($value, 'sender.id')
+            ?? Arr::get($messagingItems, '0.sender.id')
+            ?? '');
+
+        $recipientId = (string) (Arr::get($value, 'recipient.id')
+            ?? Arr::get($messagingItems, '0.recipient.id')
+            ?? Arr::get($entry, 'id')
+            ?? '');
+
+        $timestamp = Arr::get($readNode, 'watermark')
+            ?? Arr::get($messagingItems, '0.timestamp')
+            ?? Arr::get($value, 'timestamp')
+            ?? Arr::get($entry, 'time');
+
+        return [
+            'kind' => 'message_read',
+            'provider_message_id' => $this->normalizeNullableString(Arr::get($readNode, 'mid')),
+            'sender_id' => $senderId !== '' ? $senderId : null,
+            'recipient_id' => $recipientId !== '' ? $recipientId : null,
+            'text' => null,
+            'has_attachments' => false,
+            'attachments' => [],
+            'sent_at' => $timestamp,
+            'message_context_type' => 'read_receipt',
+            'is_story_reply' => false,
+            'story_id' => null,
+            'reply_to' => [],
+            'referral' => [],
+            'reaction' => [],
+            'story_context' => [],
+            'raw' => [
+                'entry' => $entry,
+                'change' => $change,
+                'value' => is_array($value) ? $value : [],
+                'read' => is_array($readNode) ? $readNode : [],
+            ],
+        ];
+    }
+
+    protected function normalizeMessageEditPayload(array $change, array $entry): array
+    {
+        $value = Arr::get($change, 'value', []);
+        $messagingItems = Arr::get($value, 'messaging', []);
+        $editNode = Arr::get($value, 'message_edit', []);
+
+        if ((! is_array($editNode) || empty($editNode)) && is_array($messagingItems)) {
+            $editNode = Arr::get($messagingItems, '0.message_edit', []);
+        }
+
+        $senderId = (string) (Arr::get($value, 'from.id')
+            ?? Arr::get($value, 'sender.id')
+            ?? Arr::get($messagingItems, '0.sender.id')
+            ?? '');
+
+        $recipientId = (string) (Arr::get($value, 'recipient.id')
+            ?? Arr::get($messagingItems, '0.recipient.id')
+            ?? Arr::get($entry, 'id')
+            ?? '');
+
+        $timestamp = Arr::get($messagingItems, '0.timestamp')
+            ?? Arr::get($value, 'timestamp')
+            ?? Arr::get($entry, 'time');
+
+        return [
+            'kind' => 'message_edit',
+            'provider_message_id' => $this->normalizeNullableString(Arr::get($editNode, 'mid')),
+            'sender_id' => $senderId !== '' ? $senderId : null,
+            'recipient_id' => $recipientId !== '' ? $recipientId : null,
+            'text' => null,
+            'has_attachments' => false,
+            'attachments' => [],
+            'sent_at' => $timestamp,
+            'message_context_type' => 'message_edit',
+            'is_story_reply' => false,
+            'story_id' => null,
+            'reply_to' => [],
+            'referral' => [],
+            'reaction' => [],
+            'story_context' => [],
+            'raw' => [
+                'entry' => $entry,
+                'change' => $change,
+                'value' => is_array($value) ? $value : [],
+                'message_edit' => is_array($editNode) ? $editNode : [],
+            ],
+        ];
+    }
+
+    protected function normalizeMessageReactionPayload(array $change, array $entry): array
+    {
+        $value = Arr::get($change, 'value', []);
+        $messagingItems = Arr::get($value, 'messaging', []);
+        $messageNode = Arr::get($value, 'message', []);
+
+        if ((! is_array($messageNode) || empty($messageNode)) && is_array($messagingItems)) {
+            $messageNode = Arr::get($messagingItems, '0.message', []);
+        }
+
+        $reactionNode = Arr::get($messageNode, 'reaction', []);
+
+        if ((! is_array($reactionNode) || empty($reactionNode)) && is_array($value)) {
+            $reactionNode = Arr::get($value, 'reaction', []);
+        }
+
+        if ((! is_array($reactionNode) || empty($reactionNode)) && is_array($messagingItems)) {
+            $reactionNode = Arr::get($messagingItems, '0.reaction', []);
+        }
+
+        $senderId = (string) (Arr::get($value, 'from.id')
+            ?? Arr::get($value, 'sender.id')
+            ?? Arr::get($messagingItems, '0.sender.id')
+            ?? '');
+
+        $recipientId = (string) (Arr::get($value, 'recipient.id')
+            ?? Arr::get($messagingItems, '0.recipient.id')
+            ?? Arr::get($entry, 'id')
+            ?? '');
+
+        $targetProviderMessageId = $this->normalizeNullableString(
+            Arr::get($reactionNode, 'mid')
+            ?? Arr::get($reactionNode, 'message_id')
+            ?? Arr::get($reactionNode, 'message.mid')
+            ?? Arr::get($messageNode, 'reply_to.mid')
+            ?? Arr::get($messageNode, 'reply_to.message_id')
+        );
+
+        $timestamp = Arr::get($messagingItems, '0.timestamp')
+            ?? Arr::get($value, 'timestamp')
+            ?? Arr::get($entry, 'time');
+
+        return [
+            'kind' => 'message_reaction',
+            'provider_message_id' => $targetProviderMessageId,
+            'reaction_target_provider_message_id' => $targetProviderMessageId,
+            'sender_id' => $senderId !== '' ? $senderId : null,
+            'recipient_id' => $recipientId !== '' ? $recipientId : null,
+            'text' => null,
+            'has_attachments' => false,
+            'attachments' => [],
+            'sent_at' => $timestamp,
+            'message_context_type' => 'reaction',
+            'is_story_reply' => false,
+            'story_id' => null,
+            'reply_to' => [],
+            'referral' => [],
+            'reaction' => is_array($reactionNode) ? $reactionNode : [],
+            'reaction_action' => $this->normalizeNullableString(Arr::get($reactionNode, 'action')) ?: 'react',
+            'reaction_name' => $this->normalizeNullableString(Arr::get($reactionNode, 'reaction')) ?: 'love',
+            'reaction_emoji' => $this->normalizeNullableString(Arr::get($reactionNode, 'emoji')) ?: '❤️',
+            'story_context' => [],
+            'raw' => [
+                'entry' => $entry,
+                'change' => $change,
+                'value' => is_array($value) ? $value : [],
+                'message' => is_array($messageNode) ? $messageNode : [],
+                'reaction' => is_array($reactionNode) ? $reactionNode : [],
+            ],
+        ];
+    }
+
     protected function normalizeMessagePayload(array $change, array $entry): array
     {
         $value = Arr::get($change, 'value', []);
@@ -75,7 +268,7 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
 
         $attachments = Arr::get($messageNode, 'attachments', []);
         $attachmentItems = collect(is_array($attachments) ? $attachments : [])->map(function ($attachment) {
-            $type = (string) (Arr::get($attachment, 'type') ?? 'unknown');
+            $type = $this->normalizeAttachmentType((string) (Arr::get($attachment, 'type') ?? 'unknown'));
             $payload = Arr::get($attachment, 'payload', []);
 
             return [
@@ -83,6 +276,8 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
                 'url' => Arr::get($payload, 'url'),
                 'title' => Arr::get($payload, 'title'),
                 'mime_type' => Arr::get($payload, 'mime_type'),
+                'template_type' => Arr::get($payload, 'template_type'),
+                'elements' => Arr::get($payload, 'elements', []),
                 'raw' => is_array($attachment) ? $attachment : [],
             ];
         })->values()->all();
@@ -151,7 +346,7 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
             'provider_message_id' => $messageId !== '' ? $messageId : null,
             'sender_id' => $senderId !== '' ? $senderId : null,
             'recipient_id' => $recipientId !== '' ? $recipientId : null,
-            'text' => Arr::get($messageNode, 'text'),
+            'text' => Arr::get($messageNode, 'text') ?? Arr::get($messageNode, 'message'),
             'has_attachments' => !empty($attachmentItems),
             'attachments' => $attachmentItems,
             'sent_at' => $timestamp,
@@ -177,6 +372,18 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
 
         if ($normalizedType === 'message') {
             return $this->normalizeMessagePayload($change, $entry);
+        }
+
+        if ($normalizedType === 'message_read') {
+            return $this->normalizeReadReceiptPayload($change, $entry);
+        }
+
+        if ($normalizedType === 'message_edit') {
+            return $this->normalizeMessageEditPayload($change, $entry);
+        }
+
+        if ($normalizedType === 'message_reaction') {
+            return $this->normalizeMessageReactionPayload($change, $entry);
         }
 
         if ($normalizedType === 'comment') {
@@ -261,19 +468,41 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
     {
         $senderId = (string) ($normalized['sender_id'] ?? '');
         $recipientId = (string) ($normalized['recipient_id'] ?? '');
-        $accountId = (string) ($event->providerConnection?->provider_account_id ?? '');
+        $accountIds = $this->resolveProviderAccountIdAliases($event);
 
-        if ($accountId !== '') {
-            if ($senderId !== '' && $senderId === $accountId) {
+        if (! empty($accountIds)) {
+            if ($senderId !== '' && in_array($senderId, $accountIds, true)) {
                 return 'outbound_or_echo';
             }
 
-            if ($recipientId !== '' && $recipientId === $accountId) {
+            if ($recipientId !== '' && in_array($recipientId, $accountIds, true)) {
                 return 'inbound';
             }
         }
 
         return 'unknown';
+    }
+
+    protected function resolveProviderAccountIdAliases(WebhookEvent $event): array
+    {
+        $connection = $event->providerConnection;
+
+        if (! $connection) {
+            return [];
+        }
+
+        return collect([
+            $connection->provider_account_id,
+            $connection->external_oauth_user_id,
+            Arr::get($connection->meta, 'identity_payload.id'),
+            Arr::get($connection->meta, 'identity_payload.user_id'),
+            Arr::get($connection->meta, 'exchange_payload.short_lived.user_id'),
+        ])
+            ->filter(fn ($value) => filled($value))
+            ->map(fn ($value) => (string) $value)
+            ->unique()
+            ->values()
+            ->all();
     }
 
     protected function normalizeInstagramTimestamp(mixed $value): ?Carbon
@@ -346,7 +575,8 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
         $direction = (string) ($normalized['direction'] ?? 'unknown');
         $senderId = (string) ($normalized['sender_id'] ?? '');
         $recipientId = (string) ($normalized['recipient_id'] ?? '');
-        $accountId = (string) ($event->providerConnection?->provider_account_id ?? '');
+        $accountIds = $this->resolveProviderAccountIdAliases($event);
+        $accountId = (string) ($accountIds[0] ?? '');
 
         $selfId = $accountId !== '' ? $accountId : null;
         $customerId = null;
@@ -439,6 +669,11 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
             $customerParticipant->role = 'participant';
             $customerParticipant->is_self = false;
             $customerParticipant->save();
+
+            if ($event->providerConnection) {
+                $this->enrichInstagramParticipantProfile($customerParticipant, $event->providerConnection);
+                $customerParticipant->refresh();
+            }
         }
 
         return [
@@ -483,14 +718,17 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
                 : null;
             $attachments = is_array($normalized['attachments'] ?? null) ? $normalized['attachments'] : [];
             $normalizedSentAt = $this->normalizeInstagramTimestamp($normalized['sent_at'] ?? null);
-            $messageType = !empty($attachments) ? 'attachment' : 'text';
+            $messageType = $this->resolveMessageTypeFromAttachments($attachments);
             $messageContextType = is_string($normalized['message_context_type'] ?? null)
                 ? $normalized['message_context_type']
                 : null;
+            $isProductCard = $messageType === 'product_card';
+            $productCard = $isProductCard ? $this->extractProductCardFromTemplateAttachments($attachments) : null;
             $isStoryReply = (bool) ($normalized['is_story_reply'] ?? false);
             $storyId = is_string($normalized['story_id'] ?? null) && $normalized['story_id'] !== ''
                 ? $normalized['story_id']
                 : null;
+            $storyPreview = $storyId ? $this->resolveStoryPreviewForMessage($conversation, $storyId) : null;
 
             if ($providerMessageId === '') {
                 $providerMessageId = $this->buildFallbackProviderMessageId($conversation, $normalized) ?? '';
@@ -510,13 +748,34 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
             $message->sender_participant_id = $senderParticipantId;
             $message->provider = 'instagram';
             $message->direction = $direction === 'outbound_or_echo' ? 'outbound' : 'inbound';
+            $existingMessageMeta = is_array($message->meta) ? $message->meta : [];
+            $existingProductCard = is_array($existingMessageMeta['product_card'] ?? null)
+                ? $existingMessageMeta['product_card']
+                : null;
+            $shouldPreserveExistingProductCard = $message->exists
+                && $direction === 'outbound_or_echo'
+                && ($message->message_type === 'product_card' || $existingProductCard !== null);
+
+            if ($shouldPreserveExistingProductCard && ! $isProductCard) {
+                $messageType = 'product_card';
+                $isProductCard = true;
+                $productCard = $existingProductCard;
+                $attachments = [];
+            } elseif ($shouldPreserveExistingProductCard && $isProductCard && ! $productCard) {
+                $productCard = $existingProductCard;
+            }
+
             $message->message_type = $messageType;
-            $message->text_body = $messageType === 'text' && $textBody !== '' ? $textBody : null;
-            $message->caption = $messageType === 'attachment' && $textBody !== '' ? $textBody : null;
+            $message->text_body = match (true) {
+                $messageType === 'text' && $textBody !== '' => $textBody,
+                $isProductCard => $message->text_body ?: ($textBody !== '' ? $textBody : null),
+                default => null,
+            };
+            $message->caption = ! in_array($messageType, ['text', 'product_card'], true) && $textBody !== '' ? $textBody : null;
             $message->status = $direction === 'outbound_or_echo' ? 'sent' : 'delivered';
             $message->sent_at = $normalizedSentAt;
             $message->received_at = $direction === 'inbound' ? ($normalizedSentAt ?? now()) : null;
-            $message->meta = array_merge(is_array($message->meta) ? $message->meta : [], [
+            $messageMeta = array_merge(is_array($message->meta) ? $message->meta : [], [
                 'provider' => 'instagram',
                 'normalized_kind' => $normalized['kind'] ?? 'message',
                 'normalized_direction' => $direction,
@@ -528,12 +787,29 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
                 'referral' => is_array($normalized['referral'] ?? null) ? $normalized['referral'] : [],
                 'reaction' => is_array($normalized['reaction'] ?? null) ? $normalized['reaction'] : [],
                 'story_context' => is_array($normalized['story_context'] ?? null) ? $normalized['story_context'] : [],
+                'story_preview' => $storyPreview,
             ]);
+
+            if ($productCard && ! is_array($messageMeta['product_card'] ?? null)) {
+                $messageMeta['product_card'] = $productCard;
+            }
+
+            $message->meta = $messageMeta;
             $message->save();
+
+            if ($isProductCard) {
+                MessageAttachment::query()
+                    ->where('message_id', $message->id)
+                    ->delete();
+            }
 
             $savedAttachmentIds = [];
 
             foreach ($attachments as $index => $attachment) {
+                if ($isProductCard && $this->isGenericTemplateAttachment($attachment)) {
+                    continue;
+                }
+
                 $raw = is_array($attachment['raw'] ?? null) ? $attachment['raw'] : [];
                 $attachmentMeta = [
                     'provider' => 'instagram',
@@ -549,7 +825,7 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
                     'sort_order' => $index,
                 ]);
 
-                $messageAttachment->attachment_type = (string) ($attachment['type'] ?? 'unknown');
+                $messageAttachment->attachment_type = $this->normalizeAttachmentType((string) ($attachment['type'] ?? 'unknown'));
                 $messageAttachment->url = $attachment['url'] ?? null;
                 $messageAttachment->mime_type = $attachment['mime_type'] ?? null;
                 $messageAttachment->file_name = $attachment['title'] ?? null;
@@ -572,10 +848,258 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
         });
     }
 
+    protected function persistNormalizedMessageReaction(Conversation $conversation, array $normalized): array
+    {
+        $targetProviderMessageId = (string) (
+            $normalized['reaction_target_provider_message_id']
+            ?? $normalized['provider_message_id']
+            ?? ''
+        );
+
+        if ($targetProviderMessageId === '') {
+            return [
+                'message_id' => null,
+                'skipped_reason' => 'missing_reaction_target_provider_message_id',
+            ];
+        }
+
+        $message = Message::query()
+            ->where('conversation_id', $conversation->id)
+            ->where('provider', 'instagram')
+            ->where('provider_message_id', $targetProviderMessageId)
+            ->first();
+
+        if (! $message) {
+            return [
+                'message_id' => null,
+                'skipped_reason' => 'reaction_target_message_not_found',
+            ];
+        }
+
+        $direction = (string) ($normalized['direction'] ?? 'unknown');
+        $metaKey = $direction === 'inbound' ? 'customer_reaction' : 'agent_reaction';
+        $reactionAction = (string) ($normalized['reaction_action'] ?? 'react');
+        $reactionName = (string) ($normalized['reaction_name'] ?? 'love');
+        $reactionEmoji = (string) ($normalized['reaction_emoji'] ?? '❤️');
+        $reactionPayload = [
+            'action' => $reactionAction,
+            'reaction' => $reactionName,
+            'emoji' => $reactionEmoji,
+            'actor' => $direction === 'inbound' ? 'customer' : 'agent',
+            'sender_id' => $normalized['sender_id'] ?? null,
+            'recipient_id' => $normalized['recipient_id'] ?? null,
+            'target_provider_message_id' => $targetProviderMessageId,
+            'received_at' => now()->toIso8601String(),
+            'raw' => is_array($normalized['reaction'] ?? null) ? $normalized['reaction'] : [],
+        ];
+        $meta = is_array($message->meta) ? $message->meta : [];
+        $history = is_array($meta['reaction_history'] ?? null) ? $meta['reaction_history'] : [];
+        $history[] = $reactionPayload;
+
+        if (in_array($reactionAction, ['unreact', 'remove', 'delete', 'deleted'], true)) {
+            unset($meta[$metaKey]);
+        } else {
+            $meta[$metaKey] = $reactionPayload;
+        }
+
+        $meta['reaction_history'] = array_slice($history, -25);
+        $message->meta = $meta;
+        $message->save();
+
+        $conversation->touch();
+
+        return [
+            'message_id' => $message->id,
+            'skipped_reason' => null,
+        ];
+    }
+
+    protected function resolveStoryPreviewForMessage(Conversation $conversation, string $storyId): ?array
+    {
+        $story = SocialStory::query()
+            ->where('workspace_id', $conversation->workspace_id)
+            ->where('provider', 'instagram')
+            ->where('provider_story_id', $storyId)
+            ->when($conversation->provider_connection_id, fn ($query) => $query->where('provider_connection_id', $conversation->provider_connection_id))
+            ->latest('posted_at')
+            ->latest('id')
+            ->first();
+
+        if (! $story) {
+            return null;
+        }
+
+        $raw = is_array($story->raw) ? $story->raw : [];
+
+        return [
+            'provider_story_id' => $story->provider_story_id,
+            'media_url' => $story->media_url,
+            'thumbnail_url' => $story->thumbnail_url,
+            'media_type' => $raw['media_type'] ?? $raw['remote_story']['media_type'] ?? null,
+            'posted_at' => optional($story->posted_at)->toIso8601String(),
+            'expires_at' => optional($story->expires_at)->toIso8601String(),
+        ];
+    }
+
     protected function shouldPersistNormalizedMessage(array $normalized, ?Conversation $resolvedConversation): bool
     {
         return ($normalized['kind'] ?? 'unknown') === 'message'
             && $resolvedConversation instanceof Conversation;
+    }
+
+    protected function shouldPersistNormalizedMessageReaction(array $normalized, ?Conversation $resolvedConversation): bool
+    {
+        return ($normalized['kind'] ?? 'unknown') === 'message_reaction'
+            && $resolvedConversation instanceof Conversation;
+    }
+
+    protected function normalizeAttachmentType(string $type): string
+    {
+        $type = Str::lower(trim($type));
+
+        return match ($type) {
+            'image', 'video', 'audio', 'file', 'template' => $type,
+            'voice' => 'audio',
+            default => $type !== '' ? $type : 'file',
+        };
+    }
+
+    protected function resolveMessageTypeFromAttachments(array $attachments): string
+    {
+        if (empty($attachments)) {
+            return 'text';
+        }
+
+        $firstType = $this->normalizeAttachmentType((string) ($attachments[0]['type'] ?? 'file'));
+
+        return match ($firstType) {
+            'image' => 'image',
+            'video' => 'video',
+            'audio' => 'voice',
+            'template' => $this->isGenericTemplateAttachment($attachments[0]) ? 'product_card' : 'file',
+            default => 'file',
+        };
+    }
+
+    protected function isGenericTemplateAttachment(array $attachment): bool
+    {
+        $type = $this->normalizeAttachmentType((string) ($attachment['type'] ?? ''));
+        $templateType = (string) (
+            $attachment['template_type']
+            ?? Arr::get($attachment, 'raw.payload.template_type')
+            ?? ''
+        );
+
+        return $type === 'template' && Str::lower(trim($templateType)) === 'generic';
+    }
+
+    protected function extractProductCardFromTemplateAttachments(array $attachments): ?array
+    {
+        $template = collect($attachments)
+            ->first(fn ($attachment) => is_array($attachment) && $this->isGenericTemplateAttachment($attachment));
+
+        if (! is_array($template)) {
+            return null;
+        }
+
+        $elements = $template['elements'] ?? Arr::get($template, 'raw.payload.elements', []);
+        $firstElement = is_array($elements) ? ($elements[0] ?? null) : null;
+
+        if (! is_array($firstElement)) {
+            return null;
+        }
+
+        $productUrl = Arr::get($firstElement, 'default_action.url');
+
+        if (! $productUrl) {
+            $button = collect(Arr::get($firstElement, 'buttons', []))
+                ->first(fn ($button) => is_array($button) && Arr::get($button, 'type') === 'web_url' && filled(Arr::get($button, 'url')));
+
+            $productUrl = is_array($button) ? Arr::get($button, 'url') : null;
+        }
+
+        return array_filter([
+            'title' => $firstElement['title'] ?? 'Product',
+            'description' => $firstElement['subtitle'] ?? null,
+            'price' => null,
+            'currency' => null,
+            'image_url' => $firstElement['image_url'] ?? null,
+            'product_url' => $productUrl,
+            'availability' => null,
+        ], fn ($value) => $value !== null && $value !== '');
+    }
+
+    protected function enrichInstagramParticipantProfile(
+        ConversationParticipant $participant,
+        ProviderConnection $connection
+    ): void {
+        $providerUserId = trim((string) ($participant->provider_user_id ?? ''));
+
+        if ($providerUserId === '' || ! $this->shouldFetchInstagramParticipantProfile($participant)) {
+            return;
+        }
+
+        try {
+            $profile = app(InstagramService::class)->fetchUserProfile($connection, $providerUserId);
+            $username = $this->normalizeNullableString(Arr::get($profile, 'username'));
+            $name = $this->normalizeNullableString(Arr::get($profile, 'name'));
+            $profilePic = $this->normalizeNullableString(Arr::get($profile, 'profile_pic'));
+            $meta = is_array($participant->meta) ? $participant->meta : [];
+
+            $participant->display_name = $name
+                ?: $username
+                ?: ($participant->display_name ?: 'Instagram User');
+            $participant->handle = $username ?: $participant->handle;
+            $participant->avatar_url = $profilePic ?: $participant->avatar_url;
+            $participant->meta = array_merge($meta, [
+                'instagram_profile' => [
+                    'id' => Arr::get($profile, 'id'),
+                    'username' => $username,
+                    'name' => $name,
+                    'profile_pic' => $profilePic,
+                ],
+                'instagram_profile_enriched_at' => now()->toIso8601String(),
+            ]);
+            $participant->save();
+        } catch (\Throwable $exception) {
+            $participant->meta = array_merge(is_array($participant->meta) ? $participant->meta : [], [
+                'instagram_profile_fetch_failed_at' => now()->toIso8601String(),
+                'instagram_profile_fetch_error' => $exception->getMessage(),
+            ]);
+            $participant->save();
+
+            $this->logWebhookProcessing('profile_enrichment_failed', [
+                'conversation_participant_id' => $participant->id,
+                'provider_user_id' => $providerUserId,
+                'provider_connection_id' => $connection->id,
+                'error' => $exception->getMessage(),
+            ], 'warning');
+        }
+    }
+
+    protected function shouldFetchInstagramParticipantProfile(ConversationParticipant $participant): bool
+    {
+        $meta = is_array($participant->meta) ? $participant->meta : [];
+        $hasUsefulProfile = filled($participant->handle)
+            && filled($participant->avatar_url)
+            && filled($participant->display_name)
+            && $participant->display_name !== 'Instagram User';
+
+        if (! $hasUsefulProfile) {
+            return true;
+        }
+
+        $enrichedAt = Arr::get($meta, 'instagram_profile_enriched_at');
+
+        if (! is_string($enrichedAt) || $enrichedAt === '') {
+            return true;
+        }
+
+        try {
+            return Carbon::parse($enrichedAt)->lessThan(now()->subDay());
+        } catch (\Throwable) {
+            return true;
+        }
     }
 
     protected function normalizeNullableString(mixed $value): ?string
@@ -642,7 +1166,7 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
             ];
         }
 
-        return DB::transaction(function () use ($event, $normalized, $providerCommentId) {
+        $result = DB::transaction(function () use ($event, $normalized, $providerCommentId) {
             $comment = SocialComment::query()->firstOrNew([
                 'provider' => 'instagram',
                 'provider_comment_id' => $providerCommentId,
@@ -709,6 +1233,90 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
                 'skipped_reason' => null,
             ];
         });
+
+        if (! empty($result['social_post_id'])) {
+            $freshPost = SocialPost::query()->find($result['social_post_id']);
+            $this->syncSocialPostCommentsFromInstagram($event, $freshPost);
+            $this->refreshSocialPostCountersFromInstagram($event, $freshPost);
+
+            if ($freshPost) {
+                $freshPost->refresh();
+                $result['like_count'] = (int) $freshPost->like_count;
+                $result['comments_count'] = (int) $freshPost->comments_count;
+            }
+        }
+
+        return $result;
+    }
+
+    protected function syncSocialPostCommentsFromInstagram(WebhookEvent $event, ?SocialPost $post): void
+    {
+        if (! $post || blank($post->provider_media_id)) {
+            return;
+        }
+
+        /** @var ProviderConnection|null $connection */
+        $connection = $event->providerConnection;
+
+        if (! $connection) {
+            return;
+        }
+
+        try {
+            app(InstagramService::class)->syncMediaComments($connection, $post, [
+                'limit' => 50,
+            ]);
+        } catch (\Throwable $exception) {
+            Log::info('instagram.social_post_comment_sync_failed', [
+                'webhook_event_id' => $event->id,
+                'social_post_id' => $post->id,
+                'provider_media_id' => $post->provider_media_id,
+                'error' => $exception->getMessage(),
+            ]);
+        }
+    }
+
+    protected function refreshSocialPostCountersFromInstagram(WebhookEvent $event, ?SocialPost $post): void
+    {
+        if (! $post || blank($post->provider_media_id)) {
+            return;
+        }
+
+        /** @var ProviderConnection|null $connection */
+        $connection = $event->providerConnection;
+
+        if (! $connection) {
+            return;
+        }
+
+        try {
+            $media = app(InstagramService::class)->fetchMediaDetails($connection, (string) $post->provider_media_id, [
+                'fields' => 'id,like_count,comments_count',
+            ]);
+
+            $dirty = false;
+
+            if (array_key_exists('like_count', $media)) {
+                $post->like_count = (int) $media['like_count'];
+                $dirty = true;
+            }
+
+            if (array_key_exists('comments_count', $media)) {
+                $post->comments_count = max((int) $post->comments_count, (int) $media['comments_count']);
+                $dirty = true;
+            }
+
+            if ($dirty) {
+                $post->save();
+            }
+        } catch (\Throwable $exception) {
+            Log::info('instagram.social_post_counter_refresh_failed', [
+                'webhook_event_id' => $event->id,
+                'social_post_id' => $post->id,
+                'provider_media_id' => $post->provider_media_id,
+                'error' => $exception->getMessage(),
+            ]);
+        }
     }
 
     protected function updateConversationSnapshot(Conversation $conversation, array $normalized, array $resolvedParticipants): void
@@ -720,6 +1328,15 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
 
         if (! $existingLastMessageAt || $messageTime->greaterThan($existingLastMessageAt)) {
             $conversation->last_message_at = $messageTime;
+            $conversation->last_message_preview = $this->buildConversationMessagePreview($normalized);
+        }
+
+        if (($normalized['direction'] ?? null) === 'inbound') {
+            $conversation->unread_count = Message::query()
+                ->where('conversation_id', $conversation->id)
+                ->where('direction', 'inbound')
+                ->whereNull('read_at')
+                ->count();
         }
 
         $customerParticipantId = $resolvedParticipants['customer_participant_id'] ?? null;
@@ -746,6 +1363,27 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
         }
 
         $conversation->save();
+    }
+
+    protected function buildConversationMessagePreview(array $normalized): string
+    {
+        $text = is_string($normalized['text'] ?? null)
+            ? trim((string) $normalized['text'])
+            : '';
+
+        if ($text !== '') {
+            return Str::limit($text, 140);
+        }
+
+        $attachments = is_array($normalized['attachments'] ?? null) ? $normalized['attachments'] : [];
+        $firstType = $this->normalizeAttachmentType((string) ($attachments[0]['type'] ?? 'file'));
+
+        return match ($firstType) {
+            'image' => '📷 Image',
+            'video' => '🎬 Video',
+            'audio' => '🎤 Voice message',
+            default => '📎 Attachment',
+        };
     }
 
     protected function shouldSkipAlreadyFinalizedEvent(WebhookEvent $event): bool
@@ -818,6 +1456,7 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
             $normalizedDirection = $this->detectNormalizedDirection($normalized, $event);
             $normalized['direction'] = $normalizedDirection;
             $isMessageEvent = ($normalized['kind'] ?? 'unknown') === 'message';
+            $isMessageReactionEvent = ($normalized['kind'] ?? 'unknown') === 'message_reaction';
             $isCommentEvent = ($normalized['kind'] ?? 'unknown') === 'comment';
 
             $this->logWebhookProcessing('event_normalized', [
@@ -844,10 +1483,11 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
                 'customer_provider_user_id' => null,
             ];
             $persistedMessage = ['message_id' => null, 'attachment_ids' => [], 'skipped_reason' => null];
+            $persistedReaction = ['message_id' => null, 'skipped_reason' => null];
             $persistedComment = ['comment_id' => null, 'social_post_id' => null, 'skipped_reason' => null];
 
             $shouldIgnore = blank($event->workspace_id) || blank($event->provider_connection_id);
-            if (! $shouldIgnore && $isMessageEvent) {
+            if (! $shouldIgnore && ($isMessageEvent || $isMessageReactionEvent)) {
                 $resolvedConversation = $this->resolveConversation($event, $normalized);
 
                 if ($resolvedConversation) {
@@ -856,6 +1496,10 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
 
                 if ($this->shouldPersistNormalizedMessage($normalized, $resolvedConversation)) {
                     $persistedMessage = $this->persistNormalizedMessage($resolvedConversation, $normalized, $resolvedParticipants);
+                }
+
+                if ($this->shouldPersistNormalizedMessageReaction($normalized, $resolvedConversation)) {
+                    $persistedReaction = $this->persistNormalizedMessageReaction($resolvedConversation, $normalized);
                 }
             }
 
@@ -866,8 +1510,10 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
             $ignoredReason = null;
             if ($shouldIgnore) {
                 $ignoredReason = 'provider_connection_not_resolved';
-            } elseif ($isMessageEvent && ! $resolvedConversation) {
+            } elseif (($isMessageEvent || $isMessageReactionEvent) && ! $resolvedConversation) {
                 $ignoredReason = 'conversation_not_resolved';
+            } elseif ($isMessageReactionEvent && $persistedReaction['skipped_reason']) {
+                $ignoredReason = $persistedReaction['skipped_reason'];
             } elseif ($isCommentEvent && $persistedComment['skipped_reason']) {
                 $ignoredReason = $persistedComment['skipped_reason'];
             }
@@ -899,6 +1545,10 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
                         'reply_to' => $normalized['reply_to'] ?? [],
                         'referral' => $normalized['referral'] ?? [],
                         'reaction' => $normalized['reaction'] ?? [],
+                        'reaction_target_provider_message_id' => $normalized['reaction_target_provider_message_id'] ?? null,
+                        'reaction_action' => $normalized['reaction_action'] ?? null,
+                        'reaction_name' => $normalized['reaction_name'] ?? null,
+                        'reaction_emoji' => $normalized['reaction_emoji'] ?? null,
                         'story_context' => $normalized['story_context'] ?? [],
                         'conversation_key' => $this->buildConversationExternalKey($event, $normalized),
                         'resolved_conversation_id' => $resolvedConversation?->id,
@@ -909,6 +1559,8 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
                         'persisted_message_id' => $persistedMessage['message_id'],
                         'persisted_attachment_ids' => $persistedMessage['attachment_ids'],
                         'persistence_skipped_reason' => $persistedMessage['skipped_reason'],
+                        'persisted_reaction_message_id' => $persistedReaction['message_id'],
+                        'reaction_persistence_skipped_reason' => $persistedReaction['skipped_reason'],
                         'provider_comment_id' => $normalized['provider_comment_id'] ?? null,
                         'provider_media_id' => $normalized['provider_media_id'] ?? null,
                         'persisted_comment_id' => $persistedComment['comment_id'],
@@ -934,12 +1586,27 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
                 ]);
             }
 
+            if (! $ignoredReason && $isMessageReactionEvent && $persistedReaction['message_id']) {
+                $this->broadcastWorkspaceUpdate($event, 'inbox', 'instagram_message_reaction_updated', [
+                    'conversation_id' => $resolvedConversation?->id,
+                    'message_id' => $persistedReaction['message_id'],
+                    'provider_message_id' => $normalized['reaction_target_provider_message_id'] ?? $normalized['provider_message_id'] ?? null,
+                    'direction' => $normalizedDirection,
+                    'reaction' => $normalized['reaction_name'] ?? null,
+                    'emoji' => $normalized['reaction_emoji'] ?? null,
+                    'reaction_action' => $normalized['reaction_action'] ?? null,
+                ]);
+            }
+
             if (! $ignoredReason && $isCommentEvent && $persistedComment['comment_id']) {
                 $this->broadcastWorkspaceUpdate($event, 'social', 'instagram_comment_received', [
                     'social_post_id' => $persistedComment['social_post_id'],
                     'comment_id' => $persistedComment['comment_id'],
                     'provider_media_id' => $normalized['provider_media_id'] ?? null,
                     'provider_comment_id' => $normalized['provider_comment_id'] ?? null,
+                    'like_count' => $persistedComment['like_count'] ?? null,
+                    'comments_count' => $persistedComment['comments_count'] ?? null,
+                    'provider_connection_id' => $event->provider_connection_id,
                 ]);
             }
 
@@ -950,6 +1617,7 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
                 'ignored_reason' => $ignoredReason,
                 'resolved_conversation_id' => $resolvedConversation?->id,
                 'persisted_message_id' => $persistedMessage['message_id'],
+                'persisted_reaction_message_id' => $persistedReaction['message_id'],
                 'persisted_comment_id' => $persistedComment['comment_id'],
                 'persisted_attachment_ids' => $persistedMessage['attachment_ids'],
                 'workspace_id' => $event->workspace_id,

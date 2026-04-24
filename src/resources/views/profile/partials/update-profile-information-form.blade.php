@@ -13,9 +13,39 @@
         @csrf
     </form>
 
-    <form method="post" action="{{ route('profile.update') }}" class="mt-6 space-y-6">
+    @php
+        $avatarUrl = $user->avatar_url ?: ('https://ui-avatars.com/api/?name=' . urlencode($user->name ?: 'User') . '&background=e2e8f0&color=334155');
+    @endphp
+
+    <form method="post" action="{{ route('profile.update') }}" class="mt-6 space-y-6" enctype="multipart/form-data">
         @csrf
         @method('patch')
+
+        <div>
+            <x-input-label for="avatar" :value="__('Profile Photo')" />
+            <div class="mt-3 flex items-center gap-4">
+                <img
+                    src="{{ $avatarUrl }}"
+                    alt="{{ $user->name }}"
+                    class="h-20 w-20 rounded-full border border-gray-200 object-cover"
+                >
+
+                <div class="flex-1">
+                    <input
+                        id="avatar"
+                        name="avatar"
+                        type="file"
+                        accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+                        class="block w-full text-sm text-gray-600 file:mr-4 file:rounded-md file:border-0 file:bg-indigo-50 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-indigo-700 hover:file:bg-indigo-100"
+                    >
+
+                    <p class="mt-2 text-sm text-gray-500">
+                        JPG, PNG, or WEBP up to 5 MB.
+                    </p>
+                </div>
+            </div>
+            <x-input-error class="mt-2" :messages="$errors->get('avatar')" />
+        </div>
 
         <div>
             <x-input-label for="name" :value="__('Name')" />

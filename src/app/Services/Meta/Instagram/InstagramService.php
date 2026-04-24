@@ -64,6 +64,47 @@ class InstagramService
         );
     }
 
+    public function sendGenericTemplate(
+        ProviderConnection $connection,
+        string $recipientId,
+        array $elements,
+        array $options = []
+    ): array {
+        $this->assertInstagramConnection($connection);
+
+        return $this->instagramMessagingService->sendGenericTemplate(
+            $connection,
+            $recipientId,
+            $elements,
+            $options
+        );
+    }
+
+    public function fetchUserProfile(ProviderConnection $connection, string $instagramScopedUserId): array
+    {
+        $this->assertInstagramConnection($connection);
+
+        return $this->instagramMessagingService->fetchUserProfile($connection, $instagramScopedUserId);
+    }
+
+    public function sendReaction(
+        ProviderConnection $connection,
+        string $recipientId,
+        string $providerMessageId,
+        string $reaction = 'love',
+        string $action = 'react'
+    ): array {
+        $this->assertInstagramConnection($connection);
+
+        return $this->instagramMessagingService->sendReaction(
+            $connection,
+            $recipientId,
+            $providerMessageId,
+            $reaction,
+            $action
+        );
+    }
+
     public function fetchMediaFeed(ProviderConnection $connection, array $options = []): array
     {
         $this->assertInstagramConnection($connection);
@@ -134,6 +175,13 @@ class InstagramService
         return $this->instagramCommentService->deleteComment($connection, $commentId);
     }
 
+    public function deleteMedia(ProviderConnection $connection, string $mediaId): array
+    {
+        $this->assertInstagramConnection($connection);
+
+        return $this->instagramContentService->deleteMedia($connection, $mediaId);
+    }
+
     public function replyToCommentViaDm(
         ProviderConnection $connection,
         SocialComment $comment,
@@ -158,14 +206,27 @@ class InstagramService
             $text,
             $options
         );
-        $recipientId = $this->resolveSentRecipientId($sendResult)
-            ?? $this->resolveCommentDmRecipientId($comment);
+        $recipientId = $this->resolveCommentDmRecipientId($comment);
+
+        if ($recipientId === null) {
+            $resolvedSendRecipientId = $this->resolveSentRecipientId($sendResult);
+            if ($resolvedSendRecipientId !== null && ! $this->isInstagramSelfScopedUserId($connection, $resolvedSendRecipientId)) {
+                $recipientId = $resolvedSendRecipientId;
+            }
+        }
 
         if ($recipientId === null) {
             throw new RuntimeException('Instagram comment private reply did not return a recipient id.');
         }
 
-        $inboxResult = $this->persistCommentDmReplyInInbox($connection, $comment, $recipientId, $text, $sendResult);
+        $inboxResult = $this->persistCommentDmReplyInInbox(
+            $connection,
+            $comment,
+            $recipientId,
+            $text,
+            $sendResult,
+            is_array($options['agent_meta'] ?? null) ? $options['agent_meta'] : []
+        );
 
         return array_merge($sendResult, [
             'inbox' => $inboxResult,
@@ -205,16 +266,18 @@ class InstagramService
         SocialComment $comment,
         string $recipientId,
         string $text,
-        array $sendResult
+        array $sendResult,
+        array $agentMeta = []
     ): array {
         $comment->loadMissing('socialPost');
         $socialPost = $comment->socialPost;
         $sentAt = now();
 
-        return DB::transaction(function () use ($connection, $comment, $socialPost, $recipientId, $text, $sendResult, $sentAt) {
+        return DB::transaction(function () use ($connection, $comment, $socialPost, $recipientId, $text, $sendResult, $agentMeta, $sentAt) {
             $conversation = $this->resolveCommentDmConversation($connection, $comment, $recipientId, $sentAt);
             $participants = $this->syncCommentDmParticipants($conversation, $connection, $comment, $recipientId);
             $providerMessageId = $this->resolveSentProviderMessageId($sendResult);
+            $messageMeta = array_filter($agentMeta, fn ($value) => $value !== null);
 
             $message = Message::create([
                 'conversation_id' => $conversation->id,
@@ -233,14 +296,16 @@ class InstagramService
                 'read_at' => null,
                 'failed_at' => null,
                 'last_error' => null,
-                'meta' => [
+                'meta' => array_merge($messageMeta, [
                     'provider' => 'instagram',
                     'delivery_mode' => 'instagram_comment_reply_dm',
                     'send_result' => $sendResult,
                     'social_comment_reply' => true,
                     'message_context_type' => 'comment_reply_dm',
+                    'native_private_reply' => true,
                     'social_comment_id' => $comment->id,
                     'social_post_id' => $socialPost?->id,
+                    'post_cover_url' => $socialPost?->thumbnail_url ?: $socialPost?->media_url,
                     'provider_media_id' => $comment->provider_media_id,
                     'provider_comment_id' => $comment->provider_comment_id,
                     'comment_author' => $this->resolveCommentAuthorName($comment),
@@ -248,11 +313,11 @@ class InstagramService
                     'post_caption' => $socialPost?->caption,
                     'post_permalink' => $socialPost?->permalink,
                     'post_media_type' => $socialPost?->media_type,
-                ],
+                ]),
             ]);
 
             $conversation->update([
-                'last_message_preview' => 'DM reply to comment: ' . $this->trimPreview($text),
+                'last_message_preview' => 'Comment DM reply',
                 'last_message_at' => $sentAt,
             ]);
 
@@ -271,6 +336,38 @@ class InstagramService
         string $recipientId,
         \Illuminate\Support\Carbon $sentAt
     ): Conversation {
+        $existingConversation = Conversation::query()
+            ->where('workspace_id', $connection->workspace_id)
+            ->where('provider_connection_id', $connection->id)
+            ->where('provider', 'instagram')
+            ->whereHas('participants', function ($query) use ($recipientId) {
+                $query->where('provider_user_id', $recipientId)
+                    ->where('is_self', false);
+            })
+            ->latest('last_message_at')
+            ->latest('id')
+            ->first();
+
+        if ($existingConversation) {
+            if (! $existingConversation->title) {
+                $existingConversation->title = $this->resolveCommentAuthorName($comment) ?: 'Instagram User';
+            }
+
+            if (! $existingConversation->type) {
+                $existingConversation->type = 'dm';
+            }
+
+            if (! $existingConversation->status || in_array($existingConversation->status, ['pending', 'trashed', 'archived'], true)) {
+                $existingConversation->status = 'active';
+            }
+
+            $existingConversation->is_archived = false;
+            $existingConversation->last_message_at = $sentAt;
+            $existingConversation->save();
+
+            return $existingConversation;
+        }
+
         $conversationKey = $this->buildCommentDmConversationKey($connection, $recipientId);
 
         $conversation = Conversation::query()->firstOrNew([
@@ -349,6 +446,7 @@ class InstagramService
         $customerParticipant->display_name = $customerParticipant->display_name
             ?: ($this->resolveCommentAuthorName($comment) ?: 'Instagram User');
         $customerParticipant->handle = $customerParticipant->handle ?: $comment->username;
+        $customerParticipant->avatar_url = $customerParticipant->avatar_url ?: $this->resolveCommentAuthorAvatarUrl($comment);
         $customerParticipant->role = 'participant';
         $customerParticipant->is_self = false;
         $customerParticipant->meta = array_merge(is_array($customerParticipant->meta) ? $customerParticipant->meta : [], [
@@ -357,6 +455,11 @@ class InstagramService
             'source_provider_comment_id' => $comment->provider_comment_id,
         ]);
         $customerParticipant->save();
+
+        if (! $conversation->avatar_url && $customerParticipant->avatar_url) {
+            $conversation->avatar_url = $customerParticipant->avatar_url;
+            $conversation->save();
+        }
 
         return [
             'self' => $selfParticipant,
@@ -403,6 +506,30 @@ class InstagramService
         return $recipientId !== '' ? $recipientId : null;
     }
 
+    protected function isInstagramSelfScopedUserId(ProviderConnection $connection, string $recipientId): bool
+    {
+        $recipientId = trim($recipientId);
+
+        if ($recipientId === '') {
+            return false;
+        }
+
+        $selfIds = collect([
+            $connection->provider_account_id,
+            $connection->external_oauth_user_id,
+            $connection->meta['identity_payload']['id'] ?? null,
+            $connection->meta['identity_payload']['user_id'] ?? null,
+            $connection->meta['exchange_payload']['short_lived']['user_id'] ?? null,
+        ])
+            ->filter(fn ($value) => filled($value))
+            ->map(fn ($value) => trim((string) $value))
+            ->unique()
+            ->values()
+            ->all();
+
+        return in_array($recipientId, $selfIds, true);
+    }
+
     protected function resolveCommentAuthorName(SocialComment $comment): ?string
     {
         $username = trim((string) ($comment->username ?? ''));
@@ -414,6 +541,19 @@ class InstagramService
         $rawUsername = trim((string) ($comment->raw['username'] ?? ($comment->raw['from']['username'] ?? '')));
 
         return $rawUsername !== '' ? $rawUsername : null;
+    }
+
+    protected function resolveCommentAuthorAvatarUrl(SocialComment $comment): ?string
+    {
+        $avatarUrl = trim((string) (
+            $comment->raw['profile_pic']
+            ?? $comment->raw['profile_picture_url']
+            ?? $comment->raw['from']['profile_pic']
+            ?? $comment->raw['from']['profile_picture_url']
+            ?? ''
+        ));
+
+        return $avatarUrl !== '' ? $avatarUrl : null;
     }
 
     protected function trimPreview(string $text): string
@@ -433,7 +573,7 @@ class InstagramService
     ): array {
         $this->assertInstagramConnection($connection);
 
-        return $this->dispatchPublishingAction('publish_post', $connection, $payload);
+        return $this->instagramContentService->publishPost($connection, $payload);
     }
 
     public function publishStory(
@@ -443,6 +583,15 @@ class InstagramService
         $this->assertInstagramConnection($connection);
 
         return $this->instagramStoryService->publishStory($connection, $payload);
+    }
+
+    public function syncStories(
+        ProviderConnection $connection,
+        array $options = []
+    ): array {
+        $this->assertInstagramConnection($connection);
+
+        return $this->instagramStoryService->syncStories($connection, $options);
     }
 
     public function handleWebhook(Request $request): array

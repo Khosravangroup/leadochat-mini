@@ -49,4 +49,32 @@ class Workspace extends Model
             ->orderBy('sort_order')
             ->orderBy('name');
     }
+
+    public function catalogs(): HasMany
+    {
+        return $this->hasMany(Catalog::class)->orderBy('name');
+    }
+
+    public function catalogProductSets(): HasMany
+    {
+        return $this->hasMany(CatalogProductSet::class)->orderBy('name');
+    }
+
+    public function catalogCollections(): HasMany
+    {
+        return $this->hasMany(CatalogCollection::class)->orderBy('name');
+    }
+
+    public function commerceOrders(): HasMany
+    {
+        return $this->hasMany(CommerceOrder::class)
+            ->orderByDesc('placed_at')
+            ->orderByDesc('id');
+    }
+
+    public function commercePromotionCampaigns(): HasMany
+    {
+        return $this->hasMany(CommercePromotionCampaign::class)
+            ->orderByDesc('id');
+    }
 }

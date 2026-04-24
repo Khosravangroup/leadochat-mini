@@ -18,12 +18,14 @@ class MessageAttachment extends Model
         'width',
         'height',
         'duration_seconds',
+        'sort_order',
         'meta',
     ];
 
     protected function casts(): array
     {
         return [
+            'sort_order' => 'integer',
             'meta' => 'array',
         ];
     }

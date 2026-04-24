@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Jobs\ProcessInstagramWebhookEvent;
 use App\Models\WebhookEvent;
 use App\Models\ProviderConnection;
+use App\Models\SocialPost;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -169,6 +170,8 @@ class InstagramWebhookController extends Controller
                     'candidate_ids' => $candidateIds,
                     'message_mid' => Arr::get($change, 'value.message.mid')
                         ?? Arr::get($change, 'value.messaging.0.message.mid')
+                        ?? Arr::get($change, 'value.messaging.0.read.mid')
+                        ?? Arr::get($change, 'value.messaging.0.message_edit.mid')
                         ?? Arr::get($change, 'value.messages.0.mid'),
                     'sender_id' => Arr::get($change, 'value.sender.id')
                         ?? Arr::get($change, 'value.messaging.0.sender.id'),
@@ -287,12 +290,42 @@ class InstagramWebhookController extends Controller
         $connection = ProviderConnection::query()
             ->where('provider', 'instagram')
             ->where('status', 'connected')
-            ->whereIn('provider_account_id', $candidates)
+            ->where(function ($query) use ($candidates) {
+                $query->whereIn('provider_account_id', $candidates)
+                    ->orWhereIn('external_oauth_user_id', $candidates);
+            })
             ->latest('id')
             ->first();
 
         if ($connection) {
             return $connection;
+        }
+
+        $providerMediaId = collect([
+            Arr::get($change, 'value.media.id'),
+            Arr::get($change, 'value.media_id'),
+            Arr::get($change, 'value.media.media_id'),
+            Arr::get($change, 'value.post_id'),
+        ])
+            ->filter(fn ($value) => filled($value))
+            ->map(fn ($value) => (string) $value)
+            ->first();
+
+        if ($providerMediaId) {
+            $resolvedPost = SocialPost::query()
+                ->where('provider', 'instagram')
+                ->where('provider_media_id', $providerMediaId)
+                ->where('status', '!=', 'deleted')
+                ->latest('id')
+                ->first();
+
+            if ($resolvedPost?->provider_connection_id) {
+                return ProviderConnection::query()
+                    ->where('provider', 'instagram')
+                    ->where('status', 'connected')
+                    ->whereKey($resolvedPost->provider_connection_id)
+                    ->first();
+            }
         }
 
         $connectedConnections = ProviderConnection::query()
@@ -337,6 +370,8 @@ class InstagramWebhookController extends Controller
                 ?? Arr::get($change, 'value.message.id')
                 ?? Arr::get($change, 'value.messaging.0.message.mid')
                 ?? Arr::get($change, 'value.messaging.0.message.id')
+                ?? Arr::get($change, 'value.messaging.0.read.mid')
+                ?? Arr::get($change, 'value.messaging.0.message_edit.mid')
                 ?? Arr::get($change, 'value.messages.0.mid')
                 ?? Arr::get($change, 'value.messages.0.id')
                 ?? Arr::get($change, 'value.comment_id')

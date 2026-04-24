@@ -341,8 +341,9 @@ class InstagramCommentService
         $comment->is_hidden = $this->resolveHiddenState($comment, (bool) ($item['hidden'] ?? false));
         $comment->commented_at = $this->normalizeTimestamp($item['timestamp'] ?? null);
         $existingRaw = is_array($comment->raw) ? $comment->raw : [];
+        $profile = $this->fetchCommentAuthorProfileIfAvailable($connection, $comment, $item, $existingRaw);
 
-        $comment->raw = array_merge(
+        $commentRaw = array_merge(
             [
                 'reply_actor_id' => $existingRaw['reply_actor_id'] ?? null,
                 'reply_actor_name' => $existingRaw['reply_actor_name'] ?? null,
@@ -354,9 +355,36 @@ class InstagramCommentService
                 'last_dm_reply_inbox_conversation_id' => $existingRaw['last_dm_reply_inbox_conversation_id'] ?? null,
                 'last_dm_reply_inbox_message_id' => $existingRaw['last_dm_reply_inbox_message_id'] ?? null,
                 'last_dm_reply_recipient_id' => $existingRaw['last_dm_reply_recipient_id'] ?? null,
+                'profile_pic' => $profile['profile_pic']
+                    ?? $existingRaw['profile_pic']
+                    ?? $existingRaw['profile_picture_url']
+                    ?? null,
+                'profile_picture_url' => $profile['profile_picture_url']
+                    ?? $profile['profile_pic']
+                    ?? $existingRaw['profile_picture_url']
+                    ?? $existingRaw['profile_pic']
+                    ?? null,
+                'profile_fetch_failed_at' => $profile['profile_fetch_failed_at']
+                    ?? $existingRaw['profile_fetch_failed_at']
+                    ?? null,
             ],
             $item
         );
+
+        $commentRaw['profile_pic'] = $profile['profile_pic']
+            ?? $commentRaw['profile_pic']
+            ?? $commentRaw['profile_picture_url']
+            ?? null;
+        $commentRaw['profile_picture_url'] = $profile['profile_picture_url']
+            ?? $profile['profile_pic']
+            ?? $commentRaw['profile_picture_url']
+            ?? $commentRaw['profile_pic']
+            ?? null;
+        $commentRaw['profile_fetch_failed_at'] = $profile['profile_fetch_failed_at']
+            ?? $commentRaw['profile_fetch_failed_at']
+            ?? null;
+
+        $comment->raw = $commentRaw;
         $comment->save();
 
         return [
@@ -418,6 +446,77 @@ class InstagramCommentService
         }
 
         return 'local-debug-comment-author-' . sha1($providerCommentId);
+    }
+
+    protected function fetchCommentAuthorProfileIfAvailable(
+        ProviderConnection $connection,
+        SocialComment $comment,
+        array $item,
+        array $existingRaw
+    ): array {
+        $existingAvatar = $this->normalizeNullableString(
+            $existingRaw['profile_pic']
+            ?? $existingRaw['profile_picture_url']
+            ?? $item['profile_pic']
+            ?? $item['profile_picture_url']
+            ?? $item['from']['profile_pic']
+            ?? $item['from']['profile_picture_url']
+            ?? null
+        );
+
+        if ($existingAvatar !== null) {
+            return [
+                'profile_pic' => $existingAvatar,
+                'profile_picture_url' => $existingAvatar,
+            ];
+        }
+
+        $failedAt = $this->normalizeTimestamp($existingRaw['profile_fetch_failed_at'] ?? null);
+        if ($failedAt && $failedAt->greaterThan(now()->subHours(12))) {
+            return [
+                'profile_fetch_failed_at' => $failedAt->toIso8601String(),
+            ];
+        }
+
+        $providerUserId = $this->normalizeNullableString($comment->provider_user_id ?? null);
+
+        if ($providerUserId === null) {
+            return [];
+        }
+
+        if (app()->environment('local')) {
+            return [
+                'profile_pic' => 'https://ui-avatars.com/api/?name=' . urlencode($comment->username ?: 'Instagram user') . '&background=e2e8f0&color=334155',
+            ];
+        }
+
+        try {
+            $response = Http::withToken($this->resolveAccessToken($connection))
+                ->acceptJson()
+                ->get("https://graph.instagram.com/{$this->resolveGraphVersion()}/{$providerUserId}", [
+                    'fields' => 'id,username,name,profile_pic',
+                ]);
+
+            if (! $response->successful()) {
+                return [
+                    'profile_fetch_failed_at' => now()->toIso8601String(),
+                ];
+            }
+
+            $profile = $response->json();
+            $avatar = $this->normalizeNullableString($profile['profile_pic'] ?? null);
+
+            return $avatar !== null
+                ? [
+                    'profile_pic' => $avatar,
+                    'profile_picture_url' => $avatar,
+                ]
+                : [];
+        } catch (\Throwable) {
+            return [
+                'profile_fetch_failed_at' => now()->toIso8601String(),
+            ];
+        }
     }
 
     protected function resolveHiddenState(SocialComment $comment, bool $providerHidden): bool

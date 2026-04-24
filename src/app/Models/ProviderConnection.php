@@ -49,4 +49,32 @@ class ProviderConnection extends Model
     {
         return $this->hasMany(Conversation::class);
     }
+
+    public function catalogs(): HasMany
+    {
+        return $this->hasMany(Catalog::class);
+    }
+
+    public function catalogProductSets(): HasMany
+    {
+        return $this->hasMany(CatalogProductSet::class);
+    }
+
+    public function catalogCollections(): HasMany
+    {
+        return $this->hasMany(CatalogCollection::class);
+    }
+
+    public function commerceOrders(): HasMany
+    {
+        return $this->hasMany(CommerceOrder::class)
+            ->orderByDesc('placed_at')
+            ->orderByDesc('id');
+    }
+
+    public function commercePromotionCampaigns(): HasMany
+    {
+        return $this->hasMany(CommercePromotionCampaign::class)
+            ->orderByDesc('id');
+    }
 }

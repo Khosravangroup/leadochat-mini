@@ -2,11 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\WorkspaceRealtimeUpdated;
+use App\Models\CatalogProduct;
 use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\MessageAttachment;
 use App\Models\WorkspaceTag;
 use App\Models\ConversationParticipant;
+use App\Models\ConversationProductShare;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -71,6 +74,7 @@ class InboxController extends Controller
         $workspaceTags = collect();
         $workspaceDepartments = collect();
         $workspaceMembers = collect();
+        $catalogProducts = collect();
 
         if ($workspace) {
             $query = Conversation::query()
@@ -78,6 +82,7 @@ class InboxController extends Controller
                 ->with([
                     'participants',
                     'messages.attachments',
+                    'messages.productShare',
                     'messages.senderParticipant',
                     'messages.replyToMessage',
                     'workspaceTags',
@@ -125,6 +130,17 @@ class InboxController extends Controller
                 ->orderBy('users.name')
                 ->orderBy('users.email')
                 ->get();
+
+            $catalogProducts = CatalogProduct::query()
+                ->where('is_active', true)
+                ->whereHas('catalog', function ($query) use ($workspace) {
+                    $query
+                        ->where('workspace_id', $workspace->id)
+                        ->where('status', 'active');
+                })
+                ->with('catalog.providerConnection')
+                ->orderBy('title')
+                ->get();
         }
 
         $selectedConversation = null;
@@ -144,13 +160,136 @@ class InboxController extends Controller
             'workspaceTags' => $workspaceTags,
             'workspaceDepartments' => $workspaceDepartments,
             'workspaceMembers' => $workspaceMembers,
+            'catalogProducts' => $catalogProducts,
             'viewMode' => $viewMode,
             'showArchived' => $showArchived,
             'showTrashed' => $showTrashed,
         ]);
     }
 
-    public function storeMessage(Request $request, Conversation $conversation): RedirectResponse
+    public function sendCatalogProduct(Request $request, Conversation $conversation): RedirectResponse|JsonResponse
+    {
+        $user = $request->user();
+        $workspace = $user?->currentWorkspace();
+
+        $this->guardWorkspaceConversationAccess($conversation, $workspace);
+
+        $validated = $request->validate([
+            'catalog_product_id' => ['required', 'integer'],
+            'note' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $product = CatalogProduct::query()
+            ->whereKey((int) $validated['catalog_product_id'])
+            ->where('is_active', true)
+            ->whereHas('catalog', function ($query) use ($workspace, $conversation) {
+                $query
+                    ->where('workspace_id', $workspace->id)
+                    ->where('status', 'active')
+                    ->where(function ($catalogQuery) use ($conversation) {
+                        $catalogQuery
+                            ->whereNull('provider_connection_id')
+                            ->orWhere('provider_connection_id', $conversation->provider_connection_id);
+                    });
+            })
+            ->with('catalog')
+            ->firstOrFail();
+
+        $selfParticipant = $this->resolveSelfParticipant($conversation);
+        $snapshot = $this->buildProductSnapshot($product);
+        $note = trim((string) ($validated['note'] ?? ''));
+        $dmText = $this->buildProductMessageText($snapshot, $note);
+
+        $sendResult = null;
+        $providerMessageId = null;
+        $status = 'sent';
+        $failedAt = null;
+        $lastError = null;
+
+        if ($conversation->provider === 'instagram') {
+            try {
+                $sendResult = $this->sendInstagramCatalogProductTemplateMessage($conversation, $snapshot, $note);
+                $providerMessageId = (string) (
+                    $sendResult['message_id']
+                    ?? $sendResult['response']['message_id']
+                    ?? $sendResult['mock_response']['message_id']
+                    ?? ''
+                );
+            } catch (\Throwable $exception) {
+                report($exception);
+
+                $errorMessage = $this->friendlyInstagramSendError($exception);
+
+                if ($request->expectsJson()) {
+                    return response()->json([
+                        'ok' => false,
+                        'status' => 'failed',
+                        'error' => $errorMessage,
+                    ], 422);
+                }
+
+                return redirect()
+                    ->route('inbox.show', ['conversation' => $conversation->id])
+                    ->withErrors(['catalog_product' => $errorMessage]);
+            }
+        }
+
+        $message = null;
+
+        DB::transaction(function () use ($conversation, $selfParticipant, $user, $product, $snapshot, $note, $dmText, $sendResult, $providerMessageId, $status, $failedAt, $lastError, &$message) {
+            $message = $this->createOutboundMessage($conversation, $selfParticipant, [
+                'message_type' => 'product_card',
+                'text_body' => $dmText,
+                'provider_message_id' => $providerMessageId !== null && $providerMessageId !== ''
+                    ? $providerMessageId
+                    : ('product-card-' . now()->timestamp . '-' . random_int(1000, 9999)),
+                'status' => $status,
+                'failed_at' => $failedAt,
+                'last_error' => $lastError,
+                'meta' => $this->withAgentMeta($user, [
+                    'delivery_mode' => $sendResult['delivery_mode'] ?? ($conversation->provider === 'instagram'
+                        ? 'instagram_service_catalog_product_template'
+                        : 'controller_catalog_product_mock'),
+                    'product_card' => $snapshot,
+                    'product_note' => $note !== '' ? $note : null,
+                    'send_result' => $sendResult,
+                ]),
+            ]);
+
+            ConversationProductShare::create([
+                'conversation_id' => $conversation->id,
+                'message_id' => $message->id,
+                'catalog_product_id' => $product->id,
+                'agent_id' => $user?->id,
+                'product_snapshot' => $snapshot,
+            ]);
+        });
+
+        $this->updateConversationSnapshot(
+            $conversation,
+            'Product: ' . $product->title,
+            $message?->sent_at ?? now()
+        );
+
+        $this->broadcastInboxUpdate($workspace, $conversation, 'catalog_product_sent', $message);
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'ok' => $message?->status !== 'failed',
+                'conversation_id' => $conversation->id,
+                'message_id' => $message?->id,
+                'message_ids' => $message?->id ? [$message->id] : [],
+                'status' => $message?->status,
+                'error' => $message?->last_error,
+            ], $message?->status === 'failed' ? 422 : 200);
+        }
+
+        return redirect()->route('inbox.show', [
+            'conversation' => $conversation->id,
+        ]);
+    }
+
+    public function storeMessage(Request $request, Conversation $conversation): RedirectResponse|JsonResponse
     {
         $user = $request->user();
         $workspace = $user?->currentWorkspace();
@@ -192,11 +331,11 @@ class InboxController extends Controller
                             ? $providerMessageId
                             : ('instagram-outbound-' . now()->timestamp . '-' . random_int(1000, 9999)),
                         'status' => 'sent',
-                        'meta' => [
+                        'meta' => $this->withAgentMeta($user, [
                             'provider' => 'instagram',
                             'delivery_mode' => 'instagram_service_text',
                             'send_result' => $sendResult,
-                        ],
+                        ]),
                     ]);
 
                     $this->updateConversationSnapshot(
@@ -204,6 +343,8 @@ class InboxController extends Controller
                         $messageText !== '' ? $messageText : 'New message',
                         $message->sent_at
                     );
+
+                    $this->broadcastInboxUpdate($workspace, $conversation, 'instagram_message_sent', $message);
                 } catch (\Throwable $exception) {
                     $message = $this->createOutboundMessage($conversation, $selfParticipant, [
                         'reply_to_message_id' => $replyToMessageId,
@@ -212,11 +353,11 @@ class InboxController extends Controller
                         'status' => 'failed',
                         'failed_at' => now(),
                         'last_error' => $exception->getMessage(),
-                        'meta' => [
+                        'meta' => $this->withAgentMeta($user, [
                             'provider' => 'instagram',
                             'delivery_mode' => 'instagram_service_text',
                             'send_failed' => true,
-                        ],
+                        ]),
                     ]);
 
                     $this->updateConversationSnapshot(
@@ -224,6 +365,19 @@ class InboxController extends Controller
                         'Failed to send Instagram message',
                         $message->sent_at
                     );
+
+                    $this->broadcastInboxUpdate($workspace, $conversation, 'instagram_message_failed', $message);
+                }
+
+                if ($request->expectsJson()) {
+                    return response()->json([
+                        'ok' => $message->status !== 'failed',
+                        'conversation_id' => $conversation->id,
+                        'message_id' => $message->id,
+                        'message_ids' => [$message->id],
+                        'status' => $message->status,
+                        'error' => $message->last_error,
+                    ], $message->status === 'failed' ? 422 : 200);
                 }
 
                 return redirect()->route('inbox.show', [
@@ -236,10 +390,10 @@ class InboxController extends Controller
                 'reply_to_message_id' => $replyToMessageId,
                 'message_type' => 'text',
                 'text_body' => $messageText,
-                'meta' => [
+                'meta' => $this->withAgentMeta($user, [
                     'is_mock' => true,
                     'delivery_mode' => 'controller_mock_text',
-                ],
+                ]),
             ]);
 
             $this->updateConversationSnapshot(
@@ -248,6 +402,19 @@ class InboxController extends Controller
                 $message->sent_at
             );
 
+            $this->broadcastInboxUpdate($workspace, $conversation, 'message_sent', $message);
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'ok' => true,
+                    'conversation_id' => $conversation->id,
+                    'message_id' => $message->id,
+                    'message_ids' => [$message->id],
+                    'status' => $message->status,
+                    'error' => $message->last_error,
+                ]);
+            }
+
             return redirect()->route('inbox.show', [
                 'conversation' => $conversation->id,
                 'reply' => null,
@@ -255,13 +422,14 @@ class InboxController extends Controller
         }
 
         $lastPreview = 'Attachment';
+        $createdMessageIds = [];
 
         if ($conversation->provider === 'instagram') {
-            DB::transaction(function () use ($uploadedFiles, $messageText, $replyToMessageId, $conversation, $selfParticipant, &$lastPreview) {
+            DB::transaction(function () use ($uploadedFiles, $messageText, $replyToMessageId, $conversation, $selfParticipant, $user, &$lastPreview, &$createdMessageIds) {
                 foreach ($uploadedFiles as $index => $uploadedFile) {
                     $upload = $this->storeInstagramOutboundUpload($uploadedFile);
-                    $messageType = $upload['is_image'] ? 'image' : ($upload['is_video'] ? 'video' : 'file');
-                    $attachmentType = $upload['is_image'] ? 'image' : ($upload['is_video'] ? 'video' : 'file');
+                    $messageType = $upload['message_type'];
+                    $attachmentType = $upload['instagram_attachment_type'];
                     $caption = $index === 0 && $messageText !== '' ? $messageText : null;
 
                     try {
@@ -284,12 +452,12 @@ class InboxController extends Controller
                                 ? $providerMessageId
                                 : ('instagram-outbound-attachment-' . now()->timestamp . '-' . random_int(1000, 9999)),
                             'status' => 'sent',
-                            'meta' => [
+                            'meta' => $this->withAgentMeta($user, [
                                 'provider' => 'instagram',
                                 'multi_upload' => true,
                                 'delivery_mode' => 'instagram_service_attachment',
                                 'send_result' => $sendResult,
-                            ],
+                            ]),
                         ]);
 
                         MessageAttachment::create([
@@ -310,6 +478,8 @@ class InboxController extends Controller
                                 'source' => 'storeMessage',
                             ],
                         ]);
+
+                        $createdMessageIds[] = $message->id;
                     } catch (\Throwable $exception) {
                         $message = $this->createOutboundMessage($conversation, $selfParticipant, [
                             'reply_to_message_id' => $replyToMessageId,
@@ -318,12 +488,12 @@ class InboxController extends Controller
                             'status' => 'failed',
                             'failed_at' => now(),
                             'last_error' => $exception->getMessage(),
-                            'meta' => [
+                            'meta' => $this->withAgentMeta($user, [
                                 'provider' => 'instagram',
                                 'multi_upload' => true,
                                 'delivery_mode' => 'instagram_service_attachment',
                                 'send_failed' => true,
-                            ],
+                            ]),
                         ]);
 
                         MessageAttachment::create([
@@ -345,43 +515,54 @@ class InboxController extends Controller
                                 'send_failed' => true,
                             ],
                         ]);
+
+                        $createdMessageIds[] = $message->id;
                     }
 
-                    $lastPreview = $upload['is_image']
-                        ? '📷 Image'
-                        : ($upload['is_video'] ? '🎬 Video' : '📎 ' . $upload['file_name']);
+                    $lastPreview = match ($messageType) {
+                        'image' => '📷 Image',
+                        'video' => '🎬 Video',
+                        'voice' => '🎤 Voice message',
+                        default => '📎 ' . $upload['file_name'],
+                    };
                 }
             });
         } else {
-            DB::transaction(function () use ($uploadedFiles, $messageText, $replyToMessageId, $conversation, $selfParticipant, &$lastPreview) {
+            DB::transaction(function () use ($uploadedFiles, $messageText, $replyToMessageId, $conversation, $selfParticipant, $user, &$lastPreview, &$createdMessageIds) {
                 foreach ($uploadedFiles as $index => $uploadedFile) {
                     $mimeType = $uploadedFile->getMimeType() ?: 'application/octet-stream';
                     $isImage = str_starts_with($mimeType, 'image/');
                     $isVideo = str_starts_with($mimeType, 'video/');
-                    $messageType = $isImage ? 'image' : ($isVideo ? 'video' : 'file');
+                    $isAudio = str_starts_with($mimeType, 'audio/');
+                    $messageType = $isImage ? 'image' : ($isVideo ? 'video' : ($isAudio ? 'voice' : 'file'));
                     $caption = $index === 0 && $messageText !== '' ? $messageText : null;
 
                     $message = $this->createOutboundMessage($conversation, $selfParticipant, [
                         'reply_to_message_id' => $replyToMessageId,
                         'message_type' => $messageType,
                         'caption' => $caption,
-                        'meta' => [
+                        'meta' => $this->withAgentMeta($user, [
                             'is_mock' => true,
                             'multi_upload' => true,
                             'delivery_mode' => 'controller_mock_attachment',
-                        ],
+                        ]),
                     ]);
 
                     $this->createAttachmentFromUpload($message, $uploadedFile, [
-                        'attachment_type' => $isImage ? 'image' : ($isVideo ? 'video' : 'file'),
+                        'attachment_type' => $isImage ? 'image' : ($isVideo ? 'video' : ($isAudio ? 'audio' : 'file')),
                         'meta' => [
                             'source' => 'storeMessage',
                         ],
                     ]);
 
-                    $lastPreview = $isImage
-                        ? '📷 Image'
-                        : ($isVideo ? '🎬 Video' : '📎 ' . $uploadedFile->getClientOriginalName());
+                    $createdMessageIds[] = $message->id;
+
+                    $lastPreview = match ($messageType) {
+                        'image' => '📷 Image',
+                        'video' => '🎬 Video',
+                        'voice' => '🎤 Voice message',
+                        default => '📎 ' . $uploadedFile->getClientOriginalName(),
+                    };
                 }
             });
         }
@@ -394,13 +575,26 @@ class InboxController extends Controller
             now()
         );
 
+        $this->broadcastInboxUpdate($workspace, $conversation, $conversation->provider === 'instagram' ? 'instagram_message_sent' : 'message_sent', [
+            'message_ids' => $createdMessageIds,
+        ]);
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'ok' => true,
+                'conversation_id' => $conversation->id,
+                'message_ids' => $createdMessageIds,
+                'status' => 'sent',
+            ]);
+        }
+
         return redirect()->route('inbox.show', [
             'conversation' => $conversation->id,
             'reply' => null,
         ]);
     }
 
-    public function storeVoice(Request $request, Conversation $conversation): RedirectResponse
+    public function storeVoice(Request $request, Conversation $conversation): RedirectResponse|JsonResponse
     {
         $user = $request->user();
         $workspace = $user?->currentWorkspace();
@@ -421,65 +615,244 @@ class InboxController extends Controller
 
         $message = null;
 
-        DB::transaction(function () use ($conversation, $selfParticipant, $voiceFile, $durationSeconds, &$message) {
-            $message = $this->createOutboundMessage($conversation, $selfParticipant, [
-                'message_type' => 'voice',
-                'meta' => [
-                    'is_mock' => true,
-                    'delivery_mode' => 'controller_mock_voice',
-                ],
-            ]);
+        if ($conversation->provider === 'instagram') {
+            $upload = $this->storeInstagramOutboundUpload($voiceFile);
 
-            $this->createAttachmentFromUpload($message, $voiceFile, [
-                'attachment_type' => 'audio',
-                'duration_seconds' => $durationSeconds,
-                'meta' => [
-                    'source' => 'storeVoice',
-                ],
-            ]);
-        });
+            try {
+                $sendResult = $this->sendInstagramAttachmentMessage($conversation, $upload['public_url'], [
+                    'attachment_type' => 'audio',
+                    'messaging_type' => 'RESPONSE',
+                ]);
+                $status = 'sent';
+                $failedAt = null;
+                $lastError = null;
+            } catch (\Throwable $exception) {
+                $sendResult = [
+                    'send_failed' => true,
+                    'error' => $exception->getMessage(),
+                ];
+                $status = 'failed';
+                $failedAt = now();
+                $lastError = $exception->getMessage();
+            }
+
+            $providerMessageId = (string) (
+                $sendResult['message_id']
+                ?? $sendResult['response']['message_id']
+                ?? $sendResult['mock_response']['message_id']
+                ?? ''
+            );
+
+            DB::transaction(function () use ($conversation, $selfParticipant, $user, $durationSeconds, $upload, $sendResult, $status, $failedAt, $lastError, $providerMessageId, &$message) {
+                $message = $this->createOutboundMessage($conversation, $selfParticipant, [
+                    'message_type' => 'voice',
+                    'provider_message_id' => $providerMessageId !== ''
+                        ? $providerMessageId
+                        : ('instagram-outbound-voice-' . now()->timestamp . '-' . random_int(1000, 9999)),
+                    'status' => $status,
+                    'failed_at' => $failedAt,
+                    'last_error' => $lastError,
+                    'meta' => $this->withAgentMeta($user, [
+                        'provider' => 'instagram',
+                        'delivery_mode' => 'instagram_service_audio',
+                        'send_result' => $sendResult,
+                    ]),
+                ]);
+
+                MessageAttachment::create([
+                    'message_id' => $message->id,
+                    'attachment_type' => 'audio',
+                    'url' => $upload['public_url'],
+                    'thumbnail_url' => null,
+                    'mime_type' => $upload['mime_type'],
+                    'file_name' => $upload['file_name'],
+                    'file_size' => $upload['file_size'],
+                    'width' => null,
+                    'height' => null,
+                    'duration_seconds' => $durationSeconds,
+                    'sort_order' => 0,
+                    'meta' => [
+                        'disk' => 'public',
+                        'path' => $upload['stored_path'],
+                        'provider' => 'instagram',
+                        'source' => 'storeVoice',
+                    ],
+                ]);
+            });
+        } else {
+            DB::transaction(function () use ($conversation, $selfParticipant, $user, $voiceFile, $durationSeconds, &$message) {
+                $message = $this->createOutboundMessage($conversation, $selfParticipant, [
+                    'message_type' => 'voice',
+                    'meta' => $this->withAgentMeta($user, [
+                        'is_mock' => true,
+                        'delivery_mode' => 'controller_mock_voice',
+                    ]),
+                ]);
+
+                $this->createAttachmentFromUpload($message, $voiceFile, [
+                    'attachment_type' => 'audio',
+                    'duration_seconds' => $durationSeconds,
+                    'meta' => [
+                        'source' => 'storeVoice',
+                    ],
+                ]);
+            });
+        }
 
         $this->updateConversationSnapshot($conversation, '🎤 Voice message', $message?->sent_at ?? now());
+        $this->broadcastInboxUpdate($workspace, $conversation, $conversation->provider === 'instagram' ? 'instagram_message_sent' : 'message_sent', $message);
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'ok' => $message?->status !== 'failed',
+                'conversation_id' => $conversation->id,
+                'message_id' => $message?->id,
+                'message_ids' => $message?->id ? [$message->id] : [],
+                'status' => $message?->status,
+                'error' => $message?->last_error,
+            ], $message?->status === 'failed' ? 422 : 200);
+        }
 
         return redirect()->route('inbox.show', [
             'conversation' => $conversation->id,
         ]);
     }
 
-    public function mockIncoming(Request $request, Conversation $conversation): RedirectResponse
+    public function storeReaction(Request $request, Conversation $conversation, Message $message): RedirectResponse|JsonResponse
     {
         $user = $request->user();
         $workspace = $user?->currentWorkspace();
 
         $this->guardWorkspaceConversationAccess($conversation, $workspace);
 
+        if ($message->conversation_id !== $conversation->id) {
+            abort(404);
+        }
+
+        if ($message->direction !== 'inbound') {
+            abort(422, 'Only inbound Instagram messages can be reacted to from the inbox.');
+        }
+
         $validated = $request->validate([
-            'incoming_text' => ['nullable', 'string', 'max:5000'],
+            'reaction' => ['nullable', 'string', 'in:love'],
+            'action' => ['nullable', 'string', 'in:react,unreact'],
         ]);
 
-        $customerParticipant = $this->resolveCustomerParticipant($conversation);
+        $reaction = $validated['reaction'] ?? 'love';
+        $action = $validated['action'] ?? 'react';
+        $emoji = $this->emojiForReaction($reaction);
+        $sendResult = null;
+        $status = 'local';
+        $error = null;
 
-        $text = trim($validated['incoming_text'] ?: 'Mock incoming message from customer.');
+        if ($conversation->provider === 'instagram') {
+            try {
+                $connection = app(InstagramService::class)->resolveConnectionFromConversation($conversation);
+                $recipientId = $this->resolveInstagramRecipientId($conversation);
 
-        $message = $this->createInboundMessage($conversation, $customerParticipant, [
-            'message_type' => 'text',
-            'text_body' => $text,
-            'meta' => [
-                'is_mock' => true,
-                'source' => 'mock_incoming',
-            ],
+                if (! $connection) {
+                    throw new \RuntimeException('Instagram provider connection was not found for this conversation.');
+                }
+
+                if (! $recipientId) {
+                    throw new \RuntimeException('Instagram recipient id was not found for this conversation.');
+                }
+
+                if (blank($message->provider_message_id)) {
+                    throw new \RuntimeException('Instagram provider message id was not found for this message.');
+                }
+
+                $sendResult = app(InstagramService::class)->sendReaction(
+                    $connection,
+                    $recipientId,
+                    (string) $message->provider_message_id,
+                    $reaction,
+                    $action
+                );
+                $status = 'sent';
+            } catch (\Throwable $exception) {
+                $status = 'failed';
+                $error = $exception->getMessage();
+                report($exception);
+            }
+        }
+
+        $this->applyMessageReaction($message, 'agent_reaction', [
+            'action' => $action,
+            'reaction' => $reaction,
+            'emoji' => $emoji,
+            'actor' => 'agent',
+            'status' => $status,
+            'error' => $error,
+            'send_result' => $sendResult,
+            'updated_at' => now()->toIso8601String(),
         ]);
 
-        $unreadCount = Message::query()
-            ->where('conversation_id', $conversation->id)
-            ->where('direction', 'inbound')
-            ->whereNull('read_at')
-            ->count();
+        $this->broadcastInboxUpdate($workspace, $conversation, 'instagram_message_reaction_updated', [
+            'message_id' => $message->id,
+            'provider_message_id' => $message->provider_message_id,
+            'reaction' => $action === 'unreact' ? null : $reaction,
+            'emoji' => $action === 'unreact' ? null : $emoji,
+            'actor' => 'agent',
+            'status' => $status,
+        ]);
 
-        $this->updateConversationSnapshot($conversation, $text, $message->sent_at, $unreadCount);
+        if ($request->expectsJson()) {
+            return response()->json([
+                'ok' => $status !== 'failed',
+                'status' => $status,
+                'error' => $error,
+                'reaction' => $action === 'unreact' ? null : $reaction,
+                'emoji' => $action === 'unreact' ? null : $emoji,
+                'action' => $action,
+                'message_id' => $message->id,
+                'provider_message_id' => $message->provider_message_id,
+                'actor' => 'agent',
+            ], $status === 'failed' ? 422 : 200);
+        }
 
         return redirect()->route('inbox.show', [
             'conversation' => $conversation->id,
+        ]);
+    }
+
+    public function realtimeSnapshot(Request $request): JsonResponse
+    {
+        $workspace = $request->user()?->currentWorkspace();
+
+        if (! $workspace) {
+            abort(404);
+        }
+
+        $conversationId = $request->integer('conversation_id') ?: null;
+        $conversation = null;
+
+        if ($conversationId) {
+            $conversation = Conversation::query()
+                ->where('workspace_id', $workspace->id)
+                ->whereKey($conversationId)
+                ->first();
+        }
+
+        $latestConversationTimestamp = Conversation::query()
+            ->where('workspace_id', $workspace->id)
+            ->max('updated_at');
+
+        $latestMessageTimestamp = Message::query()
+            ->whereHas('conversation', fn ($query) => $query->where('workspace_id', $workspace->id))
+            ->max('updated_at');
+
+        return response()->json([
+            'ok' => true,
+            'workspace_id' => $workspace->id,
+            'conversation_id' => $conversation?->id,
+            'conversation_updated_at' => optional($conversation?->updated_at)->toIso8601String(),
+            'conversation_last_message_at' => optional($conversation?->last_message_at)->toIso8601String(),
+            'conversation_message_count' => $conversation
+                ? Message::query()->where('conversation_id', $conversation->id)->count()
+                : null,
+            'latest_conversation_timestamp' => $latestConversationTimestamp,
+            'latest_message_timestamp' => $latestMessageTimestamp,
         ]);
     }
 
@@ -707,7 +1080,7 @@ class InboxController extends Controller
         ]);
     }
 
-    public function archiveConversation(Request $request, Conversation $conversation): RedirectResponse
+    public function archiveConversation(Request $request, Conversation $conversation): RedirectResponse|JsonResponse
     {
         $user = $request->user();
         $workspace = $user?->currentWorkspace();
@@ -721,10 +1094,10 @@ class InboxController extends Controller
             'status' => 'archived',
         ]);
 
-        return redirect()->route('inbox.index');
+        return $this->respondWithConversationAction($request, route('inbox.index'), 'Conversation archived.');
     }
 
-    public function unarchiveConversation(Request $request, Conversation $conversation): RedirectResponse
+    public function unarchiveConversation(Request $request, Conversation $conversation): RedirectResponse|JsonResponse
     {
         $user = $request->user();
         $workspace = $user?->currentWorkspace();
@@ -738,10 +1111,10 @@ class InboxController extends Controller
             'status' => 'active',
         ]);
 
-        return redirect()->route('inbox.index');
+        return $this->respondWithConversationAction($request, route('inbox.index'), 'Conversation unarchived.');
     }
 
-    public function trashConversation(Request $request, Conversation $conversation): RedirectResponse
+    public function trashConversation(Request $request, Conversation $conversation): RedirectResponse|JsonResponse
     {
         $user = $request->user();
         $workspace = $user?->currentWorkspace();
@@ -755,10 +1128,10 @@ class InboxController extends Controller
             'is_archived' => false,
         ]);
 
-        return redirect()->route('inbox.index');
+        return $this->respondWithConversationAction($request, route('inbox.index'), 'Conversation moved to trash.');
     }
 
-    public function restoreConversation(Request $request, Conversation $conversation): RedirectResponse
+    public function restoreConversation(Request $request, Conversation $conversation): RedirectResponse|JsonResponse
     {
         $user = $request->user();
         $workspace = $user?->currentWorkspace();
@@ -772,7 +1145,23 @@ class InboxController extends Controller
             'is_archived' => false,
         ]);
 
-        return redirect()->route('inbox.index');
+        return $this->respondWithConversationAction($request, route('inbox.index'), 'Conversation restored.');
+    }
+
+    protected function respondWithConversationAction(
+        Request $request,
+        string $redirectUrl,
+        string $message
+    ): RedirectResponse|JsonResponse {
+        if ($request->expectsJson() || $request->ajax()) {
+            return response()->json([
+                'ok' => true,
+                'message' => $message,
+                'redirect_url' => $redirectUrl,
+            ]);
+        }
+
+        return redirect()->to($redirectUrl)->with('status', $message);
     }
 
     protected function guardWorkspaceConversationAccess(?Conversation $conversation, ?object $workspace, bool $allowArchived = false): void
@@ -810,7 +1199,115 @@ class InboxController extends Controller
         return $providerUserId !== '' ? $providerUserId : null;
     }
 
+    protected function withAgentMeta(?object $user, array $meta): array
+    {
+        if (! $user?->id) {
+            return $meta;
+        }
+
+        $agentName = trim((string) ($user->name ?? ''));
+        $agentEmail = trim((string) ($user->email ?? ''));
+
+        if ($agentName === '' && $agentEmail !== '') {
+            $agentName = strstr($agentEmail, '@', true) ?: $agentEmail;
+        }
+
+        $meta['agent_user'] = [
+            'id' => $user->id,
+            'name' => $agentName !== '' ? $agentName : 'Agent',
+            'email' => $agentEmail !== '' ? $agentEmail : null,
+            'avatar_url' => $user->avatar_url ?? null,
+        ];
+
+        return $meta;
+    }
+
     protected function sendInstagramTextMessage(Conversation $conversation, string $text): array
+    {
+        return $this->sendInstagramTextMessageWithOptions($conversation, $text, [
+            'messaging_type' => 'RESPONSE',
+        ]);
+    }
+
+    protected function sendInstagramCatalogProductTextMessage(Conversation $conversation, string $text): array
+    {
+        try {
+            $result = $this->sendInstagramTextMessageWithOptions($conversation, $text, [
+                'messaging_type' => 'RESPONSE',
+            ]);
+
+            $result['delivery_mode'] = 'instagram_service_catalog_product_text';
+
+            return $result;
+        } catch (\Throwable $exception) {
+            if (! $this->isInstagramAllowedWindowError($exception)) {
+                throw $exception;
+            }
+
+            try {
+                $result = $this->sendInstagramTextMessageWithOptions($conversation, $text, [
+                    'messaging_type' => 'MESSAGE_TAG',
+                    'tag' => 'HUMAN_AGENT',
+                ]);
+
+                $result['delivery_mode'] = 'instagram_service_catalog_product_text_human_agent';
+                $result['fallback_reason'] = 'outside_standard_reply_window';
+                $result['fallback_from'] = 'RESPONSE';
+                $result['original_error'] = $exception->getMessage();
+
+                return $result;
+            } catch (\Throwable $fallbackException) {
+                throw new \RuntimeException(
+                    'Instagram rejected this product DM because the customer reply window is closed. I also tried the Human Agent fallback, but Meta rejected it too. Ask the customer to send a new DM, then try again.',
+                    0,
+                    $fallbackException
+                );
+            }
+        }
+    }
+
+    protected function sendInstagramCatalogProductTemplateMessage(Conversation $conversation, array $snapshot, string $note = ''): array
+    {
+        $elements = [
+            $this->buildInstagramProductTemplateElement($snapshot, $note),
+        ];
+
+        try {
+            $result = $this->sendInstagramGenericTemplateWithOptions($conversation, $elements, [
+                'messaging_type' => 'RESPONSE',
+            ]);
+
+            $result['delivery_mode'] = 'instagram_service_catalog_product_template';
+
+            return $result;
+        } catch (\Throwable $exception) {
+            if (! $this->isInstagramAllowedWindowError($exception)) {
+                throw $exception;
+            }
+
+            try {
+                $result = $this->sendInstagramGenericTemplateWithOptions($conversation, $elements, [
+                    'messaging_type' => 'MESSAGE_TAG',
+                    'tag' => 'HUMAN_AGENT',
+                ]);
+
+                $result['delivery_mode'] = 'instagram_service_catalog_product_template_human_agent';
+                $result['fallback_reason'] = 'outside_standard_reply_window';
+                $result['fallback_from'] = 'RESPONSE';
+                $result['original_error'] = $exception->getMessage();
+
+                return $result;
+            } catch (\Throwable $fallbackException) {
+                throw new \RuntimeException(
+                    'Instagram rejected this product card because the customer reply window is closed. I also tried the Human Agent fallback, but Meta rejected it too. Ask the customer to send a new DM, then try again.',
+                    0,
+                    $fallbackException
+                );
+            }
+        }
+    }
+
+    protected function sendInstagramTextMessageWithOptions(Conversation $conversation, string $text, array $options): array
     {
         $connection = app(InstagramService::class)->resolveConnectionFromConversation($conversation);
 
@@ -824,9 +1321,47 @@ class InboxController extends Controller
             throw new \RuntimeException('Instagram recipient id was not found for this conversation.');
         }
 
-        return app(InstagramService::class)->sendMessage($connection, $recipientId, $text, [
-            'messaging_type' => 'RESPONSE',
-        ]);
+        return app(InstagramService::class)->sendMessage($connection, $recipientId, $text, $options);
+    }
+
+    protected function sendInstagramGenericTemplateWithOptions(Conversation $conversation, array $elements, array $options): array
+    {
+        $connection = app(InstagramService::class)->resolveConnectionFromConversation($conversation);
+
+        if (! $connection) {
+            throw new \RuntimeException('Instagram provider connection was not found for this conversation.');
+        }
+
+        $recipientId = $this->resolveInstagramRecipientId($conversation);
+
+        if (! $recipientId) {
+            throw new \RuntimeException('Instagram recipient id was not found for this conversation.');
+        }
+
+        return app(InstagramService::class)->sendGenericTemplate($connection, $recipientId, $elements, $options);
+    }
+
+    protected function isInstagramAllowedWindowError(\Throwable $exception): bool
+    {
+        $message = $exception->getMessage();
+        $lowerMessage = mb_strtolower($message);
+
+        return str_contains($message, '2534022')
+            || str_contains($lowerMessage, 'outside of allowed window')
+            || str_contains($lowerMessage, 'outside the allowed window')
+            || str_contains($lowerMessage, 'reply window is closed');
+    }
+
+    protected function friendlyInstagramSendError(\Throwable $exception): string
+    {
+        $message = $exception->getMessage();
+        $lowerMessage = mb_strtolower($message);
+
+        if ($this->isInstagramAllowedWindowError($exception) || str_contains($lowerMessage, 'human agent')) {
+            return 'Instagram did not allow this DM because the customer reply window is closed. Ask the customer to send a new DM, then send the product again.';
+        }
+
+        return 'Instagram did not accept this product DM. Please try again, and if it repeats, check the Instagram connection permissions.';
     }
 
     protected function sendInstagramAttachmentMessage(
@@ -853,6 +1388,8 @@ class InboxController extends Controller
     {
         $mimeType = $uploadedFile->getMimeType() ?: 'application/octet-stream';
         $isImage = str_starts_with($mimeType, 'image/');
+        $isVideo = str_starts_with($mimeType, 'video/');
+        $isAudio = str_starts_with($mimeType, 'audio/');
         $storedPath = $uploadedFile->store('message-attachments', 'public');
 
         $width = null;
@@ -868,10 +1405,13 @@ class InboxController extends Controller
 
         return [
             'stored_path' => $storedPath,
-            'public_url' => Storage::url($storedPath),
+            'public_url' => $this->publicStorageUrl($storedPath),
             'mime_type' => $mimeType,
+            'message_type' => $isImage ? 'image' : ($isVideo ? 'video' : ($isAudio ? 'voice' : 'file')),
+            'instagram_attachment_type' => $isImage ? 'image' : ($isVideo ? 'video' : ($isAudio ? 'audio' : 'file')),
             'is_image' => $isImage,
-            'is_video' => str_starts_with($mimeType, 'video/'),
+            'is_video' => $isVideo,
+            'is_audio' => $isAudio,
             'file_name' => $uploadedFile->getClientOriginalName(),
             'file_size' => $uploadedFile->getSize(),
             'width' => $width,
@@ -891,6 +1431,104 @@ class InboxController extends Controller
             ->first();
 
         return $replyMessage?->id;
+    }
+
+    protected function buildProductSnapshot(CatalogProduct $product): array
+    {
+        return [
+            'id' => $product->id,
+            'catalog_id' => $product->catalog_id,
+            'catalog_name' => $product->catalog?->name,
+            'sku' => $product->sku,
+            'title' => $product->title,
+            'description' => $product->description,
+            'price' => $product->price !== null ? (float) $product->price : null,
+            'currency' => strtoupper((string) $product->currency),
+            'image_url' => $product->image_url,
+            'product_url' => $product->product_url,
+            'availability' => $product->availability,
+        ];
+    }
+
+    protected function buildProductMessageText(array $snapshot, string $note = ''): string
+    {
+        $lines = [
+            'Product recommendation',
+            (string) ($snapshot['title'] ?? 'Product'),
+        ];
+
+        if (($snapshot['price'] ?? null) !== null) {
+            $lines[] = strtoupper((string) ($snapshot['currency'] ?? 'USD')) . ' ' . number_format((float) $snapshot['price'], 2);
+        }
+
+        if (! blank($snapshot['description'] ?? null)) {
+            $lines[] = (string) $snapshot['description'];
+        }
+
+        if (! blank($snapshot['product_url'] ?? null)) {
+            $lines[] = 'View product: ' . $snapshot['product_url'];
+        }
+
+        if ($note !== '') {
+            $lines[] = 'Note: ' . $note;
+        }
+
+        return implode("\n", array_filter($lines, fn ($line) => trim((string) $line) !== ''));
+    }
+
+    protected function buildInstagramProductTemplateElement(array $snapshot, string $note = ''): array
+    {
+        $title = $this->compactTemplateText((string) ($snapshot['title'] ?? 'Product'), 80);
+        $description = trim((string) ($snapshot['description'] ?? ''));
+        $price = null;
+
+        if (($snapshot['price'] ?? null) !== null) {
+            $price = strtoupper((string) ($snapshot['currency'] ?? 'USD')) . ' ' . number_format((float) $snapshot['price'], 2);
+        }
+
+        $subtitleParts = array_filter([
+            $price,
+            $note !== '' ? 'Note: ' . $note : null,
+            $description !== '' ? $description : null,
+        ], fn ($value) => trim((string) $value) !== '');
+
+        $element = [
+            'title' => $title !== '' ? $title : 'Product',
+            'subtitle' => $this->compactTemplateText(implode(' - ', $subtitleParts), 80),
+        ];
+
+        $imageUrl = trim((string) ($snapshot['image_url'] ?? ''));
+        if ($imageUrl !== '') {
+            $element['image_url'] = $imageUrl;
+        }
+
+        $productUrl = trim((string) ($snapshot['product_url'] ?? ''));
+        if ($productUrl !== '') {
+            $element['default_action'] = [
+                'type' => 'web_url',
+                'url' => $productUrl,
+            ];
+            $element['buttons'] = [
+                [
+                    'type' => 'web_url',
+                    'url' => $productUrl,
+                    'title' => 'View product',
+                ],
+            ];
+        }
+
+        return $element;
+    }
+
+    protected function compactTemplateText(string $value, int $limit): string
+    {
+        $value = trim(preg_replace('/\s+/', ' ', $value) ?: '');
+
+        if ($value === '' || mb_strlen($value) <= $limit) {
+            return $value;
+        }
+
+        return rtrim(mb_substr($value, 0, max(1, $limit - 3))) . '...';
     }
 
     protected function createOutboundMessage(
@@ -976,7 +1614,7 @@ class InboxController extends Controller
         return MessageAttachment::create([
             'message_id' => $message->id,
             'attachment_type' => $meta['attachment_type'] ?? ($isImage ? 'image' : 'file'),
-            'url' => Storage::url($storedPath),
+            'url' => $this->publicStorageUrl($storedPath),
             'thumbnail_url' => $meta['thumbnail_url'] ?? null,
             'mime_type' => $mimeType,
             'file_name' => $uploadedFile->getClientOriginalName(),
@@ -984,6 +1622,7 @@ class InboxController extends Controller
             'width' => $meta['width'] ?? $width,
             'height' => $meta['height'] ?? $height,
             'duration_seconds' => $meta['duration_seconds'] ?? null,
+            'sort_order' => $meta['sort_order'] ?? 0,
             'meta' => array_merge([
                 'disk' => 'public',
                 'path' => $storedPath,
@@ -1008,5 +1647,67 @@ class InboxController extends Controller
         }
 
         $conversation->update($payload);
+    }
+
+    protected function publicStorageUrl(string $storedPath): string
+    {
+        return url(Storage::url($storedPath));
+    }
+
+    protected function applyMessageReaction(Message $message, string $metaKey, array $reaction): void
+    {
+        $meta = is_array($message->meta) ? $message->meta : [];
+        $history = is_array($meta['reaction_history'] ?? null) ? $meta['reaction_history'] : [];
+        $history[] = $reaction;
+
+        if (($reaction['status'] ?? null) === 'failed') {
+            unset($meta[$metaKey]);
+            $meta[$metaKey . '_error'] = $reaction;
+        } elseif (($reaction['action'] ?? 'react') === 'unreact') {
+            unset($meta[$metaKey]);
+            unset($meta[$metaKey . '_error']);
+        } else {
+            $meta[$metaKey] = $reaction;
+            unset($meta[$metaKey . '_error']);
+        }
+
+        $meta['reaction_history'] = array_slice($history, -25);
+        $message->meta = $meta;
+        $message->save();
+    }
+
+    protected function emojiForReaction(string $reaction): string
+    {
+        return match ($reaction) {
+            'love' => '❤️',
+            default => '❤️',
+        };
+    }
+
+    protected function broadcastInboxUpdate(?object $workspace, Conversation $conversation, string $action, mixed $messageOrPayload = null): void
+    {
+        if (! $workspace?->id) {
+            return;
+        }
+
+        $payload = [
+            'conversation_id' => $conversation->id,
+            'provider' => $conversation->provider,
+        ];
+
+        if ($messageOrPayload instanceof Message) {
+            $payload['message_id'] = $messageOrPayload->id;
+            $payload['direction'] = $messageOrPayload->direction;
+            $payload['message_type'] = $messageOrPayload->message_type;
+            $payload['status'] = $messageOrPayload->status;
+        } elseif (is_array($messageOrPayload)) {
+            $payload = array_merge($payload, $messageOrPayload);
+        }
+
+        try {
+            event(new WorkspaceRealtimeUpdated((int) $workspace->id, 'inbox', $action, $payload));
+        } catch (\Throwable $exception) {
+            report($exception);
+        }
     }
 }

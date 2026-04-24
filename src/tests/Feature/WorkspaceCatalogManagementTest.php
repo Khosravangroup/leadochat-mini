@@ -1,0 +1,332 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\Catalog;
+use App\Models\CatalogProduct;
+use App\Models\User;
+use App\Models\Workspace;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Tests\TestCase;
+
+class WorkspaceCatalogManagementTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_agent_can_update_and_toggle_catalog_product(): void
+    {
+        [$user, $catalog] = $this->makeWorkspaceCatalog();
+
+        $product = CatalogProduct::create([
+            'catalog_id' => $catalog->id,
+            'sku' => 'OLD-001',
+            'title' => 'Old Product',
+            'description' => 'Old description',
+            'price' => 10,
+            'currency' => 'USD',
+            'availability' => 'in_stock',
+            'is_active' => true,
+        ]);
+
+        $response = $this->actingAs($user)
+            ->withSession(['_token' => 'test-csrf-token'])
+            ->withHeader('X-CSRF-TOKEN', 'test-csrf-token')
+            ->patch(route('settings.catalogs.products.update', $product), [
+            'title' => 'Updated Product',
+            'sku' => 'NEW-001',
+            'description' => 'Updated description',
+            'price' => 19.95,
+            'sale_price' => 17.5,
+            'currency' => 'eur',
+            'image_url' => 'https://example.com/products/updated.jpg',
+            'product_url' => 'https://example.com/products/updated-product',
+            'brand' => 'Leadochat Labs',
+            'product_condition' => 'refurbished',
+            'inventory_quantity' => 14,
+            'sale_price_effective_start_at' => '2026-04-23T10:00',
+            'sale_price_effective_end_at' => '2026-04-25T21:00',
+            'google_product_category' => 'Electronics > Accessories',
+            'content_language' => 'fa-ir',
+            'target_country' => 'ae',
+            'availability' => 'preorder',
+            'is_active' => '0',
+        ]);
+
+        $response->assertRedirect(route('settings.index', ['section' => 'catalogs']));
+
+        $product->refresh();
+
+        $this->assertSame('Updated Product', $product->title);
+        $this->assertSame('NEW-001', $product->sku);
+        $this->assertSame('EUR', $product->currency);
+        $this->assertSame('17.50', $product->sale_price);
+        $this->assertSame('Leadochat Labs', $product->brand);
+        $this->assertSame('refurbished', $product->product_condition);
+        $this->assertSame(14, $product->inventory_quantity);
+        $this->assertSame('Electronics > Accessories', $product->google_product_category);
+        $this->assertSame('fa_IR', $product->content_language);
+        $this->assertSame('AE', $product->target_country);
+        $this->assertSame('preorder', $product->availability);
+        $this->assertFalse($product->is_active);
+
+        $response = $this->actingAs($user)
+            ->withSession(['_token' => 'test-csrf-token'])
+            ->withHeader('X-CSRF-TOKEN', 'test-csrf-token')
+            ->patch(route('settings.catalogs.products.status', $product));
+
+        $response->assertRedirect(route('settings.index', ['section' => 'catalogs']));
+
+        $this->assertTrue($product->refresh()->is_active);
+    }
+
+    public function test_agent_can_import_catalog_products_from_csv_and_update_matching_skus(): void
+    {
+        [$user, $catalog] = $this->makeWorkspaceCatalog();
+
+        CatalogProduct::create([
+            'catalog_id' => $catalog->id,
+            'sku' => 'SKU-001',
+            'title' => 'Existing Product',
+            'price' => 5,
+            'currency' => 'USD',
+            'availability' => 'in_stock',
+            'is_active' => true,
+        ]);
+
+        $csv = implode("\n", [
+            'title,sku,description,price,sale_price,currency,brand,condition,inventory,image_url,product_url,content_language,target_country,custom_label,availability,is_active',
+            'Updated CSV Product,SKU-001,Updated by import,25,20,USD,Leadochat Books,new,12,https://example.com/one.jpg,https://example.com/one,en,us,bestseller,in_stock,true',
+            'New CSV Product,SKU-002,Created by import,30,24,EUR,Leadochat Goods,used,3,https://example.com/two.jpg,https://example.com/two,fa_IR,ae,seasonal,out of stock,false',
+            ',SKU-003,Missing title,1,,USD,,,,,,,,,in_stock,true',
+        ]);
+
+        $response = $this->actingAs($user)
+            ->withSession(['_token' => 'test-csrf-token'])
+            ->withHeader('X-CSRF-TOKEN', 'test-csrf-token')
+            ->post(route('settings.catalogs.products.import', $catalog), [
+            'products_csv' => UploadedFile::fake()->createWithContent('products.csv', $csv),
+        ]);
+
+        $response->assertRedirect(route('settings.index', ['section' => 'catalogs']));
+
+        $this->assertSame(2, $catalog->products()->count());
+
+        $updated = $catalog->products()->where('sku', 'SKU-001')->firstOrFail();
+        $created = $catalog->products()->where('sku', 'SKU-002')->firstOrFail();
+
+        $this->assertSame('Updated CSV Product', $updated->title);
+        $this->assertSame('25.00', $updated->price);
+        $this->assertSame('20.00', $updated->sale_price);
+        $this->assertSame('Leadochat Books', $updated->brand);
+        $this->assertSame('new', $updated->product_condition);
+        $this->assertSame(12, $updated->inventory_quantity);
+        $this->assertSame('en', $updated->content_language);
+        $this->assertSame('US', $updated->target_country);
+        $this->assertSame('bestseller', data_get($updated->metadata, 'extra_attributes.custom_label'));
+        $this->assertSame('New CSV Product', $created->title);
+        $this->assertSame('24.00', $created->sale_price);
+        $this->assertSame('Leadochat Goods', $created->brand);
+        $this->assertSame('used', $created->product_condition);
+        $this->assertSame(3, $created->inventory_quantity);
+        $this->assertSame('fa_IR', $created->content_language);
+        $this->assertSame('AE', $created->target_country);
+        $this->assertSame('seasonal', data_get($created->metadata, 'extra_attributes.custom_label'));
+        $this->assertSame('out_of_stock', $created->availability);
+        $this->assertFalse($created->is_active);
+    }
+
+    public function test_agent_can_manage_localized_market_profiles_for_catalog_product(): void
+    {
+        [$user, $catalog] = $this->makeWorkspaceCatalog();
+
+        $product = CatalogProduct::create([
+            'catalog_id' => $catalog->id,
+            'sku' => 'BOOK-LOC-1',
+            'title' => 'Global Product',
+            'description' => 'Base description',
+            'price' => 50,
+            'currency' => 'USD',
+            'product_url' => 'https://example.com/global-product',
+            'availability' => 'in_stock',
+            'is_active' => true,
+        ]);
+
+        $storeResponse = $this->actingAs($user)
+            ->withSession(['_token' => 'test-csrf-token'])
+            ->withHeader('X-CSRF-TOKEN', 'test-csrf-token')
+            ->post(route('settings.catalogs.products.market-overrides.store', $product), [
+                'target_country' => 'ae',
+                'content_language' => 'fa-ir',
+                'title' => 'Localized Product',
+                'description' => 'Localized description',
+                'price' => 42,
+                'sale_price' => 39,
+                'currency' => 'aed',
+                'product_url' => 'https://example.com/fa/product',
+                'checkout_url' => 'https://checkout.example.com/fa/product',
+                'google_product_category' => 'Books > Persian',
+            ]);
+
+        $storeResponse->assertRedirect(route('settings.index', ['section' => 'catalogs']));
+
+        $override = $product->marketOverrides()->firstOrFail();
+
+        $this->assertSame('AE', $override->target_country);
+        $this->assertSame('fa_IR', $override->content_language);
+        $this->assertSame('Localized Product', $override->title);
+        $this->assertSame('39.00', $override->sale_price);
+        $this->assertSame('AED', $override->currency);
+
+        $updateResponse = $this->actingAs($user)
+            ->withSession(['_token' => 'test-csrf-token'])
+            ->withHeader('X-CSRF-TOKEN', 'test-csrf-token')
+            ->patch(route('settings.catalogs.products.market-overrides.update', $override), [
+                'target_country' => 'ca',
+                'content_language' => 'en',
+                'title' => 'Canada Product',
+                'description' => 'English Canada description',
+                'price' => 55,
+                'sale_price' => 50,
+                'currency' => 'cad',
+                'product_url' => 'https://example.com/ca/product',
+                'checkout_url' => 'https://checkout.example.com/ca/product',
+                'google_product_category' => 'Books > English',
+                'is_active' => '0',
+            ]);
+
+        $updateResponse->assertRedirect(route('settings.index', ['section' => 'catalogs']));
+
+        $override->refresh();
+
+        $this->assertSame('CA', $override->target_country);
+        $this->assertSame('en', $override->content_language);
+        $this->assertSame('Canada Product', $override->title);
+        $this->assertSame('50.00', $override->sale_price);
+        $this->assertSame('CAD', $override->currency);
+        $this->assertFalse($override->is_active);
+
+        $deleteResponse = $this->actingAs($user)
+            ->withSession(['_token' => 'test-csrf-token'])
+            ->withHeader('X-CSRF-TOKEN', 'test-csrf-token')
+            ->delete(route('settings.catalogs.products.market-overrides.delete', $override));
+
+        $deleteResponse->assertRedirect(route('settings.index', ['section' => 'catalogs']));
+
+        $this->assertDatabaseMissing('catalog_product_market_overrides', [
+            'id' => $override->id,
+        ]);
+    }
+
+    public function test_agent_can_manage_product_offers_and_attach_them_to_market_profiles(): void
+    {
+        [$user, $catalog] = $this->makeWorkspaceCatalog();
+
+        $product = CatalogProduct::create([
+            'catalog_id' => $catalog->id,
+            'sku' => 'PROMO-1',
+            'title' => 'Promo Product',
+            'price' => 80,
+            'currency' => 'USD',
+            'availability' => 'in_stock',
+            'is_active' => true,
+        ]);
+
+        $marketOverride = $product->marketOverrides()->create([
+            'target_country' => 'AE',
+            'content_language' => 'fa_IR',
+            'price' => 70,
+            'currency' => 'AED',
+            'is_active' => true,
+        ]);
+
+        $storeResponse = $this->actingAs($user)
+            ->withSession(['_token' => 'test-csrf-token'])
+            ->withHeader('X-CSRF-TOKEN', 'test-csrf-token')
+            ->post(route('settings.catalogs.products.offers.store', $product), [
+                'name' => 'Launch promo',
+                'status' => 'active',
+                'discount_type' => 'percentage',
+                'discount_value' => 15,
+                'currency' => 'usd',
+                'priority' => 5,
+                'starts_at' => '2026-04-23T12:00',
+                'ends_at' => '2026-04-30T12:00',
+                'checkout_url' => 'https://checkout.example.com/promo',
+            ]);
+
+        $storeResponse->assertRedirect(route('settings.index', ['section' => 'catalogs']));
+
+        $offer = $product->offers()->firstOrFail();
+
+        $this->assertSame('Launch promo', $offer->name);
+        $this->assertSame('active', $offer->status);
+        $this->assertSame('percentage', $offer->discount_type);
+        $this->assertSame('15.00', $offer->discount_value);
+        $this->assertSame('USD', $offer->currency);
+        $this->assertSame(5, $offer->priority);
+        $this->assertNull($offer->catalog_product_market_override_id);
+
+        $updateResponse = $this->actingAs($user)
+            ->withSession(['_token' => 'test-csrf-token'])
+            ->withHeader('X-CSRF-TOKEN', 'test-csrf-token')
+            ->patch(route('settings.catalogs.products.offers.update', $offer), [
+                'name' => 'AE promo',
+                'status' => 'paused',
+                'market_override_id' => $marketOverride->id,
+                'discount_type' => 'price_override',
+                'discount_value' => 55,
+                'currency' => 'aed',
+                'priority' => 2,
+                'starts_at' => '2026-04-24T12:00',
+                'ends_at' => '2026-05-01T12:00',
+                'checkout_url' => 'https://checkout.example.com/ae-promo',
+            ]);
+
+        $updateResponse->assertRedirect(route('settings.index', ['section' => 'catalogs']));
+
+        $offer->refresh();
+
+        $this->assertSame('AE promo', $offer->name);
+        $this->assertSame('paused', $offer->status);
+        $this->assertSame('price_override', $offer->discount_type);
+        $this->assertSame('55.00', $offer->discount_value);
+        $this->assertSame('AED', $offer->currency);
+        $this->assertSame(2, $offer->priority);
+        $this->assertSame($marketOverride->id, $offer->catalog_product_market_override_id);
+
+        $deleteResponse = $this->actingAs($user)
+            ->withSession(['_token' => 'test-csrf-token'])
+            ->withHeader('X-CSRF-TOKEN', 'test-csrf-token')
+            ->delete(route('settings.catalogs.products.offers.delete', $offer));
+
+        $deleteResponse->assertRedirect(route('settings.index', ['section' => 'catalogs']));
+
+        $this->assertDatabaseMissing('catalog_product_offers', [
+            'id' => $offer->id,
+        ]);
+    }
+
+    protected function makeWorkspaceCatalog(): array
+    {
+        $user = User::factory()->create();
+        $workspace = Workspace::create([
+            'owner_id' => $user->id,
+            'name' => 'Catalog Management Workspace',
+            'slug' => 'catalog-management-workspace',
+        ]);
+
+        $workspace->members()->attach($user->id, [
+            'role' => 'owner',
+        ]);
+
+        $catalog = Catalog::create([
+            'workspace_id' => $workspace->id,
+            'source' => 'leadochat',
+            'name' => 'Store Catalog',
+            'status' => 'active',
+        ]);
+
+        return [$user, $catalog];
+    }
+}

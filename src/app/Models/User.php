@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\Storage;
 
 class User extends Authenticatable
 {
@@ -16,7 +17,9 @@ class User extends Authenticatable
     protected $fillable = [
         'name',
         'email',
+        'email_verified_at',
         'password',
+        'avatar_path',
     ];
 
     protected $hidden = [
@@ -47,5 +50,16 @@ class User extends Authenticatable
     public function currentWorkspace(): ?Workspace
     {
         return $this->workspaces()->orderBy('workspaces.id')->first();
+    }
+
+    public function getAvatarUrlAttribute(): ?string
+    {
+        $path = trim((string) ($this->avatar_path ?? ''));
+
+        if ($path === '') {
+            return null;
+        }
+
+        return url(Storage::url($path));
     }
 }
