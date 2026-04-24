@@ -352,4 +352,120 @@ class ProcessInstagramWebhookEventTest extends TestCase
         $this->assertSame('Yellow Notebook', $message->meta['product_card']['title']);
         $this->assertSame(0, MessageAttachment::query()->where('message_id', $message->id)->count());
     }
+
+    public function test_it_does_not_downgrade_existing_product_card_to_attachment_when_echo_shape_is_ambiguous(): void
+    {
+        $user = User::factory()->create();
+        $workspace = Workspace::create([
+            'owner_id' => $user->id,
+            'name' => 'Catalog Echo Fallback Workspace',
+            'slug' => 'catalog-echo-fallback-workspace',
+        ]);
+        $connection = ProviderConnection::create([
+            'workspace_id' => $workspace->id,
+            'provider' => 'instagram',
+            'provider_account_type' => 'instagram_account',
+            'provider_account_id' => '17841439881436376',
+            'external_oauth_user_id' => '35082347498047063',
+            'provider_account_name' => 'msmsu.ir',
+            'status' => 'connected',
+        ]);
+        $conversation = Conversation::create([
+            'workspace_id' => $workspace->id,
+            'provider_connection_id' => $connection->id,
+            'provider' => 'instagram',
+            'provider_conversation_id' => 'instagram:dm:17841439881436376:customer-igsid',
+            'type' => 'dm',
+            'title' => 'Instagram DM',
+            'status' => 'open',
+            'last_message_at' => now(),
+        ]);
+        $selfParticipant = $conversation->participants()->create([
+            'provider_user_id' => '17841439881436376',
+            'display_name' => 'msmsu.ir',
+            'role' => 'participant',
+            'is_self' => true,
+        ]);
+        $conversation->participants()->create([
+            'provider_user_id' => 'customer-igsid',
+            'display_name' => 'Instagram User',
+            'role' => 'participant',
+            'is_self' => false,
+        ]);
+        $message = Message::create([
+            'conversation_id' => $conversation->id,
+            'sender_participant_id' => $selfParticipant->id,
+            'provider' => 'instagram',
+            'provider_message_id' => 'mid-ambiguous-card',
+            'direction' => 'outbound',
+            'message_type' => 'product_card',
+            'text_body' => "Product recommendation\nYellow Notebook",
+            'status' => 'sent',
+            'sent_at' => now(),
+            'meta' => [
+                'delivery_mode' => 'instagram_service_catalog_product_template',
+                'product_card' => [
+                    'title' => 'Yellow Notebook',
+                    'description' => 'Original Leadochat product description.',
+                    'image_url' => 'https://example.com/notebook.jpg',
+                    'product_url' => 'https://example.com/notebook',
+                ],
+            ],
+        ]);
+
+        MessageAttachment::create([
+            'message_id' => $message->id,
+            'attachment_type' => 'image',
+            'url' => 'https://example.com/old-attachment.jpg',
+            'sort_order' => 0,
+        ]);
+
+        $event = WebhookEvent::create([
+            'workspace_id' => $workspace->id,
+            'provider_connection_id' => $connection->id,
+            'provider' => 'instagram',
+            'event_type' => 'messages',
+            'object' => 'instagram',
+            'provider_event_id' => 'instagram:17841439881436376:messages:mid-ambiguous-card:1776691234',
+            'status' => 'received',
+            'source' => 'webhook',
+            'headers' => [],
+            'payload' => [
+                'object' => 'instagram',
+                'entry' => [
+                    'id' => '17841439881436376',
+                    'time' => 1776691234,
+                ],
+                'change' => [
+                    'field' => 'messages',
+                    'value' => [
+                        'sender' => ['id' => '17841439881436376'],
+                        'recipient' => ['id' => 'customer-igsid'],
+                        'timestamp' => 1776691234,
+                        'message' => [
+                            'mid' => 'mid-ambiguous-card',
+                            'attachments' => [
+                                [
+                                    'type' => 'image',
+                                    'payload' => [
+                                        'url' => 'https://example.com/notebook-rendered.jpg',
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+
+        (new ProcessInstagramWebhookEvent($event->id))->handle();
+
+        $message->refresh();
+
+        $this->assertSame('processed', $event->refresh()->status);
+        $this->assertSame('product_card', $message->message_type);
+        $this->assertSame("Product recommendation\nYellow Notebook", $message->text_body);
+        $this->assertSame('Yellow Notebook', $message->meta['product_card']['title']);
+        $this->assertSame(0, MessageAttachment::query()->where('message_id', $message->id)->count());
+    }
 }

@@ -82,6 +82,7 @@ class InboxController extends Controller
                 ->with([
                     'participants',
                     'messages.attachments',
+                    'messages.productShare',
                     'messages.senderParticipant',
                     'messages.replyToMessage',
                     'workspaceTags',

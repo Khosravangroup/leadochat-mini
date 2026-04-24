@@ -748,6 +748,23 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
             $message->sender_participant_id = $senderParticipantId;
             $message->provider = 'instagram';
             $message->direction = $direction === 'outbound_or_echo' ? 'outbound' : 'inbound';
+            $existingMessageMeta = is_array($message->meta) ? $message->meta : [];
+            $existingProductCard = is_array($existingMessageMeta['product_card'] ?? null)
+                ? $existingMessageMeta['product_card']
+                : null;
+            $shouldPreserveExistingProductCard = $message->exists
+                && $direction === 'outbound_or_echo'
+                && ($message->message_type === 'product_card' || $existingProductCard !== null);
+
+            if ($shouldPreserveExistingProductCard && ! $isProductCard) {
+                $messageType = 'product_card';
+                $isProductCard = true;
+                $productCard = $existingProductCard;
+                $attachments = [];
+            } elseif ($shouldPreserveExistingProductCard && $isProductCard && ! $productCard) {
+                $productCard = $existingProductCard;
+            }
+
             $message->message_type = $messageType;
             $message->text_body = match (true) {
                 $messageType === 'text' && $textBody !== '' => $textBody,
@@ -779,6 +796,12 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
 
             $message->meta = $messageMeta;
             $message->save();
+
+            if ($isProductCard) {
+                MessageAttachment::query()
+                    ->where('message_id', $message->id)
+                    ->delete();
+            }
 
             $savedAttachmentIds = [];
 

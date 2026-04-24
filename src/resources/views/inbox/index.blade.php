@@ -2419,9 +2419,12 @@
                                         $canReactFromInbox = ! $isOutbound
                                             && $selectedConversation?->provider === 'instagram'
                                             && filled($message->provider_message_id);
+                                        $productShareSnapshot = is_array($message->productShare?->product_snapshot ?? null)
+                                            ? $message->productShare->product_snapshot
+                                            : null;
                                         $productCard = is_array($messageMeta['product_card'] ?? null)
                                             ? $messageMeta['product_card']
-                                            : null;
+                                            : $productShareSnapshot;
                                     @endphp
 
                                     <div
@@ -2588,7 +2591,7 @@
                                                                 </div>
                                                             @endif
 
-                                                            @if ($message->message_type === 'product_card' && $productCard)
+                                                            @if ($productCard)
                                                                 <div class="lc-product-card">
                                                                     <div class="lc-product-card-media">
                                                                         @if (!empty($productCard['image_url']))
