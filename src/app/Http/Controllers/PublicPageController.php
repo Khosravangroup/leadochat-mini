@@ -27,6 +27,7 @@ class PublicPageController extends Controller
 
         return view('public.landing-page', [
             'page' => $this->landingPages()[$slug],
+            'slug' => $slug,
         ]);
     }
 

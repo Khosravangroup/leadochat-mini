@@ -14,8 +14,8 @@
                     </p>
                 </div>
                 <div class="col-lg-5">
-                    <div class="lc-hero-panel">
-                        <img src="{{ asset('leadochat-site/assets/images/about/about-image.svg') }}" alt="Leadochat workflow">
+                    <div class="lc-hero-panel wow fadeInUp" data-wow-delay=".2s">
+                        <x-public.about-animation />
                     </div>
                 </div>
             </div>
