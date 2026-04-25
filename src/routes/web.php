@@ -41,6 +41,7 @@ Route::get('/shared-inbox-customer-support', [PublicPageController::class, 'land
     ->defaults('slug', 'shared-inbox-customer-support')
     ->name('public.shared-inbox-customer-support');
 Route::get('/privacy-policy', [PublicPageController::class, 'privacyPolicy'])->name('privacy-policy');
+Route::get('/policies-and-procedures', [PublicPageController::class, 'policiesAndProcedures'])->name('policies-and-procedures');
 Route::get('/data-deletion', [PublicPageController::class, 'dataDeletion'])->name('data-deletion');
 Route::get('/contact', [PublicPageController::class, 'contact'])->name('contact');
 

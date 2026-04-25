@@ -41,6 +41,11 @@ class PublicPageController extends Controller
         return view('public.privacy-policy');
     }
 
+    public function policiesAndProcedures(): View
+    {
+        return view('public.policies-and-procedures');
+    }
+
     public function dataDeletion(): View
     {
         return view('public.data-deletion');
