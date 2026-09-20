@@ -51,8 +51,10 @@ delivery-capable production mail transport remains an operational prerequisite.
 `WorkspaceSettingsController` and the catalog/commerce controllers manage workspace
 profile data, members, tags, departments, catalogs, products, offers, orders,
 collections, product sets, and promotion campaigns. Workspace membership is a
-tenant boundary. Current role enforcement is incomplete and is tracked as
-`AUTH-01` in the risk register.
+tenant boundary. The Phase 1 candidate uses deny-by-default `workspace.access` and
+`workspace.manage` gates plus controller-level object ownership checks. `AUTH-01`
+remains in progress until that exact cumulative revision is deployed and smoke-
+tested.
 
 ### Inbox
 
@@ -101,6 +103,16 @@ through `ProviderSecretRedactor` before leaving the provider-service boundary.
 Realtime transport is an enhancement, not a substitute for persisted source of
 truth. Consumers must recover by refreshing a server snapshot after reconnect.
 
+### Browser response security
+
+`AddBrowserSecurityHeaders` is the application response boundary for MIME-sniffing,
+framing, referrer, browser-permission, staged HSTS, and report-only CSP controls.
+`CspReportController` accepts bounded public browser reports and emits only
+normalized, query-free structured telemetry. This application layer does not cover
+static or error responses served directly by Nginx; matching origin/edge controls
+remain Phase 3 work. The policy and rollout contract are documented in
+`SECURITY_HEADERS_AND_CSP.md`.
+
 ## Dependency direction
 
 Controllers should validate and authorize the request, resolve workspace-owned
@@ -126,6 +138,7 @@ and a rollback plan:
 - public file storage and PHP execution;
 - database migrations and cascade rules;
 - Reverb channel authorization and event payloads;
+- browser security headers, CSP report privacy, and policy enforcement;
 - deployment branch, migrations, build artifacts, and rollback.
 
 ## Architecture decisions

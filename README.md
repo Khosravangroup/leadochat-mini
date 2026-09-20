@@ -69,6 +69,7 @@ Start with the [documentation index](doc/INDEX.md). Important entry points are:
 - [Environment variables](doc/ENVIRONMENT_VARIABLES.md)
 - [Testing and quality](doc/TESTING_AND_QUALITY.md)
 - [Deployment and operations](doc/DEPLOYMENT_AND_OPERATIONS.md)
+- [Browser security headers and CSP rollout](doc/SECURITY_HEADERS_AND_CSP.md)
 - [Risk register](doc/RISK_REGISTER.md)
 - [Phased remediation roadmap](doc/REMEDIATION_ROADMAP.md)
 - [Codex skills](doc/CODEX_SKILLS.md)

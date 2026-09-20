@@ -23,6 +23,23 @@ read transition; it does not by itself prove every ciphertext has been re-encryp
 under the new primary key. Treat key rotation as a separate data migration with a
 fresh backup, row-count verification, provider smoke test, and rollback window.
 
+## Browser security headers
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `SECURITY_HEADERS_ENABLED` | `true` | Emergency switch for the complete Laravel response-header layer |
+| `CSP_REPORT_ONLY_ENABLED` | `true` | Emit report-only CSP plus reporting endpoint; never enables enforcement |
+| `CSP_REPORT_MAX_BYTES` | `65536` | Maximum accepted CSP report request body |
+| `CSP_REPORT_MAX_BATCH` | `20` | Maximum reports processed from one Reporting API batch |
+| `SECURITY_HSTS_ENABLED` | `true` | Emit staged HSTS only when Laravel identifies HTTPS |
+| `SECURITY_HSTS_MAX_AGE` | `86400` | Staged HSTS lifetime in seconds; no subdomain/preload scope |
+
+Keep `APP_URL` on the canonical HTTPS origin in production because it is used to
+construct `Reporting-Endpoints`. Disabling HSTS stops new headers but does not clear
+a browser's cached policy before its prior `max-age` expires. CSP enforcement,
+`includeSubDomains`, preload, and a longer HSTS lifetime require separate approval
+after measured compatibility evidence. See `SECURITY_HEADERS_AND_CSP.md`.
+
 ## Database, cache, queue, and session
 
 | Variable group | Production expectation |

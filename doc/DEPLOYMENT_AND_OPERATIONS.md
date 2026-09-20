@@ -93,6 +93,7 @@ Within five minutes:
 ```bash
 curl --fail --silent --show-error https://mini.leadochat.com/up
 curl --fail --silent --show-error --output /dev/null https://mini.leadochat.com/
+curl --fail --silent --show-error --dump-header - --output /dev/null https://mini.leadochat.com/
 ```
 
 Also verify:
@@ -103,6 +104,10 @@ Also verify:
 - queue depth is stable and no new failed jobs appear;
 - Reverb accepts expected connections;
 - no new production error fingerprint appears;
+- report-only CSP, reporting endpoint, HSTS, frame, MIME, referrer, and permissions
+  headers match `SECURITY_HEADERS_AND_CSP.md`, while enforced CSP remains absent;
+- CSP telemetry is normalized and bounded, and key browser journeys have no
+  unexplained violation or compatibility regression;
 - the safe smoke journeys in `TESTING_AND_QUALITY.md` pass.
 
 ## Rollback policy
@@ -163,9 +168,11 @@ controls, and environment copies readable as mode `644`.
 
 Phase 0 added and loaded the Nginx PHP-family deny beneath `/storage/`, changed the
 active environment file to mode `600`, and removed four plaintext environment
-backups after encrypted restore-verified capture. The remaining SSH, firewall,
-public Reverb, security-header, automated permission-check, and backup-scheduling
-items stay open.
+backups after encrypted restore-verified capture. The Phase 1 candidate adds
+application-generated browser headers and privacy-bounded report-only CSP
+telemetry. Production and Nginx static/error responses remain unchanged. The
+remaining SSH, firewall, public Reverb, origin-level header, automated
+permission-check, and backup-scheduling items stay open.
 
 Remediation must preserve verified access and Cloudflare/origin traffic. Apply and
 test controls incrementally with a second session available; never lock out the only

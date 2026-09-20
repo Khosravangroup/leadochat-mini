@@ -126,7 +126,9 @@ repository in the Mac mini's protected local credential stores.
 - Meta webhook idempotency, signature validation, retries, and tenant resolution.
 - Dependency advisories across Composer and npm packages.
 - PostgreSQL behavior not covered by the SQLite-only suite.
-- Missing backup/restore proof, host hardening, security headers, and monitoring.
+- Missing automated backup/restore operations, host hardening, deployed
+  origin-level security headers, CSP telemetry evidence, and monitoring. A tested
+  Phase 1 application-header/report-only candidate exists but is not deployed.
 - Branch drift, unprotected branches, and production/deploy branch mismatch.
 - Large controllers, jobs, and Blade/JavaScript files with limited focused tests.
 
