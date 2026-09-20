@@ -24,6 +24,10 @@ use Illuminate\Validation\Rules\Password;
 
 class WorkspaceSettingsController extends Controller
 {
+    private const LABEL_NAME_RULES = ['required', 'string', 'max:80', 'not_regex:/\A\s*\z/u'];
+
+    private const LABEL_COLOR_RULES = ['required', 'string', 'regex:/\A#[0-9A-Fa-f]{6}\z/'];
+
     public function index(Request $request): View
     {
         $user = $request->user();
@@ -386,8 +390,8 @@ class WorkspaceSettingsController extends Controller
         }
 
         $validated = $request->validate([
-            'name' => ['required', 'string', 'max:80'],
-            'color' => ['required', 'string', 'max:20'],
+            'name' => self::LABEL_NAME_RULES,
+            'color' => self::LABEL_COLOR_RULES,
         ]);
 
         $name = trim($validated['name']);
@@ -410,7 +414,7 @@ class WorkspaceSettingsController extends Controller
         $department = WorkspaceDepartment::create([
             'workspace_id' => $workspace->id,
             'name' => $name,
-            'color' => $validated['color'],
+            'color' => strtolower($validated['color']),
             'sort_order' => $maxSort + 1,
         ]);
 
@@ -446,8 +450,8 @@ class WorkspaceSettingsController extends Controller
         }
 
         $validated = $request->validate([
-            'name' => ['required', 'string', 'max:80'],
-            'color' => ['required', 'string', 'max:20'],
+            'name' => self::LABEL_NAME_RULES,
+            'color' => self::LABEL_COLOR_RULES,
         ]);
 
         $name = trim($validated['name']);
@@ -470,7 +474,7 @@ class WorkspaceSettingsController extends Controller
         $tag = WorkspaceTag::create([
             'workspace_id' => $workspace->id,
             'name' => $name,
-            'color' => $validated['color'],
+            'color' => strtolower($validated['color']),
             'is_active' => true,
             'sort_order' => $maxSort + 1,
         ]);
@@ -491,8 +495,8 @@ class WorkspaceSettingsController extends Controller
         }
 
         $validated = $request->validate([
-            'name' => ['required', 'string', 'max:80'],
-            'color' => ['required', 'string', 'max:20'],
+            'name' => self::LABEL_NAME_RULES,
+            'color' => self::LABEL_COLOR_RULES,
             'is_active' => ['required', 'boolean'],
         ]);
 
@@ -512,7 +516,7 @@ class WorkspaceSettingsController extends Controller
 
         $tag->update([
             'name' => $name,
-            'color' => $validated['color'],
+            'color' => strtolower($validated['color']),
             'is_active' => (bool) $validated['is_active'],
         ]);
 

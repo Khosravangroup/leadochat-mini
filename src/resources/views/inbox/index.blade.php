@@ -3610,25 +3610,43 @@
                 }, 1800);
             };
 
+            const normalizeDepartmentColor = (value) => {
+                const color = String(value || '');
+                return /^#[0-9a-fA-F]{6}$/.test(color) ? color.toLowerCase() : '#6366f1';
+            };
+
             const renderCurrentDepartment = () => {
                 const option = departmentSelect.options[departmentSelect.selectedIndex] || null;
                 const departmentId = option ? option.value : '';
                 const departmentName = option ? option.textContent.trim() : '';
-                const departmentColor = option ? (option.getAttribute('data-color') || '#6366f1') : '#6366f1';
+                const departmentColor = normalizeDepartmentColor(option ? option.getAttribute('data-color') : '');
+
+                currentDepartmentWrap.replaceChildren();
 
                 if (!departmentId) {
-                    currentDepartmentWrap.innerHTML = '<span id="lcConversationDepartmentEmpty" style="font-size:11px; color:#94a3b8;">No department assigned</span>';
+                    const emptyState = document.createElement('span');
+                    emptyState.id = 'lcConversationDepartmentEmpty';
+                    emptyState.style.fontSize = '11px';
+                    emptyState.style.color = '#94a3b8';
+                    emptyState.textContent = 'No department assigned';
+                    currentDepartmentWrap.append(emptyState);
                     return;
                 }
 
-                currentDepartmentWrap.innerHTML = `
-                    <span
-                        data-department-id="${departmentId}"
-                        style="display:inline-flex; align-items:center; min-height:24px; border-radius:999px; padding:0 8px; background:${departmentColor}20; color:#334155; border:1px solid ${departmentColor}55; font-size:11px; font-weight:700;"
-                    >
-                        ${departmentName}
-                    </span>
-                `;
+                const chip = document.createElement('span');
+                chip.dataset.departmentId = departmentId;
+                chip.style.display = 'inline-flex';
+                chip.style.alignItems = 'center';
+                chip.style.minHeight = '24px';
+                chip.style.borderRadius = '999px';
+                chip.style.padding = '0 8px';
+                chip.style.backgroundColor = `${departmentColor}20`;
+                chip.style.color = '#334155';
+                chip.style.border = `1px solid ${departmentColor}55`;
+                chip.style.fontSize = '11px';
+                chip.style.fontWeight = '700';
+                chip.textContent = departmentName;
+                currentDepartmentWrap.append(chip);
             };
 
             departmentSelect.addEventListener('change', function () {
@@ -3742,19 +3760,32 @@
                 const agentId = option ? option.value : '';
                 const agentName = option ? option.textContent.trim() : '';
 
+                currentAgentWrap.replaceChildren();
+
                 if (!agentId) {
-                    currentAgentWrap.innerHTML = '<span id="lcConversationAgentEmpty" style="font-size:11px; color:#94a3b8;">No agent assigned</span>';
+                    const emptyState = document.createElement('span');
+                    emptyState.id = 'lcConversationAgentEmpty';
+                    emptyState.style.fontSize = '11px';
+                    emptyState.style.color = '#94a3b8';
+                    emptyState.textContent = 'No agent assigned';
+                    currentAgentWrap.append(emptyState);
                     return;
                 }
 
-                currentAgentWrap.innerHTML = `
-                    <span
-                        data-agent-id="${agentId}"
-                        style="display:inline-flex; align-items:center; min-height:24px; border-radius:999px; padding:0 8px; background:#eef2ff; color:#334155; border:1px solid #c7d2fe; font-size:11px; font-weight:700;"
-                    >
-                        ${agentName}
-                    </span>
-                `;
+                const chip = document.createElement('span');
+                chip.dataset.agentId = agentId;
+                chip.style.display = 'inline-flex';
+                chip.style.alignItems = 'center';
+                chip.style.minHeight = '24px';
+                chip.style.borderRadius = '999px';
+                chip.style.padding = '0 8px';
+                chip.style.backgroundColor = '#eef2ff';
+                chip.style.color = '#334155';
+                chip.style.border = '1px solid #c7d2fe';
+                chip.style.fontSize = '11px';
+                chip.style.fontWeight = '700';
+                chip.textContent = agentName;
+                currentAgentWrap.append(chip);
             };
 
             agentSelect.addEventListener('change', function () {
@@ -3890,23 +3921,34 @@
 
             const buildPreviewThumb = (file, objectUrl) => {
                 if (file.type.startsWith('image/')) {
-                    return `<img src="${objectUrl}" alt="${file.name}">`;
+                    const image = document.createElement('img');
+                    image.src = objectUrl;
+                    image.alt = file.name;
+                    return image;
                 }
 
                 if (file.type.startsWith('video/')) {
-                    return `<video src="${objectUrl}" muted playsinline></video>`;
+                    const video = document.createElement('video');
+                    video.src = objectUrl;
+                    video.muted = true;
+                    video.playsInline = true;
+                    return video;
                 }
+
+                const fallback = document.createElement('span');
 
                 if (file.type.startsWith('audio/')) {
-                    return '<span>🎤</span>';
+                    fallback.textContent = '🎤';
+                    return fallback;
                 }
 
-                return '<span>📎</span>';
+                fallback.textContent = '📎';
+                return fallback;
             };
 
             const renderPreviewList = () => {
                 releaseObjectUrls();
-                list.innerHTML = '';
+                list.replaceChildren();
 
                 if (!selectedFiles.length) {
                     wrap.classList.remove('is-visible');
@@ -3924,20 +3966,38 @@
 
                     const item = document.createElement('div');
                     item.className = 'lc-composer-preview';
-                    item.innerHTML = `
-                        <div class="lc-composer-preview-top">
-                            <div class="lc-composer-preview-main">
-                                <div class="lc-composer-preview-thumb">
-                                    ${buildPreviewThumb(file, objectUrl)}
-                                </div>
-                                <div class="lc-composer-preview-meta">
-                                    <div class="lc-composer-preview-name">${file.name}</div>
-                                    <div class="lc-composer-preview-sub">${buildFileKindLabel(file)} • ${formatBytes(file.size)}</div>
-                                </div>
-                            </div>
-                            <button type="button" class="lc-composer-preview-remove" data-preview-index="${index}">Remove</button>
-                        </div>
-                    `;
+
+                    const top = document.createElement('div');
+                    top.className = 'lc-composer-preview-top';
+
+                    const main = document.createElement('div');
+                    main.className = 'lc-composer-preview-main';
+
+                    const thumb = document.createElement('div');
+                    thumb.className = 'lc-composer-preview-thumb';
+                    thumb.append(buildPreviewThumb(file, objectUrl));
+
+                    const meta = document.createElement('div');
+                    meta.className = 'lc-composer-preview-meta';
+
+                    const name = document.createElement('div');
+                    name.className = 'lc-composer-preview-name';
+                    name.textContent = file.name;
+
+                    const details = document.createElement('div');
+                    details.className = 'lc-composer-preview-sub';
+                    details.textContent = `${buildFileKindLabel(file)} • ${formatBytes(file.size)}`;
+
+                    const removeButton = document.createElement('button');
+                    removeButton.type = 'button';
+                    removeButton.className = 'lc-composer-preview-remove';
+                    removeButton.dataset.previewIndex = String(index);
+                    removeButton.textContent = 'Remove';
+
+                    meta.append(name, details);
+                    main.append(thumb, meta);
+                    top.append(main, removeButton);
+                    item.append(top);
 
                     list.appendChild(item);
                 });
@@ -4600,28 +4660,54 @@
                 }, 1800);
             };
 
+            const normalizeTagColor = (value) => {
+                const color = String(value || '');
+                return /^#[0-9a-fA-F]{6}$/.test(color) ? color.toLowerCase() : '#6366f1';
+            };
+
             const renderSelectedConversationTags = () => {
                 const selectedButtons = Array.from(
                     workspaceTagsList.querySelectorAll('.lc-workspace-tag-option.is-selected')
                 );
 
+                selectedTagsContainer.replaceChildren();
+
                 if (!selectedButtons.length) {
-                    selectedTagsContainer.innerHTML = '<span id="lcConversationTagsEmpty" style="font-size:11px; color:#94a3b8;">No tags assigned</span>';
+                    const emptyState = document.createElement('span');
+                    emptyState.id = 'lcConversationTagsEmpty';
+                    emptyState.style.fontSize = '11px';
+                    emptyState.style.color = '#94a3b8';
+                    emptyState.textContent = 'No tags assigned';
+                    selectedTagsContainer.append(emptyState);
                     return;
                 }
 
-                selectedTagsContainer.innerHTML = selectedButtons.map((button) => {
+                selectedButtons.forEach((button) => {
                     const tagId = button.getAttribute('data-tag-id') || '';
-                    const color = button.getAttribute('data-tag-color') || '#6366f1';
+                    const color = normalizeTagColor(button.getAttribute('data-tag-color'));
                     const label = button.textContent.trim();
-                    return `<span data-tag-id="${tagId}" style="display:inline-flex; align-items:center; min-height:24px; border-radius:999px; padding:0 8px; background:${color}20; color:#334155; border:1px solid ${color}55; font-size:11px; font-weight:700;">${label}</span>`;
-                }).join('');
+
+                    const chip = document.createElement('span');
+                    chip.dataset.tagId = tagId;
+                    chip.style.display = 'inline-flex';
+                    chip.style.alignItems = 'center';
+                    chip.style.minHeight = '24px';
+                    chip.style.borderRadius = '999px';
+                    chip.style.padding = '0 8px';
+                    chip.style.backgroundColor = `${color}20`;
+                    chip.style.color = '#334155';
+                    chip.style.border = `1px solid ${color}55`;
+                    chip.style.fontSize = '11px';
+                    chip.style.fontWeight = '700';
+                    chip.textContent = label;
+                    selectedTagsContainer.append(chip);
+                });
             };
 
             const refreshWorkspaceTagButtons = () => {
                 workspaceTagsList.querySelectorAll('.lc-workspace-tag-option').forEach((button) => {
                     const tagId = Number(button.getAttribute('data-tag-id'));
-                    const color = button.getAttribute('data-tag-color') || '#6366f1';
+                    const color = normalizeTagColor(button.getAttribute('data-tag-color'));
                     const isSelected = selectedTagIds.has(tagId);
 
                     button.classList.toggle('is-selected', isSelected);

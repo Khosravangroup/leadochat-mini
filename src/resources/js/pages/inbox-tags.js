@@ -52,38 +52,54 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 1800);
     };
 
+    const normalizeTagColor = (value) => {
+        const color = String(value || '');
+        return /^#[0-9a-fA-F]{6}$/.test(color) ? color.toLowerCase() : '#6366f1';
+    };
+
     const renderSelectedConversationTags = () => {
         const selectedButtons = Array.from(
             workspaceTagsList.querySelectorAll('.lc-workspace-tag-option.is-selected')
         );
 
+        selectedTagsContainer.replaceChildren();
+
         if (!selectedButtons.length) {
-            selectedTagsContainer.innerHTML = '<span id="lcConversationTagsEmpty" style="font-size:11px; color:#94a3b8;">No tags assigned</span>';
+            const emptyState = document.createElement('span');
+            emptyState.id = 'lcConversationTagsEmpty';
+            emptyState.style.fontSize = '11px';
+            emptyState.style.color = '#94a3b8';
+            emptyState.textContent = 'No tags assigned';
+            selectedTagsContainer.append(emptyState);
             return;
         }
 
-        selectedTagsContainer.innerHTML = selectedButtons
-            .map((button) => {
-                const tagId = button.getAttribute('data-tag-id') || '';
-                const color = button.getAttribute('data-tag-color') || '#6366f1';
-                const label = button.textContent.trim();
+        selectedButtons.forEach((button) => {
+            const tagId = button.getAttribute('data-tag-id') || '';
+            const color = normalizeTagColor(button.getAttribute('data-tag-color'));
+            const label = button.textContent.trim();
 
-                return `
-                    <span
-                        data-tag-id="${tagId}"
-                        style="display:inline-flex; align-items:center; min-height:24px; border-radius:999px; padding:0 8px; background:${color}20; color:#334155; border:1px solid ${color}55; font-size:11px; font-weight:700;"
-                    >
-                        ${label}
-                    </span>
-                `;
-            })
-            .join('');
+            const chip = document.createElement('span');
+            chip.dataset.tagId = tagId;
+            chip.style.display = 'inline-flex';
+            chip.style.alignItems = 'center';
+            chip.style.minHeight = '24px';
+            chip.style.borderRadius = '999px';
+            chip.style.padding = '0 8px';
+            chip.style.backgroundColor = `${color}20`;
+            chip.style.color = '#334155';
+            chip.style.border = `1px solid ${color}55`;
+            chip.style.fontSize = '11px';
+            chip.style.fontWeight = '700';
+            chip.textContent = label;
+            selectedTagsContainer.append(chip);
+        });
     };
 
     const refreshWorkspaceTagButtons = () => {
         workspaceTagsList.querySelectorAll('.lc-workspace-tag-option').forEach((button) => {
             const tagId = Number(button.getAttribute('data-tag-id'));
-            const color = button.getAttribute('data-tag-color') || '#6366f1';
+            const color = normalizeTagColor(button.getAttribute('data-tag-color'));
             const isSelected = selectedTagIds.has(tagId);
 
             button.classList.toggle('is-selected', isSelected);
