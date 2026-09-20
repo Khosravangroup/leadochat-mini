@@ -9,6 +9,8 @@ on:
     branches:
       - develop
       - main
+  schedule:
+    - cron: "17 3 * * 1"
   workflow_dispatch:
 
 permissions:
@@ -25,7 +27,7 @@ env:
 jobs:
   php-sqlite:
     name: PHP / SQLite
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     defaults:
       run:
@@ -87,7 +89,7 @@ jobs:
 
   php-postgresql:
     name: PHP / PostgreSQL 16
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     defaults:
       run:
@@ -147,7 +149,7 @@ jobs:
 
   frontend:
     name: Frontend build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     defaults:
       run:
@@ -180,8 +182,11 @@ jobs:
 
   security:
     name: Secret and focused SAST scan
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write
 
     steps:
       - name: Check out full history
@@ -204,10 +209,18 @@ jobs:
           --workdir /src
           semgrep/semgrep@sha256:acaac22ffc7b7cc5926de0751b223bce0b2491c33d18422fa72f632c78d81198
           semgrep scan --config .semgrep.yml --error --metrics=off
+          --sarif --output semgrep.sarif
+
+      - name: Upload Semgrep results to GitHub code scanning
+        if: ${{ always() && github.actor != 'dependabot[bot]' }}
+        uses: github/codeql-action/upload-sarif@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4
+        with:
+          sarif_file: semgrep.sarif
+          category: leadochat-focused-semgrep
 
   dependency-audit:
-    name: Dependency audit baseline
-    runs-on: ubuntu-latest
+    name: Dependency audit
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     defaults:
       run:
@@ -232,10 +245,8 @@ jobs:
           cache-dependency-path: src/package-lock.json
 
       - name: Audit locked PHP dependencies
-        continue-on-error: true
         run: composer audit --locked --abandoned=fail
 
       - name: Audit locked frontend dependencies
         if: always()
-        continue-on-error: true
         run: npm audit --package-lock-only --audit-level=high

@@ -342,6 +342,12 @@ dependency reporting. Dependency audits remain report-only, the workflow is not 
 merged, and neither protected branch requires it, so the finding remains in
 progress.
 
+**Phase 2 enforcement update:** pull request `#22` makes both dependency audits
+blocking, schedules weekly validation, pins Ubuntu 24.04, and publishes Semgrep
+SARIF. All workflow jobs passed on exact head
+`26e9763c4b51d081daa6c1f5c73a21643af75a73`. Branch protection and required-review
+policy remain necessary before this finding can close.
+
 **Close when:** protected branches require reviewed pull requests and current CI
 checks; force-push/deletion are restricted; least-privilege CI runs PHP, PostgreSQL,
 frontend build, lint, dependency, secret, and security checks.
@@ -435,6 +441,12 @@ focused first-party Semgrep policy on exact head
 configuration for Composer, npm, and GitHub Actions. GitHub secret-scanning,
 push-protection, dependency-alert, and code-scanning features are not yet enabled,
 and scheduled/required enforcement remains incomplete.
+
+**Phase 2 enforcement update:** pull request `#22` passed full-history Gitleaks and
+focused Semgrep, then uploaded a zero-result SARIF analysis covering four rules to
+GitHub code scanning. The candidate also schedules weekly scans. Repository secret
+scanning, push protection, dependency alerts, and protected-branch enforcement
+remain to be enabled after merge.
 
 **Close when:** secret scanning, dependency updates/alerts, SAST, and scheduled/full
 dependency scans are enabled; findings route to an owner; false-positive exceptions
