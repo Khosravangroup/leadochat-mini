@@ -3,6 +3,7 @@
 use App\Http\Controllers\ConnectionController;
 use App\Http\Controllers\InboxController;
 use App\Http\Controllers\InstagramConnectController;
+use App\Http\Controllers\MessageAttachmentController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SocialController;
 use App\Http\Controllers\PublicPageController;
@@ -44,6 +45,10 @@ Route::get('/privacy-policy', [PublicPageController::class, 'privacyPolicy'])->n
 Route::get('/policies-and-procedures', [PublicPageController::class, 'policiesAndProcedures'])->name('policies-and-procedures');
 Route::get('/data-deletion', [PublicPageController::class, 'dataDeletion'])->name('data-deletion');
 Route::get('/contact', [PublicPageController::class, 'contact'])->name('contact');
+
+Route::get('/attachments/provider', [MessageAttachmentController::class, 'provider'])
+    ->middleware(['signed', 'throttle:120,1'])
+    ->name('attachments.provider');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/dashboard', function () {
@@ -145,6 +150,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/settings/commerce/collections/{collection}/sync', [WorkspaceMetaCollectionController::class, 'sync'])->name('settings.commerce.collections.sync');
     Route::delete('/settings/commerce/collections/{collection}', [WorkspaceMetaCollectionController::class, 'destroy'])->name('settings.commerce.collections.delete');
     Route::get('/inbox', [InboxController::class, 'index'])->name('inbox.index');
+    Route::get('/attachments/{attachment}', [MessageAttachmentController::class, 'show'])
+        ->name('attachments.show');
     Route::get('/inbox/realtime/snapshot', [InboxController::class, 'realtimeSnapshot'])->name('inbox.realtime.snapshot');
     Route::get('/inbox/{conversation}', [InboxController::class, 'index'])->name('inbox.show');
 

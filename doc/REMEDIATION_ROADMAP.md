@@ -78,6 +78,12 @@ and the application portion of `OPS-05`.
    and decide provider token rotation.
 7. Introduce CSP in report-only mode after removing unsafe inline DOM construction.
 
+**Current progress:** item 1 has an implemented and locally verified candidate:
+private message-attachment storage, workspace-authorized browser delivery,
+short-lived signed Meta delivery, and idempotent legacy-file migration. It remains
+open until the exact revision is deployed and the production migration/inventory is
+verified.
+
 **Acceptance gate:** all relevant security regression tests pass; no ordinary member
 can perform owner/admin actions; no cross-workspace object is accessible; password
 reset and verification emails arrive through the production provider; owner deletion

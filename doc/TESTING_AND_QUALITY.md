@@ -17,6 +17,11 @@ At revision `f65945d30c039532cd3109d3a78dfb33eacfa88d` on 20 September
 
 This baseline is evidence for one revision, not a permanent status.
 
+For the Phase 1 private-attachment candidate on 20 September 2026, a fresh
+`npm ci --no-audit --no-fund` installed 172 packages and `npm run build`
+completed successfully with Vite 8.0.8. This is local evidence, not yet a
+reproducible CI gate.
+
 ## Local verification
 
 Start with the smallest affected check:
@@ -125,6 +130,8 @@ evaluation.
 ## Coverage gaps to close
 
 - attachment type/execution and public-storage behavior;
+- private attachment authorization, signed-provider URL expiry, HTTP Range support,
+  and idempotent legacy-file migration;
 - tag/department/agent stored XSS;
 - workspace roles and cross-tenant object access;
 - effective email verification and real mail delivery;

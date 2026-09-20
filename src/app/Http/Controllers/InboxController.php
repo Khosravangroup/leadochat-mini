@@ -18,7 +18,7 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
 use App\Services\Meta\Instagram\InstagramService;
 
 class InboxController extends Controller
@@ -490,7 +490,7 @@ class InboxController extends Controller
                     $caption = $index === 0 && $messageText !== '' ? $messageText : null;
 
                     try {
-                        $sendResult = $this->sendInstagramAttachmentMessage($conversation, $upload['public_url'], [
+                        $sendResult = $this->sendInstagramAttachmentMessage($conversation, $upload['provider_url'], [
                             'attachment_type' => $attachmentType,
                             'messaging_type' => 'RESPONSE',
                         ]);
@@ -513,14 +513,14 @@ class InboxController extends Controller
                                 'provider' => 'instagram',
                                 'multi_upload' => true,
                                 'delivery_mode' => 'instagram_service_attachment',
-                                'send_result' => $sendResult,
+                                'send_result' => $this->withoutTemporaryAttachmentUrl($sendResult),
                             ]),
                         ]);
 
                         MessageAttachment::create([
                             'message_id' => $message->id,
                             'attachment_type' => $attachmentType,
-                            'url' => $upload['public_url'],
+                            'url' => null,
                             'thumbnail_url' => null,
                             'mime_type' => $upload['mime_type'],
                             'file_name' => $upload['file_name'],
@@ -529,7 +529,7 @@ class InboxController extends Controller
                             'height' => $upload['height'],
                             'duration_seconds' => null,
                             'meta' => [
-                                'disk' => 'public',
+                                'disk' => 'local',
                                 'path' => $upload['stored_path'],
                                 'provider' => 'instagram',
                                 'source' => 'storeMessage',
@@ -556,7 +556,7 @@ class InboxController extends Controller
                         MessageAttachment::create([
                             'message_id' => $message->id,
                             'attachment_type' => $attachmentType,
-                            'url' => $upload['public_url'],
+                            'url' => null,
                             'thumbnail_url' => null,
                             'mime_type' => $upload['mime_type'],
                             'file_name' => $upload['file_name'],
@@ -565,7 +565,7 @@ class InboxController extends Controller
                             'height' => $upload['height'],
                             'duration_seconds' => null,
                             'meta' => [
-                                'disk' => 'public',
+                                'disk' => 'local',
                                 'path' => $upload['stored_path'],
                                 'provider' => 'instagram',
                                 'source' => 'storeMessage',
@@ -676,7 +676,7 @@ class InboxController extends Controller
             $upload = $this->storeInstagramOutboundUpload($voiceFile);
 
             try {
-                $sendResult = $this->sendInstagramAttachmentMessage($conversation, $upload['public_url'], [
+                $sendResult = $this->sendInstagramAttachmentMessage($conversation, $upload['provider_url'], [
                     'attachment_type' => 'audio',
                     'messaging_type' => 'RESPONSE',
                 ]);
@@ -712,14 +712,14 @@ class InboxController extends Controller
                     'meta' => $this->withAgentMeta($user, [
                         'provider' => 'instagram',
                         'delivery_mode' => 'instagram_service_audio',
-                        'send_result' => $sendResult,
+                        'send_result' => $this->withoutTemporaryAttachmentUrl($sendResult),
                     ]),
                 ]);
 
                 MessageAttachment::create([
                     'message_id' => $message->id,
                     'attachment_type' => 'audio',
-                    'url' => $upload['public_url'],
+                    'url' => null,
                     'thumbnail_url' => null,
                     'mime_type' => $upload['mime_type'],
                     'file_name' => $upload['file_name'],
@@ -729,7 +729,7 @@ class InboxController extends Controller
                     'duration_seconds' => $durationSeconds,
                     'sort_order' => 0,
                     'meta' => [
-                        'disk' => 'public',
+                        'disk' => 'local',
                         'path' => $upload['stored_path'],
                         'provider' => 'instagram',
                         'source' => 'storeVoice',
@@ -1447,7 +1447,7 @@ class InboxController extends Controller
         $isImage = str_starts_with($mimeType, 'image/');
         $isVideo = str_starts_with($mimeType, 'video/');
         $isAudio = str_starts_with($mimeType, 'audio/');
-        $storedPath = $uploadedFile->store('message-attachments', 'public');
+        $storedPath = $this->storePrivateMessageAttachment($uploadedFile);
 
         $width = null;
         $height = null;
@@ -1462,7 +1462,7 @@ class InboxController extends Controller
 
         return [
             'stored_path' => $storedPath,
-            'public_url' => $this->publicStorageUrl($storedPath),
+            'provider_url' => $this->privateAttachmentProviderUrl($storedPath),
             'mime_type' => $mimeType,
             'message_type' => $isImage ? 'image' : ($isVideo ? 'video' : ($isAudio ? 'voice' : 'file')),
             'instagram_attachment_type' => $isImage ? 'image' : ($isVideo ? 'video' : ($isAudio ? 'audio' : 'file')),
@@ -1655,7 +1655,7 @@ class InboxController extends Controller
     ): MessageAttachment {
         $mimeType = $uploadedFile->getMimeType() ?: 'application/octet-stream';
         $isImage = str_starts_with($mimeType, 'image/');
-        $storedPath = $uploadedFile->store('message-attachments', 'public');
+        $storedPath = $this->storePrivateMessageAttachment($uploadedFile);
 
         $width = null;
         $height = null;
@@ -1671,7 +1671,7 @@ class InboxController extends Controller
         return MessageAttachment::create([
             'message_id' => $message->id,
             'attachment_type' => $meta['attachment_type'] ?? ($isImage ? 'image' : 'file'),
-            'url' => $this->publicStorageUrl($storedPath),
+            'url' => null,
             'thumbnail_url' => $meta['thumbnail_url'] ?? null,
             'mime_type' => $mimeType,
             'file_name' => $uploadedFile->getClientOriginalName(),
@@ -1681,7 +1681,7 @@ class InboxController extends Controller
             'duration_seconds' => $meta['duration_seconds'] ?? null,
             'sort_order' => $meta['sort_order'] ?? 0,
             'meta' => array_merge([
-                'disk' => 'public',
+                'disk' => 'local',
                 'path' => $storedPath,
                 'is_mock' => true,
             ], $meta['meta'] ?? []),
@@ -1706,9 +1706,38 @@ class InboxController extends Controller
         $conversation->update($payload);
     }
 
-    protected function publicStorageUrl(string $storedPath): string
+    protected function privateAttachmentProviderUrl(string $storedPath): string
     {
-        return url(Storage::url($storedPath));
+        $ttlMinutes = max(
+            1,
+            min(1440, (int) config('filesystems.attachment_provider_url_ttl', 60))
+        );
+
+        return URL::temporarySignedRoute(
+            'attachments.provider',
+            now()->addMinutes($ttlMinutes),
+            ['path' => $storedPath]
+        );
+    }
+
+    protected function storePrivateMessageAttachment(UploadedFile $uploadedFile): string
+    {
+        $storedPath = $uploadedFile->store('message-attachments', 'local');
+
+        if (! is_string($storedPath) || $storedPath === '') {
+            throw new \RuntimeException('Message attachment could not be stored.');
+        }
+
+        return $storedPath;
+    }
+
+    protected function withoutTemporaryAttachmentUrl(array $sendResult): array
+    {
+        if (isset($sendResult['payload']['message']['attachment']['payload']['url'])) {
+            $sendResult['payload']['message']['attachment']['payload']['url'] = '[redacted-temporary-url]';
+        }
+
+        return $sendResult;
     }
 
     protected function applyMessageReaction(Message $message, string $metaKey, array $reaction): void
