@@ -1,5 +1,10 @@
 # Leadochat Mini — Cursor Handoff
 
+> **Archived handoff — do not use as current defect or task status.** The observations
+> below came from an earlier editing session and have not been revalidated. Use
+> [the current documentation index](INDEX.md), [risk register](RISK_REGISTER.md),
+> current tests, and current source before planning work.
+
 ## Goal of this handoff
 This document summarizes what was implemented, what is currently stable, what is broken, which files Cursor should inspect first, and the exact next steps to continue safely.
 

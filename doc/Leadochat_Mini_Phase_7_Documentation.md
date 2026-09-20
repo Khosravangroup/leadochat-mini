@@ -1,5 +1,10 @@
 # Leadochat Mini — Documentation for Phase 7
 
+> **Historical record — not an operational source of truth.** This file describes
+> an earlier webhook foundation. Statements about local/staging readiness or current
+> provider behavior may be obsolete. Start with [the documentation index](INDEX.md)
+> and verify current code, tests, provider configuration, and environment.
+
 ## Project Context
 This document records the implementation progress for:
 
