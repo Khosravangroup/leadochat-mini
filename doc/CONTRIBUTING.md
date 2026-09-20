@@ -60,6 +60,24 @@ Documentation-only work does not require a fabricated failing test.
 - Never include secrets, `.env` values, customer data, tokens, database dumps,
   private keys, or unredacted logs.
 
+### Pull-request verification
+
+The Phase 2 validation workflow reports these checks for pull requests targeting
+`develop` or `main`:
+
+- `PHP / SQLite`;
+- `PHP / PostgreSQL 16`;
+- `Frontend build`;
+- `Secret and focused SAST scan`;
+- `Dependency audit baseline`.
+
+PHP syntax and the full PHPUnit suite cover the current tree. Pint checks changed
+PHP files until the separately tracked legacy formatting baseline is removed. The
+dependency audit steps are report-only while registered Composer and npm advisories
+are remediated; they must become blocking before Phase 2 acceptance. Never bypass a
+required check, expose deployment secrets to pull-request code, or treat an uploaded
+artifact as production-approved by itself.
+
 ## Documentation changes
 
 Update the matching source of truth in the same change:

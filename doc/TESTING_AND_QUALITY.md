@@ -87,6 +87,18 @@ application responses and enforced CSP remains absent. Authenticated browser rol
 XSS, inbox, attachment/provider, deletion, and real-email delivery journeys were not
 run because no approved production synthetic account/provider target was available.
 
+For the Phase 2 CI-foundation candidate
+`34e32795a884b39fb7435e7f4c60a6cb6c80c65d` in pull request `#19` on
+21 September 2026, all five workflow jobs passed on the exact head. Both the
+SQLite and PostgreSQL 16 jobs passed 114 tests with 911 assertions. The workflow
+also validated Composer configuration, checked PHP syntax, ran Pint against changed
+PHP files, completed a clean Node 24 install and Vite build, retained the frontend
+artifact for seven days, scanned full Git history with Gitleaks, and ran the focused
+first-party Semgrep policy. Composer and npm audits are deliberately report-only in
+this foundation candidate because they still report 50 and 14 advisories
+respectively; they are not yet release gates. The candidate does not become a
+repository control until it is merged and required by branch protection.
+
 ## Local verification
 
 Start with the smallest affected check:
@@ -161,6 +173,14 @@ Add a pull-request workflow that, at minimum:
 
 Pin action versions and least-privilege workflow permissions. Do not expose deploy
 secrets to pull-request code.
+
+The Phase 2 foundation implements this shape in `.github/workflows/ci.yml`. Until
+the existing dependency advisories are remediated, the two audit steps remain
+visible but non-blocking. Pint is intentionally scoped to PHP files changed against
+the pull-request base while the 26-file legacy formatting baseline is handled
+separately; syntax and both PHPUnit database jobs still cover the complete current
+tree. Promotion requires making dependency audits blocking and requiring every
+named job on protected `develop` and `main` branches.
 
 ## Release gate
 
