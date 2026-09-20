@@ -30,7 +30,7 @@ and infrastructure may change.
 | `SEC-02` | High | In progress | Stored DOM XSS sinks | 1 |
 | `AUTH-01` | High | In progress | Missing workspace role authorization | 1 |
 | `AUTH-02` | High | In progress | Ineffective email verification and mail delivery | 1 |
-| `DATA-01` | High | Open | Owner deletion can cascade workspace data | 1 |
+| `DATA-01` | High | In progress | Owner deletion can cascade workspace data | 1 |
 | `DATA-02` | High | Open | OAuth tokens stored plaintext | 1 |
 | `DEP-01` | High | Open | Composer security advisories | 2 |
 | `DEP-02` | High | Open | npm security advisories | 2 |
@@ -205,9 +205,29 @@ uses a cascading foreign key.
 **Impact:** an owner can unintentionally delete a workspace and related operational
 and customer data through ordinary profile deletion.
 
+**Phase 1 candidate:** profile deletion is blocked while any owned workspace
+remains. The profile UI exposes separate transfer and permanent-delete workflows.
+Both require the current password; transfer accepts only an existing non-self
+member, while deletion additionally requires the exact workspace slug and displays
+the cascade/backup impact. Both operations recheck authoritative ownership inside
+a database transaction with a row lock, and foreign workspace IDs return `404`.
+Transfer preserves the workspace and demotes the former owner to member; explicit
+deletion intentionally uses the existing foreign-key cascades. Audit rows survive
+workspace or actor deletion so operator evidence remains available.
+
+The cumulative SQLite suite passed with 99 tests and 822 assertions. Six focused
+ownership, transfer, authorization, multi-workspace, audit, and cascade tests passed
+on PostgreSQL 16 with 41 assertions. A fresh PostgreSQL migration, rollback of the
+new audit table, and forward migration all passed. Production remains unchanged;
+deployment requires a fresh verified backup and explicit approval of the exact
+cumulative Phase 1 revision. The finding remains in progress until that deployment
+and production smoke evidence exist.
+
 **Close when:** an explicit transfer-or-delete workflow exists; destructive impact
-is shown and reconfirmed; sole-owner and multi-owner cases are protected; audit and
-restore paths are defined; PostgreSQL tests prove cascade behavior is intentional.
+is shown and reconfirmed; sole-owner and multiple-owned-workspace cases are
+protected; audit and restore paths are defined; PostgreSQL tests prove cascade
+behavior is intentional; and the exact candidate is deployed and smoke-tested after
+a verified backup.
 
 ### `DATA-02` — OAuth tokens stored plaintext
 

@@ -12,7 +12,7 @@ or migration compatibility.
 | Domain | Primary tables/models | Ownership |
 | --- | --- | --- |
 | Identity | users, password reset tokens, sessions | User |
-| Workspace | workspaces, workspace_members, workspace_departments, workspace_tags | Workspace |
+| Workspace | workspaces, workspace_members, workspace_departments, workspace_tags, workspace_audit_events | Workspace |
 | Provider connection | provider_connections, oauth_tokens, provider_permissions | Workspace/provider connection |
 | Webhooks | webhook_events | Provider event, optionally resolved to workspace/connection |
 | Inbox | conversations, participants, messages, attachments, tag pivot | Workspace/conversation |
@@ -22,8 +22,9 @@ or migration compatibility.
 | Commerce operations | orders, order items, order snapshots, promotion campaigns | Workspace |
 | Infrastructure | cache, jobs, job batches, failed jobs | Application runtime |
 
-There were 43 migrations at the audited revision. Use the repository migration
-files as the field-level source of truth.
+There were 43 migrations at the audited revision. The Phase 1 `DATA-01` candidate
+adds the `workspace_audit_events` migration. Use the repository migration files as
+the field-level source of truth.
 
 ## Ownership and deletion rules
 
@@ -31,9 +32,28 @@ Every workspace-scoped lookup must prove that the authenticated user belongs to
 the same workspace and has the required role. Route-model binding alone is not
 authorization.
 
-Current owner deletion can cascade through `workspaces.owner_id` and destroy
-workspace data. Until `DATA-01` is closed, deleting an owner account is a
-release-blocking operation that requires manual review and a verified backup.
+The Phase 1 `DATA-01` candidate blocks account deletion while the user owns any
+workspace. An owner must resolve every owned workspace through one of two explicit
+paths:
+
+1. transfer ownership to an existing workspace member after re-entering the
+   current password; or
+2. permanently delete the workspace after re-entering the current password and
+   typing the exact workspace slug.
+
+`workspaces.owner_id` is the authoritative single-owner record. A successful
+transfer updates it and both affected pivot roles in one locked transaction. A
+profile deletion after transfer removes only the former owner's account and leaves
+the workspace intact. Explicit workspace deletion intentionally uses the existing
+foreign-key cascades and can remove conversations, messages, attachments, provider
+connections, catalog/commerce records, and other scoped data.
+
+Ownership transfer and workspace deletion write immutable evidence to
+`workspace_audit_events`. The audit table deliberately has no cascading foreign
+keys, so the recorded IDs and deletion metadata survive removal of a workspace or
+actor. Restore remains a backup operation; there is no undelete UI or soft-delete
+window. Until `DATA-01` is approved, deployed, and production-smoke-tested, any
+owner-account or workspace deletion remains a release-blocking operation.
 
 Soft deletion, retention, privacy erasure, and provider-data retention are not
 consistently documented or implemented across all domains. Do not promise a
@@ -84,8 +104,10 @@ and public/private file inventories afterward.
 
 ## Backup and restore
 
-No application/PostgreSQL backup job or successful restore drill was verified on
-20 September 2026. The target is:
+No automated application/PostgreSQL backup job or full-service restore drill was
+verified on 20 September 2026. Phase 0 did produce one encrypted off-host snapshot
+and successfully restore its database, uploaded files, and environment files in
+isolated containers. The continuing target is:
 
 - RPO: no more than 24 hours of data loss;
 - RTO: service restored within 4 hours;
