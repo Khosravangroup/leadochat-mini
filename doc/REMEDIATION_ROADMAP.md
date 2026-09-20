@@ -163,6 +163,11 @@ known Composer advisories and its exact head passed both 114-test database jobs,
 the clean frontend build, and the secret/SAST job. Merge and required-check
 enforcement remain necessary before `DEP-01` can close.
 
+Pull request `#21` is the npm-remediation candidate. Its exact lockfile installed
+cleanly from the official npm registry, built with Vite 8.3.0, and reported zero npm
+vulnerabilities. Both database jobs and the security job also passed. Merge and
+required-check enforcement remain necessary before `DEP-02` can close.
+
 **Acceptance gate:** required checks are green on the exact head; a clean frontend
 artifact is reproducible; no unaccepted critical/high dependency advisory remains;
 branch protection is effective; secret/code scanning reports are triaged.

@@ -124,6 +124,10 @@ authenticated browser/provider smoke remains pending an approved synthetic targe
 - The Phase 2 Composer-remediation candidate in pull request `#20` reports zero
   locked Composer advisories and passed the complete SQLite and PostgreSQL 16
   suites on its exact head. Merge and required-check enforcement remain pending.
+- The Phase 2 npm-remediation candidate in pull request `#21` reports zero npm
+  vulnerabilities, passed a clean Node 24 install and Vite 8.3.0 build, and passed
+  both complete database suites. Merge and required-check enforcement remain
+  pending.
 - The post-deploy smoke suite must complete in under 5 minutes and cover health,
   authentication, dashboard/inbox read, a safe webhook negative check, and queue
   health.
