@@ -53,11 +53,31 @@ Do not resolve the divergence with an automatic reset, rebase, or force-push.
 Inventory the unique commits, choose the canonical promotion flow, preserve history,
 and protect both branches first.
 
+## Runtime-managed files in the production checkout
+
+The read-only Phase 1 inventory found exactly two untracked runtime paths in
+`/opt/leadochat`: `.env` and `docker/nginx/certs/`. These paths contain sensitive
+configuration and TLS material and are intentionally outside version control. They
+are production state, not disposable build output.
+
+Until runtime configuration and certificates are mounted from managed storage
+outside the checkout, every deployment must preserve and verify these exact paths.
+Never run `git clean`, add or commit either path, print their contents, include them
+in a plaintext artifact, or overwrite them from the repository. A pre-deploy
+`git status --short` result containing any other changed or untracked path is a
+`NO-GO` until the operator identifies and resolves it safely. The allowed paths must
+still pass secret-safe backup, ownership, permission, and certificate-validity
+checks; their presence on the allowlist is not proof that their contents are valid.
+
 ## Pre-deploy checklist
 
 - Confirm approved change set, exact commit, branch, operator, and release approver.
 - Confirm required CI checks pass on that exact commit.
 - Confirm no critical/high security or dependency blockers remain.
+- Capture `git status --short` without file contents. Require the production
+  checkout to be clean except for the runtime-managed `.env` and
+  `docker/nginx/certs/` paths described above; never use `git clean` to satisfy this
+  gate.
 - Back up PostgreSQL and verify the artifact before migrations.
 - Review migration forward/rollback behavior on PostgreSQL 16.
 - For the `DATA-01` candidate, create and restore-verify a fresh encrypted database
@@ -67,6 +87,8 @@ and protect both branches first.
   be preserved, inventory only token row/null counts, and create a fresh
   restore-verified encrypted database backup. Never print token columns.
 - Confirm `.env` permissions and required configuration without printing values.
+- Confirm runtime-managed TLS files remain present, protected, and valid without
+  printing private-key material.
 - Run `php artisan app:mail-check`; require a real verification and password-reset
   message to arrive through the configured production provider.
 - Record current containers, image IDs, database migration status, queue depth,
