@@ -63,6 +63,9 @@ and protect both branches first.
 - For the `DATA-01` candidate, create and restore-verify a fresh encrypted database
   and upload backup before migrating; do not exercise workspace deletion until the
   exact release revision and destructive test target are explicitly approved.
+- For the `DATA-02` candidate, confirm the current `APP_KEY` is configured and will
+  be preserved, inventory only token row/null counts, and create a fresh
+  restore-verified encrypted database backup. Never print token columns.
 - Confirm `.env` permissions and required configuration without printing values.
 - Run `php artisan app:mail-check`; require a real verification and password-reset
   message to arrive through the configured production provider.
@@ -70,6 +73,18 @@ and protect both branches first.
   failed jobs, disk space, and recent error fingerprints.
 - Identify the previous known-good revision and rehearse the appropriate rollback.
 - Avoid an unattended or low-support deployment window.
+
+Immediately after the `DATA-02` migration, run:
+
+```bash
+php artisan oauth-tokens:check-encryption
+```
+
+Require a zero `unencrypted_or_unreadable` count, then perform an approved provider
+connection smoke test. If the application revision must be rolled back past the
+encrypted-cast change, roll back the token migration before starting the old code.
+That compatibility action restores plaintext and must be treated as temporary
+containment; prefer a forward fix and re-encrypt as soon as possible.
 
 ## Post-deploy verification
 

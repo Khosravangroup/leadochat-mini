@@ -11,6 +11,7 @@ use App\Models\ProviderConnection;
 use App\Models\User;
 use App\Models\Workspace;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -40,6 +41,19 @@ class MetaCommerceStructureSyncTest extends TestCase
         $this->assertSame('meta-product-set-123', $productSet->external_product_set_id);
         $this->assertSame('synced', $productSet->meta_sync_status);
         $this->assertSame($metaCatalog->external_catalog_id, $productSet->meta['last_meta_sync']['external_catalog_id'] ?? null);
+        $this->assertStringNotContainsString(
+            'test-meta-access-token',
+            json_encode($productSet->meta, JSON_THROW_ON_ERROR)
+        );
+        $this->assertSame(
+            '[redacted]',
+            $productSet->meta['last_meta_sync']['result']['payload']['access_token'] ?? null
+        );
+        Http::assertSent(function (Request $request): bool {
+            parse_str($request->body(), $body);
+
+            return ($body['access_token'] ?? null) === 'test-meta-access-token';
+        });
     }
 
     public function test_agent_can_sync_collection_to_meta(): void
@@ -80,6 +94,19 @@ class MetaCommerceStructureSyncTest extends TestCase
         $this->assertSame('meta-collection-123', $collection->external_collection_id);
         $this->assertSame('synced', $collection->meta_sync_status);
         $this->assertSame($metaCatalog->external_catalog_id, $collection->meta['last_meta_sync']['external_catalog_id'] ?? null);
+        $this->assertStringNotContainsString(
+            'test-meta-access-token',
+            json_encode($collection->meta, JSON_THROW_ON_ERROR)
+        );
+        $this->assertSame(
+            '[redacted]',
+            $collection->meta['last_meta_sync']['result']['payload']['access_token'] ?? null
+        );
+        Http::assertSent(function (Request $request): bool {
+            parse_str($request->body(), $body);
+
+            return ($body['access_token'] ?? null) === 'test-meta-access-token';
+        });
     }
 
     protected function makeCommerceStructure(): array

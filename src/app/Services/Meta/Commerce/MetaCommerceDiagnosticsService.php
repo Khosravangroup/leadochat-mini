@@ -8,6 +8,7 @@ use App\Models\CommerceOrder;
 use App\Models\CommercePromotionCampaign;
 use App\Models\OauthToken;
 use App\Models\ProviderConnection;
+use App\Support\ProviderSecretRedactor;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
@@ -195,7 +196,7 @@ class MetaCommerceDiagnosticsService
                 count($missingPermissions) === 0 ? 'ok' : 'fail',
                 count($missingPermissions) === 0
                     ? 'All configured commerce review permissions are granted.'
-                    : 'Missing required review permissions: ' . implode(', ', $missingPermissions),
+                    : 'Missing required review permissions: '.implode(', ', $missingPermissions),
                 [
                     'required' => $requiredPermissions,
                     'granted' => $grantedPermissions,
@@ -204,8 +205,8 @@ class MetaCommerceDiagnosticsService
             ),
             $this->makeReadinessCheck(
                 'product_tag_eligibility',
-                !empty($accountBody['shopping_product_tag_eligibility']) ? 'ok' : 'warn',
-                !empty($accountBody['shopping_product_tag_eligibility'])
+                ! empty($accountBody['shopping_product_tag_eligibility']) ? 'ok' : 'warn',
+                ! empty($accountBody['shopping_product_tag_eligibility'])
                     ? 'Instagram account is eligible for product tagging.'
                     : 'Instagram account did not report product-tag eligibility yet.',
                 [
@@ -218,7 +219,7 @@ class MetaCommerceDiagnosticsService
                 count($missingWebhookFields) === 0 ? 'ok' : 'warn',
                 count($missingWebhookFields) === 0
                     ? 'Webhook subscription includes the key commerce fields for messaging and comments.'
-                    : 'Webhook subscription is missing required fields: ' . implode(', ', $missingWebhookFields),
+                    : 'Webhook subscription is missing required fields: '.implode(', ', $missingWebhookFields),
                 [
                     'verified_fields' => $verifiedWebhookFields,
                     'missing_fields' => $missingWebhookFields,
@@ -409,7 +410,7 @@ class MetaCommerceDiagnosticsService
                 'Instagram business account',
                 filled($connection->provider_account_id) ? 'ok' : 'fail',
                 filled($accountBody['username'] ?? null)
-                    ? 'Connected as @' . $accountBody['username'] . '.'
+                    ? 'Connected as @'.$accountBody['username'].'.'
                     : 'Connection exists but the account identity could not be read live.'
             ),
             $this->makeEvidenceItem(
@@ -418,7 +419,7 @@ class MetaCommerceDiagnosticsService
                 count($missingPermissions) === 0 ? 'ok' : 'fail',
                 count($missingPermissions) === 0
                     ? 'All configured review permissions are granted.'
-                    : 'Missing permissions: ' . implode(', ', $missingPermissions),
+                    : 'Missing permissions: '.implode(', ', $missingPermissions),
                 [
                     'required' => $requiredPermissions,
                     'missing' => $missingPermissions,
@@ -427,8 +428,8 @@ class MetaCommerceDiagnosticsService
             $this->makeEvidenceItem(
                 'product_tag_eligibility',
                 'Product tag eligibility',
-                !empty($accountBody['shopping_product_tag_eligibility']) ? 'ok' : 'warn',
-                !empty($accountBody['shopping_product_tag_eligibility'])
+                ! empty($accountBody['shopping_product_tag_eligibility']) ? 'ok' : 'warn',
+                ! empty($accountBody['shopping_product_tag_eligibility'])
                     ? 'Instagram reports that product tagging is eligible.'
                     : 'Instagram has not confirmed product-tag eligibility yet.'
             ),
@@ -437,7 +438,7 @@ class MetaCommerceDiagnosticsService
                 'Webhook coverage',
                 in_array('messages', $verifiedWebhookFields, true) && in_array('comments', $verifiedWebhookFields, true) ? 'ok' : 'warn',
                 $verifiedWebhookFields !== []
-                    ? 'Live webhook fields: ' . implode(', ', $verifiedWebhookFields)
+                    ? 'Live webhook fields: '.implode(', ', $verifiedWebhookFields)
                     : 'No live webhook fields were returned yet.'
             ),
             $this->makeEvidenceItem(
@@ -445,7 +446,7 @@ class MetaCommerceDiagnosticsService
                 'Discovered Meta catalogs',
                 count($liveCatalogs) > 0 ? 'ok' : 'fail',
                 count($liveCatalogs) > 0
-                    ? 'Found ' . count($liveCatalogs) . ' Meta catalog(s) for this account.'
+                    ? 'Found '.count($liveCatalogs).' Meta catalog(s) for this account.'
                     : 'No Meta catalogs are discovered for this account yet.'
             ),
             $this->makeEvidenceItem(
@@ -453,10 +454,10 @@ class MetaCommerceDiagnosticsService
                 'Live catalog access',
                 count($liveCatalogs) === 0
                     ? 'warn'
-                    : (collect($liveCatalogs)->every(fn (array $catalog) => !empty($catalog['live_ok'])) ? 'ok' : 'warn'),
+                    : (collect($liveCatalogs)->every(fn (array $catalog) => ! empty($catalog['live_ok'])) ? 'ok' : 'warn'),
                 count($liveCatalogs) === 0
                     ? 'Run discovery and sync to pull in live catalog assets.'
-                    : (collect($liveCatalogs)->every(fn (array $catalog) => !empty($catalog['live_ok']))
+                    : (collect($liveCatalogs)->every(fn (array $catalog) => ! empty($catalog['live_ok']))
                         ? 'Live reads succeeded for all discovered Meta catalogs.'
                         : 'Some discovered Meta catalogs could not be queried live.')
             ),
@@ -464,13 +465,13 @@ class MetaCommerceDiagnosticsService
                 'merchandising_layers',
                 'Merchandising layers',
                 ($localStats['product_set_count'] ?? 0) > 0 && ($localStats['collection_count'] ?? 0) > 0 ? 'ok' : 'warn',
-                'Product sets: ' . ($localStats['product_set_count'] ?? 0) . ', collections: ' . ($localStats['collection_count'] ?? 0) . '.'
+                'Product sets: '.($localStats['product_set_count'] ?? 0).', collections: '.($localStats['collection_count'] ?? 0).'.'
             ),
             $this->makeEvidenceItem(
                 'localized_merchandising',
                 'Localized pricing and offers',
                 ($localStats['market_override_count'] ?? 0) > 0 || ($localStats['offer_count'] ?? 0) > 0 ? 'ok' : 'warn',
-                'Localized profiles: ' . ($localStats['market_override_count'] ?? 0) . ', offers: ' . ($localStats['offer_count'] ?? 0) . '.'
+                'Localized profiles: '.($localStats['market_override_count'] ?? 0).', offers: '.($localStats['offer_count'] ?? 0).'.'
             ),
             $this->makeEvidenceItem(
                 'checkout_flows',
@@ -480,23 +481,23 @@ class MetaCommerceDiagnosticsService
                     : ((($checkoutSummary['invalid_count'] ?? 0) === 0) ? 'ok' : 'warn'),
                 ($checkoutSummary['checked_count'] ?? 0) === 0
                     ? 'No checkout URLs are configured yet.'
-                    : ('Checked ' . ($checkoutSummary['checked_count'] ?? 0) . ' URL(s), invalid ' . ($checkoutSummary['invalid_count'] ?? 0) . '.')
+                    : ('Checked '.($checkoutSummary['checked_count'] ?? 0).' URL(s), invalid '.($checkoutSummary['invalid_count'] ?? 0).'.')
             ),
             $this->makeEvidenceItem(
                 'orders_and_snapshots',
                 'Orders and snapshots',
                 ($localStats['order_count'] ?? 0) > 0 && ($localStats['order_snapshot_count'] ?? 0) > 0 ? 'ok' : 'warn',
-                'Orders: ' . ($localStats['order_count'] ?? 0) . ', test orders: ' . ($localStats['test_order_count'] ?? 0) . ', snapshots: ' . ($localStats['order_snapshot_count'] ?? 0) . '.'
+                'Orders: '.($localStats['order_count'] ?? 0).', test orders: '.($localStats['test_order_count'] ?? 0).', snapshots: '.($localStats['order_snapshot_count'] ?? 0).'.'
             ),
             $this->makeEvidenceItem(
                 'ads_and_promotions',
                 'Ads and promotion foundation',
                 ($localStats['promotion_campaign_count'] ?? 0) > 0 && ($localStats['prepared_promotion_campaign_count'] ?? 0) > 0 ? 'ok' : 'warn',
-                'Campaigns: ' . ($localStats['promotion_campaign_count'] ?? 0)
-                    . ', prepared: ' . ($localStats['prepared_promotion_campaign_count'] ?? 0)
-                    . ', promoted posts: ' . ($localStats['promoted_post_campaign_count'] ?? 0)
-                    . ', collection ads: ' . ($localStats['collection_ad_campaign_count'] ?? 0)
-                    . ', shops ads: ' . ($localStats['shops_ad_campaign_count'] ?? 0) . '.'
+                'Campaigns: '.($localStats['promotion_campaign_count'] ?? 0)
+                    .', prepared: '.($localStats['prepared_promotion_campaign_count'] ?? 0)
+                    .', promoted posts: '.($localStats['promoted_post_campaign_count'] ?? 0)
+                    .', collection ads: '.($localStats['collection_ad_campaign_count'] ?? 0)
+                    .', shops ads: '.($localStats['shops_ad_campaign_count'] ?? 0).'.'
             ),
         ];
 
@@ -548,7 +549,7 @@ class MetaCommerceDiagnosticsService
             foreach ($product->marketOverrides as $marketOverride) {
                 $entries->push([
                     'type' => 'market_override_checkout_url',
-                    'label' => $product->title . ' / ' . $marketOverride->target_country . ' / ' . $marketOverride->content_language,
+                    'label' => $product->title.' / '.$marketOverride->target_country.' / '.$marketOverride->content_language,
                     'url' => $marketOverride->checkout_url,
                 ]);
             }
@@ -556,7 +557,7 @@ class MetaCommerceDiagnosticsService
             foreach ($product->offers as $offer) {
                 $entries->push([
                     'type' => 'offer_checkout_url',
-                    'label' => $product->title . ' / ' . $offer->name,
+                    'label' => $product->title.' / '.$offer->name,
                     'url' => $offer->checkout_url,
                 ]);
             }
@@ -694,14 +695,21 @@ class MetaCommerceDiagnosticsService
                 ->get($url, $query);
 
             $json = $response->json();
+            $body = ProviderSecretRedactor::payload(
+                is_array($json) ? $json : ['raw' => mb_substr($response->body(), 0, 1000)],
+                [$accessToken]
+            );
 
             return [
                 'url' => $url,
                 'query' => $query,
                 'status' => $response->status(),
                 'ok' => $response->successful(),
-                'error' => $response->successful() ? null : Arr::get($json, 'error.message', $response->body()),
-                'body' => is_array($json) ? $json : ['raw' => mb_substr($response->body(), 0, 1000)],
+                'error' => $response->successful() ? null : ProviderSecretRedactor::text(
+                    (string) Arr::get($body, 'error.message', $response->body()),
+                    [$accessToken]
+                ),
+                'body' => $body,
             ];
         } catch (\Throwable $exception) {
             return [
@@ -709,7 +717,7 @@ class MetaCommerceDiagnosticsService
                 'query' => $query,
                 'status' => null,
                 'ok' => false,
-                'error' => $exception->getMessage(),
+                'error' => ProviderSecretRedactor::text($exception->getMessage(), [$accessToken]),
                 'body' => [],
             ];
         }

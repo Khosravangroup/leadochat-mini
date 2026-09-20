@@ -5,6 +5,7 @@ namespace App\Services\Meta\Instagram;
 use App\Models\OauthToken;
 use App\Models\ProviderConnection;
 use App\Models\ProviderPermission;
+use App\Support\ProviderSecretRedactor;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
@@ -14,8 +15,7 @@ class InstagramTokenExchangeService
 {
     public function __construct(
         protected InstagramWebhookSubscriptionService $instagramWebhookSubscriptionService
-    ) {
-    }
+    ) {}
 
     public function exchangeAndStore(ProviderConnection $connection, string $authorizationCode): array
     {
@@ -32,7 +32,10 @@ class InstagramTokenExchangeService
         ]);
 
         if (! $response->successful()) {
-            throw new RuntimeException('Instagram token exchange failed: ' . $response->body());
+            throw new RuntimeException('Instagram token exchange failed: '.ProviderSecretRedactor::text(
+                $response->body(),
+                [$authorizationCode, (string) config('services.instagram.client_secret')]
+            ));
         }
 
         $payload = $response->json();
@@ -76,7 +79,7 @@ class InstagramTokenExchangeService
     protected function storeLocalDebugResult(ProviderConnection $connection, string $authorizationCode): array
     {
         return $this->storeExchangeResult($connection, [
-            'access_token' => 'local-debug-token-' . substr(md5($authorizationCode), 0, 16),
+            'access_token' => 'local-debug-token-'.substr(md5($authorizationCode), 0, 16),
             'user_id' => 'local-debug-instagram-account',
             'oauth_user_id' => 'local-debug-instagram-user',
             'provider_account_id' => 'local-debug-instagram-account',
@@ -104,7 +107,10 @@ class InstagramTokenExchangeService
         ]);
 
         if (! $response->successful()) {
-            throw new RuntimeException('Instagram identity fetch failed: ' . $response->body());
+            throw new RuntimeException('Instagram identity fetch failed: '.ProviderSecretRedactor::text(
+                $response->body(),
+                [$accessToken]
+            ));
         }
 
         $payload = $response->json();
@@ -128,7 +134,10 @@ class InstagramTokenExchangeService
         ]);
 
         if (! $response->successful()) {
-            throw new RuntimeException('Instagram long-lived token exchange failed: ' . $response->body());
+            throw new RuntimeException('Instagram long-lived token exchange failed: '.ProviderSecretRedactor::text(
+                $response->body(),
+                [$shortLivedAccessToken, $appSecret]
+            ));
         }
 
         $payload = $response->json();
@@ -305,7 +314,7 @@ class InstagramTokenExchangeService
         }
 
         $sourceConnection->update([
-            'provider_account_id' => 'superseded-instagram-account-' . $sourceConnection->id,
+            'provider_account_id' => 'superseded-instagram-account-'.$sourceConnection->id,
             'provider_account_name' => 'Superseded Instagram Connection',
             'status' => 'superseded',
             'meta' => array_merge(is_array($sourceConnection->meta) ? $sourceConnection->meta : [], [
@@ -336,23 +345,6 @@ class InstagramTokenExchangeService
 
     protected function sanitizeMetaPayload(mixed $payload): mixed
     {
-        if (! is_array($payload)) {
-            return $payload;
-        }
-
-        $sanitized = [];
-
-        foreach ($payload as $key => $value) {
-            $normalizedKey = strtolower((string) $key);
-
-            if ($normalizedKey === 'access_token' || $normalizedKey === 'refresh_token') {
-                $sanitized[$key] = '[redacted]';
-                continue;
-            }
-
-            $sanitized[$key] = $this->sanitizeMetaPayload($value);
-        }
-
-        return $sanitized;
+        return ProviderSecretRedactor::payload($payload);
     }
 }

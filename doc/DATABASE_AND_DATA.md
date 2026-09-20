@@ -22,9 +22,10 @@ or migration compatibility.
 | Commerce operations | orders, order items, order snapshots, promotion campaigns | Workspace |
 | Infrastructure | cache, jobs, job batches, failed jobs | Application runtime |
 
-There were 43 migrations at the audited revision. The Phase 1 `DATA-01` candidate
-adds the `workspace_audit_events` migration. Use the repository migration files as
-the field-level source of truth.
+There were 43 migrations at the audited revision. The cumulative Phase 1 candidate
+adds the `workspace_audit_events` migration and the transactional `DATA-02` token
+encryption data migration. Use the repository migration files as the field-level
+source of truth.
 
 ## Ownership and deletion rules
 
@@ -70,9 +71,22 @@ Treat these as secrets or regulated customer content:
 - email addresses and authentication/session data;
 - database backups, exports, failure payloads, and logs.
 
-OAuth tokens are currently stored without encrypted casts and are tracked as
-`DATA-02`. Encryption remediation must include a data migration, backup, rollback,
-key management, and token rotation decision.
+The Phase 1 `DATA-02` candidate encrypts `oauth_tokens.access_token` and nullable
+`oauth_tokens.refresh_token` through Laravel encrypted model casts. The data
+migration transforms existing plaintext values in a transaction, is idempotent for
+already encrypted values, and its rollback decrypts values only for application
+rollback compatibility. Token fields are hidden from model serialization.
+
+Provider error text, diagnostic output, local-debug responses, and persisted Meta
+sync metadata pass through `ProviderSecretRedactor`; live HTTP requests still
+receive the real credential. The safe verification command prints counts only:
+
+```bash
+php artisan oauth-tokens:check-encryption
+```
+
+It fails when any non-null token cannot be decrypted with the configured key set.
+Never use a database query that prints token columns as an operational check.
 
 ## Migration rules
 
@@ -101,6 +115,16 @@ The command is idempotent, verifies matching source/target checksums before dele
 the public copy, preserves remote provider attachments, and updates `meta.disk` to
 `local`. Run it only after a fresh verified backup and verify both the row count
 and public/private file inventories afterward.
+
+For `DATA-02`, preserve the existing production `APP_KEY`, create and restore-verify
+a fresh encrypted database backup, run the migration, then run
+`oauth-tokens:check-encryption`. A code rollback to a revision without encrypted
+casts requires rolling this migration back first; that deliberately restores
+plaintext and therefore reopens the original database-exposure risk. Prefer a
+forward fix. Key rotation is a separate reviewed operation: retain the old key in
+`APP_PREVIOUS_KEYS`, prove reads, re-encrypt every row under the new primary key,
+verify counts without printing values, and remove the old key only after rollback
+and retention windows are approved.
 
 ## Backup and restore
 
