@@ -106,6 +106,14 @@ on SQLite and PostgreSQL 16, with 114 tests and 911 assertions in each job, plus
 clean frontend build and secret/SAST jobs. This is merge-candidate evidence; the
 dependency audit remains non-blocking until the enforcement change lands.
 
+For the Phase 2 npm-remediation candidate
+`d184cedf3c3d173bcce913d9ae268fa16c8001d6` in pull request `#21`, the exact
+lockfile installed 162 packages under Node 24 from the official npm registry,
+reported zero vulnerabilities, and completed the Vite 8.3.0 production build. The
+same head passed 114 tests with 911 assertions on both SQLite and PostgreSQL 16 and
+passed the secret/SAST job. This is merge-candidate evidence; required enforcement
+still depends on the final governance change.
+
 ## Local verification
 
 Start with the smallest affected check:

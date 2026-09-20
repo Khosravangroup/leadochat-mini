@@ -35,7 +35,7 @@ and infrastructure may change.
 | `DATA-01` | High | In progress | Owner deletion can cascade workspace data | 1 |
 | `DATA-02` | High | In progress | OAuth tokens stored plaintext | 1 |
 | `DEP-01` | High | In progress | Composer security advisories | 2 |
-| `DEP-02` | High | Open | npm security advisories | 2 |
+| `DEP-02` | High | In progress | npm security advisories | 2 |
 | `CI-01` | High | In progress | No CI gate or branch protection | 2 |
 | `REL-01` | High | Open | Branch divergence and deploy-target mismatch | 2-4 |
 | `OPS-02` | High | In progress | Production environment files readable as `644` | 0, 3 |
@@ -313,6 +313,15 @@ versions.
 
 **Impact:** build-chain or browser-side vulnerabilities can affect delivered assets
 or developer/CI environments.
+
+**Phase 2 candidate update:** pull request `#21` updates Axios to 1.20.0 and
+refreshes the existing-major lock graph, including Concurrently 9.2.4, PostCSS
+8.5.28, Vite 8.3.0, Shell Quote 1.9.0, Browserslist 4.29.0, and Nano ID 3.3.19.
+On exact head `d184cedf3c3d173bcce913d9ae268fa16c8001d6`, GitHub CI installed 162 packages
+from the official registry, reported zero npm vulnerabilities, and completed the
+Vite build. Both database jobs passed 114 tests with 911 assertions, and the
+secret/SAST job passed. The finding remains in progress until the candidate is
+merged and the audit becomes a required blocking check.
 
 **Close when:** direct and transitive packages are updated without unsafe forced
 major upgrades; clean lockfile install and Vite build pass; affected UI behavior and
