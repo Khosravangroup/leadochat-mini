@@ -34,7 +34,7 @@ and infrastructure may change.
 | `AUTH-02` | High | In progress | Ineffective email verification and mail delivery | 1 |
 | `DATA-01` | High | In progress | Owner deletion can cascade workspace data | 1 |
 | `DATA-02` | High | In progress | OAuth tokens stored plaintext | 1 |
-| `DEP-01` | High | Open | Composer security advisories | 2 |
+| `DEP-01` | High | In progress | Composer security advisories | 2 |
 | `DEP-02` | High | Open | npm security advisories | 2 |
 | `CI-01` | High | In progress | No CI gate or branch protection | 2 |
 | `REL-01` | High | Open | Branch divergence and deploy-target mismatch | 2-4 |
@@ -291,6 +291,15 @@ packages included Laravel, Filament, Livewire, Guzzle, and Symfony components.
 
 **Impact:** known framework or library vulnerabilities may be reachable through
 application paths. Severity counts alone do not prove exploitability.
+
+**Phase 2 candidate update:** pull request `#20` refreshes the compatible runtime
+dependency graph. It moves Filament from 4.10.0 to 4.13.4, Laravel from 13.4.0 to
+13.32.0, and updates the affected Livewire, Guzzle, CommonMark, Symfony, and related
+transitive packages. `composer audit --locked` reports zero advisories on exact head
+`f2617c1c43b12521c15a97729bb9fe9201f57fe2`. The full SQLite and PostgreSQL 16
+suites each passed 114 tests with 911 assertions; frontend build and secret/SAST
+jobs also passed. The finding remains in progress until this candidate is merged
+and the audit is enforced as a required check.
 
 **Close when:** dependencies are updated in reviewable groups; advisory reachability
 is assessed; application/security regression and PostgreSQL tests pass; the final
