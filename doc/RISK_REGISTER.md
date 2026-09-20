@@ -307,7 +307,11 @@ frontend build, lint, dependency, secret, and security checks.
 ### `REL-01` — Branch divergence and deploy-target mismatch
 
 **Evidence:** production was on `develop`, `deploy.sh` defaults to `main`, and the
-branches had three versus four unique commits in the audit comparison.
+branches had three versus four unique commits in the audit comparison. The Phase 1
+read-only inventory also found runtime-managed `.env` and
+`docker/nginx/certs/` paths untracked inside the production checkout. The current
+reset flow preserves untracked files, but a broad clean or checkout replacement can
+silently destroy the active configuration or TLS material.
 
 **Impact:** a manual deploy can silently select different code, omit fixes, or
 reintroduce behavior. The release source is not reproducible.
@@ -315,7 +319,9 @@ reintroduce behavior. The release source is not reproducible.
 **Close when:** unique commits are reconciled without history loss; the canonical
 promotion path is documented and enforced; deployment requires an immutable,
 approved revision; the running SHA is verified post-deploy; rollback targets the
-previous known-good revision.
+previous known-good revision; runtime secrets and certificates are mounted from
+managed storage outside the source checkout, or the deployment pipeline enforces
+and verifies an exact, secret-safe runtime-path allowlist without cleaning it.
 
 ### `OPS-02` — Environment file permissions
 

@@ -192,6 +192,9 @@ alert delivery is tested; restore meets RPO/RTO.
 6. Practice application rollback and data restore separately; record durations.
 7. Create a distinct staging environment or document an approved low-risk substitute
    before risky integration changes.
+8. Move runtime secrets and TLS certificates outside the Git checkout into managed
+   mounts. Until then, enforce the documented exact-path allowlist and prohibit
+   broad `git clean` operations during deployment.
 
 **Acceptance gate:** a release candidate moves through CI, staging/equivalent,
 approval, exact-revision deployment, smoke verification, and a practiced rollback
