@@ -1,6 +1,6 @@
 # QA Project Context
 
-Last verified: 20 September 2026. This file is the source of truth for project
+Last verified: 21 September 2026. This file is the source of truth for project
 stack, environments, quality goals, and test policy. Reverify volatile production
 facts before relying on them.
 
@@ -48,16 +48,24 @@ Critical user journeys are:
   and array mail.
 - Latest cumulative Phase 1 baseline: 114 tests and 911 assertions, all passing.
 - PHP syntax validation passed for all PHP files in the audited revision.
-- No committed browser E2E, accessibility, visual-regression, load, or PostgreSQL
-  integration suite is present.
+- No committed browser E2E, accessibility, visual-regression, or load suite is
+  present. The Phase 2 CI candidate runs the complete existing suite against both
+  SQLite and PostgreSQL 16, but still lacks focused concurrency and JSONB breadth.
 - Clean Vite 8.0.8 builds passed locally for Phase 1 and again during the exact
-  production release. This is still not a retained CI artifact or automated gate.
+  production release. The Phase 2 CI candidate also passed a clean Node 24 build
+  and retained its artifact for seven days; it is not yet a protected-branch gate
+  or deployment input.
 
 ## 4. CI/CD
 
-- GitHub Actions contains one manual `Deploy Production` workflow.
-- No test, lint, build, dependency, SAST, secret, or migration validation workflow
-  currently gates changes.
+- GitHub Actions contains the manual `Deploy Production` workflow. Phase 2 pull
+  request `#19` adds a candidate validation workflow for PHP syntax, changed-file
+  Pint, full SQLite and PostgreSQL 16 tests, a clean frontend build, dependency
+  reports, full-history secret scanning, and focused SAST.
+- All five candidate jobs passed on exact head
+  `34e32795a884b39fb7435e7f4c60a6cb6c80c65d`; dependency audits remain
+  report-only pending advisory remediation, and no validation check currently gates
+  either protected branch.
 - `main` and `develop` had no branch protection at the audit date.
 - GitHub Dependabot, secret scanning, and code scanning were disabled or had no
   analysis at the audit date.
@@ -77,8 +85,10 @@ never be committed.
 
 ### Test
 
-PHPUnit uses in-memory SQLite. This is fast but does not prove PostgreSQL-specific
-behavior, JSONB queries, constraints, locking, or migration compatibility.
+PHPUnit defaults to in-memory SQLite for fast local feedback. The Phase 2 CI
+candidate additionally runs the same complete suite against an isolated PostgreSQL
+16 service. Focused JSONB, locking, concurrent/idempotent path, and migration matrix
+coverage remains incomplete.
 
 ### Staging
 
@@ -134,7 +144,9 @@ authenticated browser/provider smoke remains pending an approved synthetic targe
 - Cascading owner deletion and workspace data loss.
 - Meta webhook idempotency, signature validation, retries, and tenant resolution.
 - Dependency advisories across Composer and npm packages.
-- PostgreSQL behavior not covered by the SQLite-only suite.
+- PostgreSQL 16 now runs the complete existing suite in the Phase 2 CI candidate,
+  but focused JSONB, locking, queue-claim, concurrency, and migration breadth remains
+  incomplete.
 - Missing automated backup/restore operations, host hardening, Nginx static/error
   security headers, authenticated CSP telemetry evidence, and monitoring. The
   Phase 1 application-header/report-only controls are deployed.

@@ -148,6 +148,16 @@ of `TEST-01`, and governance part of `REL-01`.
 6. Inventory the unique commits on `main` and `develop` and approve a non-destructive
    reconciliation plan.
 
+**Progress on 21 September 2026:** pull request `#19` implements the CI foundation
+and repository-side Dependabot configuration. Its exact head
+`34e32795a884b39fb7435e7f4c60a6cb6c80c65d` passed all five jobs: full PHPUnit on
+SQLite and PostgreSQL 16, PHP validation and changed-file Pint, clean frontend
+install/build with a retained artifact, full-history Gitleaks, focused Semgrep, and
+report-only dependency audits. The audit steps are not yet blocking because the
+locked Composer and npm trees still contain known advisories. Dependency upgrades,
+GitHub security-feature enablement, effective branch protection, and non-destructive
+`develop` to `main` promotion remain required before this phase can close.
+
 **Acceptance gate:** required checks are green on the exact head; a clean frontend
 artifact is reproducible; no unaccepted critical/high dependency advisory remains;
 branch protection is effective; secret/code scanning reports are triaged.

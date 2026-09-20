@@ -36,15 +36,15 @@ and infrastructure may change.
 | `DATA-02` | High | In progress | OAuth tokens stored plaintext | 1 |
 | `DEP-01` | High | Open | Composer security advisories | 2 |
 | `DEP-02` | High | Open | npm security advisories | 2 |
-| `CI-01` | High | Open | No CI gate or branch protection | 2 |
+| `CI-01` | High | In progress | No CI gate or branch protection | 2 |
 | `REL-01` | High | Open | Branch divergence and deploy-target mismatch | 2-4 |
 | `OPS-02` | High | In progress | Production environment files readable as `644` | 0, 3 |
 | `OPS-03` | High | Open | SSH and host firewall hardening gaps | 3 |
 | `FE-01` | Medium | In progress | Clean frontend build not proven | 2 |
-| `CI-02` | Medium | Open | Security scanning disabled/missing | 2 |
+| `CI-02` | Medium | In progress | Security scanning disabled/missing | 2 |
 | `OPS-04` | Medium | Open | Reverb port publicly bound | 3 |
 | `OPS-05` | Medium | In progress | Missing browser security headers | 1, 3 |
-| `TEST-01` | Medium | Open | SQLite-only automated database coverage | 2, 4 |
+| `TEST-01` | Medium | In progress | SQLite-only automated database coverage | 2, 4 |
 | `ARC-01` | Medium | Open | Oversized controllers/job and inline scripts | 5 |
 | `OBS-01` | Medium | Open | Limited verified monitoring and operational SLOs | 3 |
 | `OPS-06` | Low | Open | Historical failed jobs not dispositioned | 3 |
@@ -317,6 +317,13 @@ the audited revision had no checks/statuses. `main` and `develop` were unprotect
 **Impact:** untested, unreviewed, or vulnerable code can reach a release branch or
 production; history can be overwritten without a repository policy gate.
 
+**Phase 2 candidate update:** pull request `#19` adds a least-privilege workflow.
+At exact head `34e32795a884b39fb7435e7f4c60a6cb6c80c65d`, all five jobs passed, including
+full SQLite and PostgreSQL 16 suites, frontend build, secret/SAST scanning, and
+dependency reporting. Dependency audits remain report-only, the workflow is not yet
+merged, and neither protected branch requires it, so the finding remains in
+progress.
+
 **Close when:** protected branches require reviewed pull requests and current CI
 checks; force-push/deletion are restricted; least-privilege CI runs PHP, PostgreSQL,
 frontend build, lint, dependency, secret, and security checks.
@@ -388,6 +395,11 @@ evidence. Production assets may drift from source.
 candidate and on the exact production revision. The finding remains in progress
 because no CI gate retains and deploys an immutable frontend artifact.
 
+**Phase 2 candidate update:** pull request `#19` completed a clean Node 24 install
+and Vite build on its exact head and retained `src/public/build` for seven days.
+The artifact is not yet a required protected-branch output or the source of a
+production deployment, so the close condition is not yet met.
+
 **Close when:** a clean, isolated install from `package-lock.json` and `npm run build`
 pass in CI on a supported Node version, with the artifact retained and deployed from
 that exact revision.
@@ -398,6 +410,13 @@ that exact revision.
 scanning analysis existed for the repository.
 
 **Impact:** credential exposure and new vulnerable dependencies can remain unnoticed.
+
+**Phase 2 candidate update:** pull request `#19` passed full-history Gitleaks and a
+focused first-party Semgrep policy on exact head
+`34e32795a884b39fb7435e7f4c60a6cb6c80c65d`, and adds weekly grouped Dependabot
+configuration for Composer, npm, and GitHub Actions. GitHub secret-scanning,
+push-protection, dependency-alert, and code-scanning features are not yet enabled,
+and scheduled/required enforcement remains incomplete.
 
 **Close when:** secret scanning, dependency updates/alerts, SAST, and scheduled/full
 dependency scans are enabled; findings route to an owner; false-positive exceptions
@@ -461,6 +480,12 @@ PostgreSQL and JSONB.
 
 **Impact:** migrations, constraints, JSON queries, locking, ordering, and
 transaction behavior may pass tests but fail in production.
+
+**Phase 2 candidate update:** the complete current suite passed on PostgreSQL 16 and
+SQLite in pull request `#19`, with 114 tests and 911 assertions in each job. This
+establishes repeatable database-engine coverage for the existing suite, but does
+not by itself add the missing JSONB, locking, queue-claim, concurrency, or
+idempotency scenarios. The checks are not yet required by branch protection.
 
 **Close when:** CI runs database-sensitive feature/migration tests on PostgreSQL 16,
 including ownership cascades, JSONB, queue claims, and concurrent/idempotent paths.

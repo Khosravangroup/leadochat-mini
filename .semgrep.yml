@@ -1,0 +1,55 @@
+rules:
+  - id: leadochat-php-no-dynamic-eval
+    message: Dynamic PHP evaluation is forbidden in application code.
+    severity: ERROR
+    languages:
+      - php
+    paths:
+      include:
+        - src/app/**/*.php
+        - src/routes/**/*.php
+    pattern-either:
+      - pattern: eval(...)
+      - pattern: assert($EXPRESSION)
+
+  - id: leadochat-php-no-process-execution
+    message: Process execution requires an explicit security review and allowlist.
+    severity: ERROR
+    languages:
+      - php
+    paths:
+      include:
+        - src/app/**/*.php
+        - src/routes/**/*.php
+    pattern-either:
+      - pattern: exec(...)
+      - pattern: shell_exec(...)
+      - pattern: system(...)
+      - pattern: passthru(...)
+      - pattern: proc_open(...)
+
+  - id: leadochat-js-no-dynamic-code
+    message: Dynamic JavaScript evaluation is forbidden in first-party modules.
+    severity: ERROR
+    languages:
+      - javascript
+      - typescript
+    paths:
+      include:
+        - src/resources/js/**/*.js
+        - src/resources/js/**/*.ts
+    pattern-either:
+      - pattern: eval(...)
+      - pattern: new Function(...)
+
+  - id: leadochat-php-no-unserialize
+    message: Native unserialize is forbidden for application-controlled data.
+    severity: ERROR
+    languages:
+      - php
+    paths:
+      include:
+        - src/app/**/*.php
+        - src/routes/**/*.php
+    pattern: unserialize(...)
+
