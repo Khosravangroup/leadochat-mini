@@ -1,5 +1,10 @@
 # Social Module — Instagram Architecture
 
+> **Product design reference.** Parts of this design are implemented, but this file
+> is not a live implementation checklist. Verify current routes and services through
+> [the architecture guide](ARCHITECTURE.md) and [route guide](API_AND_ROUTES.md).
+> Track gaps as scoped tasks instead of assuming every item below is complete.
+
 ## Product split
 
 ### 1) Inbox

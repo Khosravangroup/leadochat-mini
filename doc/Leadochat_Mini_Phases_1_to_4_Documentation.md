@@ -1,5 +1,10 @@
 # Leadochat Mini — Documentation for Phases 1 to 4
 
+> **Historical record — not an operational source of truth.** This file describes
+> an earlier implementation snapshot. Statements about readiness, active services,
+> and current behavior may be obsolete. Start with [the documentation index](INDEX.md)
+> and verify current code and environment before acting.
+
 ## Project Summary
 Leadochat Mini is a university MVP built as a modular Laravel monolith for Meta platform integrations.  
 The stack implemented so far is:

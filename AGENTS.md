@@ -35,3 +35,17 @@
 - Flag destructive migrations.
 - Flag changes that can break deployment.
 - Flag secrets accidentally added to the repository.
+
+## Current documentation
+- Read "doc/INDEX.md" and ".agents/qa-project-context.md" before relying on project state.
+- Treat the phase documents and Cursor handoff listed as historical in "doc/INDEX.md" as provenance, not current operating instructions.
+- Update the applicable source-of-truth document with route, schema, configuration, architecture, test, deployment, or risk changes.
+- Never add credentials, tokens, private keys, customer data, database dumps, or unredacted logs to documentation.
+
+## Project-local skills
+- For every project task, use ".agents/skills/leadochat-mini-task-workflow/SKILL.md" first.
+- For bugs, failed tests/builds, and unexplained integration behavior, also use ".agents/skills/leadochat-mini-debugging/SKILL.md".
+- For risk-register work or changes to uploads, XSS defenses, roles, authentication, OAuth, webhooks, queues, deletion, dependencies, secrets, infrastructure exposure, backups, or deployment safety, also use ".agents/skills/leadochat-mini-security-remediation/SKILL.md".
+- For release planning, smoke verification, rollback planning, or a GO/NO-GO decision, also use ".agents/skills/leadochat-mini-release-readiness/SKILL.md".
+- A skill does not grant permission to commit, push, open or merge a pull request, deploy, mutate production, rotate secrets, or change server/network configuration.
+- Documentation-only work does not require a fabricated failing test.

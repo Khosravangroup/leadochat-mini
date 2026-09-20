@@ -1,5 +1,10 @@
 # Leadochat Mini — Documentation for Phases 5 and 6
 
+> **Historical record — not an operational source of truth.** This file describes
+> an earlier implementation snapshot. Statements about readiness, provider behavior,
+> and current schema may be obsolete. Start with [the documentation index](INDEX.md)
+> and verify current code and environment before acting.
+
 ## Project Context
 This document records the implementation progress for:
 
