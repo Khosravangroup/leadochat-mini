@@ -9,6 +9,7 @@ repository root.
 - [Architecture](../doc/ARCHITECTURE.md)
 - [Local development](../doc/LOCAL_DEVELOPMENT.md)
 - [Testing and quality](../doc/TESTING_AND_QUALITY.md)
+- [Browser security headers and CSP rollout](../doc/SECURITY_HEADERS_AND_CSP.md)
 - [Security policy](../SECURITY.md)
 
 Run framework commands from this directory only when working outside Docker. The

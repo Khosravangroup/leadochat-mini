@@ -61,6 +61,16 @@ output. Missing-key and unreadable-foreign-ciphertext cases fail closed instead 
 double-encrypting data; the former failed transactionally as expected before the
 successful run with an explicit non-production test key.
 
+For the Phase 1 browser-header and report-only CSP candidate on 20 September 2026,
+six focused tests passed with 43 assertions. They cover the exact headers, absence
+of enforced CSP, HTTPS-only staged HSTS, legacy and Reporting API payloads, report
+sanitization, route rate limiting, controlled rollback switches, malformed JSON,
+and oversized input. The cumulative SQLite suite passed with 114 tests and 911
+assertions. A clean
+`npm ci --no-audit --no-fund` installed 172 packages and the Vite 8.0.8 production
+build passed. A live production recheck still showed none of the tracked headers;
+deployment and browser/telemetry smoke remain required.
+
 ## Local verification
 
 Start with the smallest affected check:
@@ -176,6 +186,8 @@ evaluation.
 - effective email verification and real mail delivery;
 - deployed owner transfer/deletion smoke and backup-linked restore evidence;
 - OAuth token encryption and key rotation;
+- deployed CSP report-only telemetry, inline-code reduction, narrowed sources, and
+  separately approved enforcement;
 - webhook duplicates, retries, ordering, and malformed provider payloads;
 - PostgreSQL migration/constraint behavior;
 - browser E2E, accessibility, and reliable frontend build;

@@ -78,7 +78,7 @@ and the application portion of `OPS-05`.
    and decide provider token rotation.
 7. Introduce CSP in report-only mode after removing unsafe inline DOM construction.
 
-**Current progress:** items 1 through 6 have implemented and locally verified
+**Current progress:** items 1 through 7 have implemented and locally verified
 candidates. Item 1 provides private message-attachment storage,
 workspace-authorized browser delivery, short-lived signed Meta delivery, and an
 idempotent legacy-file migration. Item 2 replaces the identified tag, department,
@@ -101,7 +101,17 @@ Item 1 additionally requires the production legacy-file migration and inventory
 check. Item 5 requires a fresh verified backup and exact-revision approval before
 its migration or deletion workflow reaches production. Item 6 likewise requires a
 fresh verified backup, preservation of the exact production `APP_KEY`, production
-migration verification, and a provider smoke test. Item 7 remains outstanding.
+migration verification, and a provider smoke test. Item 7 adds application-wide
+browser defense headers, HTTPS-only staged HSTS, report-only CSP, and a
+privacy-bounded, rate-limited report receiver. Its current broad inline/media/
+WebSocket allowances are explicitly temporary and enforcement is not enabled.
+
+All seven Phase 1 application work packages now have merged or locally verified
+candidates. Phase 1 is not operationally closed: `AUTH-02` still lacks a production
+mail credential; no cumulative Phase 1 revision has been approved/deployed; data
+migrations and attachment migration still require fresh backup gates; and `OPS-05`
+still requires deployed browser/telemetry evidence before source narrowing or CSP
+enforcement.
 
 **Acceptance gate:** all relevant security regression tests pass; no ordinary member
 can perform owner/admin actions; no cross-workspace object is accessible; password

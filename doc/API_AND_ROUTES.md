@@ -11,7 +11,8 @@ docker compose exec app php artisan route:list
 ```
 
 The audited revision registered 127 routes. The cumulative Phase 1 candidate,
-including the two `DATA-01` ownership routes below, registers 131 routes.
+including the two `DATA-01` ownership routes and CSP report receiver below,
+registers 132 routes.
 
 ## Public pages
 
@@ -78,6 +79,18 @@ identity, idempotency, event state, retry behavior, and workspace resolution.
 The audited invalid verification request returned `403`; this negative check is
 safe for smoke testing. Never place a real token in a URL, command history, test
 fixture, or log.
+
+## CSP report receiver
+
+| Method | Path | Named route | Purpose |
+| --- | --- | --- | --- |
+| `POST` | `/csp-reports` | `csp.report` | Receive normalized report-only CSP telemetry |
+
+The endpoint is intentionally public and does not use browser CSRF state. It is
+rate-limited, body- and batch-bounded, and logs only an allowlist of normalized
+fields after removing URL query strings and fragments. It must never log raw
+reports, `script-sample`, cookies, authorization data, or arbitrary payload keys.
+See `SECURITY_HEADERS_AND_CSP.md` for the rollout and privacy contract.
 
 ## Authorization contract
 

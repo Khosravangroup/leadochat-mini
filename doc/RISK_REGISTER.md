@@ -41,7 +41,7 @@ and infrastructure may change.
 | `FE-01` | Medium | Open | Clean frontend build not proven | 2 |
 | `CI-02` | Medium | Open | Security scanning disabled/missing | 2 |
 | `OPS-04` | Medium | Open | Reverb port publicly bound | 3 |
-| `OPS-05` | Medium | Open | Missing browser security headers | 1, 3 |
+| `OPS-05` | Medium | In progress | Missing browser security headers | 1, 3 |
 | `TEST-01` | Medium | Open | SQLite-only automated database coverage | 2, 4 |
 | `ARC-01` | Medium | Open | Oversized controllers/job and inline scripts | 5 |
 | `OBS-01` | Medium | Open | Limited verified monitoring and operational SLOs | 3 |
@@ -396,6 +396,30 @@ frame-ancestor/frame options, content-type sniff protection, or a referrer polic
 **Impact:** browser defense-in-depth against downgrade, framing, MIME confusion,
 and XSS is weaker. A strict CSP can break inline scripts and must be introduced from
 measured report-only data.
+
+**Phase 1 candidate:** global Laravel middleware adds `nosniff`, same-origin frame
+control, strict-origin referrer handling, a restrictive browser permissions policy,
+one-day HSTS only on recognized HTTPS requests, and CSP strictly through
+`Content-Security-Policy-Report-Only`. No enforced CSP header is emitted. The
+initial policy inventories the current inline-script/style and dynamic media/Reverb
+constraints. Both legacy and Reporting API reports route to a public receiver with
+rate, body, batch, field, and URL-sanitization controls; query strings, fragments,
+user information, script samples, arbitrary keys, cookies, and raw bodies are not
+logged.
+
+Six focused tests passed with 43 assertions, covering headers, HTTPS-only HSTS,
+absence of enforced CSP, both report formats, CSRF independence, sanitization,
+rate-limit declaration, rollback switches, invalid JSON, and oversized bodies. The
+cumulative SQLite suite passed with 114 tests and 911 assertions, and a clean Vite
+8.0.8 build passed.
+A live header recheck on 20 September 2026 still returned none of the tracked
+headers because production remains on the Phase 0 revision.
+
+**Residual risk:** the report-only policy retains `unsafe-inline` for scripts and
+styles and broad HTTPS media/image plus WebSocket schemes while the existing UI is
+measured. Application middleware cannot protect Nginx-served static/error responses.
+Production deployment, browser journey evidence, telemetry observation, inline-code
+reduction, source narrowing, and separately approved enforcement remain open.
 
 **Close when:** headers are deployed with compatibility tests; CSP starts in report-
 only mode, observed violations are resolved without unsafe broad allowances, and
