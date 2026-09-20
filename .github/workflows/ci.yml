@@ -1,0 +1,214 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - develop
+      - main
+  push:
+    branches:
+      - develop
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PHP_VERSION: "8.4"
+  NODE_VERSION: "24"
+
+jobs:
+  php-sqlite:
+    name: PHP / SQLite
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: src
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          extensions: bcmath, gd, intl, mbstring, pcntl, pdo_sqlite
+          coverage: none
+          tools: composer:v2
+
+      - name: Validate Composer metadata
+        run: composer validate --strict --no-check-publish
+
+      - name: Install PHP dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Validate PHP syntax
+        run: >-
+          find app bootstrap config database routes tests
+          -type f -name '*.php' -print0 |
+          xargs -0 -n1 php -l
+
+      - name: Check PHP formatting
+        run: ./vendor/bin/pint --test
+
+      - name: Run SQLite test suite
+        run: php artisan test
+
+  php-postgresql:
+    name: PHP / PostgreSQL 16
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: src
+    services:
+      postgres:
+        image: postgres:16-alpine@sha256:3c5c8892d184f738f4fe282d14ddaa613a38f00f4189d2d94725ebe6f2909ddb
+        env:
+          POSTGRES_DB: leadochat_test
+          POSTGRES_USER: leadochat_test
+          POSTGRES_PASSWORD: test-only-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U leadochat_test -d leadochat_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      APP_ENV: testing
+      APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      BCRYPT_ROUNDS: "4"
+      BROADCAST_CONNECTION: "null"
+      CACHE_STORE: array
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: "5432"
+      DB_DATABASE: leadochat_test
+      DB_USERNAME: leadochat_test
+      DB_PASSWORD: test-only-password
+      DB_URL: ""
+      MAIL_MAILER: array
+      QUEUE_CONNECTION: sync
+      SESSION_DRIVER: array
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          extensions: bcmath, gd, intl, mbstring, pcntl, pdo_pgsql
+          coverage: none
+          tools: composer:v2
+
+      - name: Install PHP dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Run PostgreSQL test suite
+        run: php artisan test
+
+  frontend:
+    name: Frontend build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: src
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: src/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Build frontend assets
+        run: npm run build
+
+      - name: Retain frontend artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: frontend-build-${{ github.sha }}
+          path: src/public/build
+          if-no-files-found: error
+          retention-days: 7
+
+  security:
+    name: Secret and focused SAST scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out full history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Scan Git history for secrets
+        run: >-
+          docker run --rm
+          --volume "$GITHUB_WORKSPACE:/repo"
+          --workdir /repo
+          ghcr.io/gitleaks/gitleaks@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
+          detect --source . --redact --no-banner --exit-code 1 --log-opts=--all
+
+      - name: Run focused Semgrep rules
+        run: >-
+          docker run --rm
+          --volume "$GITHUB_WORKSPACE:/src"
+          --workdir /src
+          semgrep/semgrep@sha256:acaac22ffc7b7cc5926de0751b223bce0b2491c33d18422fa72f632c78d81198
+          semgrep scan --config .semgrep.yml --error --metrics=off
+
+  dependency-audit:
+    name: Dependency audit baseline
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    defaults:
+      run:
+        working-directory: src
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          coverage: none
+          tools: composer:v2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: src/package-lock.json
+
+      - name: Audit locked PHP dependencies
+        run: composer audit --locked --abandoned=fail
+
+      - name: Audit locked frontend dependencies
+        if: always()
+        run: npm audit --package-lock-only --audit-level=high
+
