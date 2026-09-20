@@ -46,13 +46,12 @@ Critical user journeys are:
 - Feature and unit suites under `src/tests`.
 - Current automated tests use in-memory SQLite, synchronous queues, array sessions,
   and array mail.
-- Latest audited baseline: 54 tests, 390 assertions, all passing in 2.94 seconds.
+- Latest cumulative Phase 1 baseline: 114 tests and 911 assertions, all passing.
 - PHP syntax validation passed for all PHP files in the audited revision.
 - No committed browser E2E, accessibility, visual-regression, load, or PostgreSQL
   integration suite is present.
-- Frontend build verification was inconclusive on the audit machine because the
-  existing `node_modules` tree lacked a native Rolldown binding and clean `npm ci`
-  attempts were interrupted by registry `ECONNRESET` errors.
+- Clean Vite 8.0.8 builds passed locally for Phase 1 and again during the exact
+  production release. This is still not a retained CI artifact or automated gate.
 
 ## 4. CI/CD
 
@@ -63,7 +62,7 @@ Critical user journeys are:
 - GitHub Dependabot, secret scanning, and code scanning were disabled or had no
   analysis at the audit date.
 - Production was verified on `develop` at revision
-  `f65945d30c039532cd3109d3a78dfb33eacfa88d`, while `deploy.sh` defaults to
+  `b7e948f4325c5fc318f4ab9f7274319d72b3d32a`, while `deploy.sh` defaults to
   `main`. Branch and deployment policy therefore conflict.
 - At the audit date, `main` had three unique commits and `develop` had four unique
   commits relative to each other.
@@ -94,6 +93,13 @@ all containers were running with zero restarts, application debug was off, and
 configuration/routes/views were cached. Access credentials remain outside the
 repository in the Mac mini's protected local credential stores.
 
+The cumulative Phase 1 release was deployed on 20 September 2026 after encrypted
+off-host backup and isolated restore verification. Both data migrations applied,
+token encryption verification passed, the attachment migration had no eligible
+records, public smoke checks and the CSP receiver passed, and the expected
+application security headers are live. Production still uses `MAIL_MAILER=log`, and
+authenticated browser/provider smoke remains pending an approved synthetic target.
+
 ## 6. Quality Goals
 
 - 100% of committed PHP tests must pass before review and before deployment.
@@ -116,19 +122,22 @@ repository in the Mac mini's protected local credential stores.
 
 ## 7. Risk Areas
 
-- Public attachment handling and Nginx PHP execution rules.
-- Stored DOM XSS in tag, department, and agent rendering.
-- Plaintext OAuth tokens at rest.
-- Workspace role enforcement and missing policy/gate coverage.
+- Residual authenticated/private attachment delivery smoke and Nginx static/error
+  response boundaries; the private-storage implementation and storage execution
+  deny are deployed.
+- Residual authenticated browser proof for the deployed stored-DOM-XSS remediation.
+- Provider connectivity proof and key-rotation planning for deployed encrypted
+  OAuth tokens.
+- Production role-matrix smoke for the deployed workspace authorization gates.
 - Ineffective email verification and a production mail driver that cannot deliver
   password-reset email.
 - Cascading owner deletion and workspace data loss.
 - Meta webhook idempotency, signature validation, retries, and tenant resolution.
 - Dependency advisories across Composer and npm packages.
 - PostgreSQL behavior not covered by the SQLite-only suite.
-- Missing automated backup/restore operations, host hardening, deployed
-  origin-level security headers, CSP telemetry evidence, and monitoring. A tested
-  Phase 1 application-header/report-only candidate exists but is not deployed.
+- Missing automated backup/restore operations, host hardening, Nginx static/error
+  security headers, authenticated CSP telemetry evidence, and monitoring. The
+  Phase 1 application-header/report-only controls are deployed.
 - Branch drift, unprotected branches, and production/deploy branch mismatch.
 - Large controllers, jobs, and Blade/JavaScript files with limited focused tests.
 

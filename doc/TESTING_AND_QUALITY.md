@@ -68,8 +68,24 @@ sanitization, route rate limiting, controlled rollback switches, malformed JSON,
 and oversized input. The cumulative SQLite suite passed with 114 tests and 911
 assertions. A clean
 `npm ci --no-audit --no-fund` installed 172 packages and the Vite 8.0.8 production
-build passed. A live production recheck still showed none of the tracked headers;
-deployment and browser/telemetry smoke remain required.
+build passed. Before deployment, a live production recheck showed none of the
+tracked headers; deployment and browser/telemetry smoke remained required at that
+point.
+
+The exact cumulative Phase 1 revision
+`b7e948f4325c5fc318f4ab9f7274319d72b3d32a` was subsequently deployed to
+production. A fresh encrypted backup passed checksum and isolated restore checks
+before deployment. The production Vite 8.0.8 build passed after a clean install;
+both database migrations applied; token verification reported zero unencrypted or
+unreadable fields; and the attachment migration had zero eligible records and zero
+failures. Repeated `/up`, home, and login probes passed; anonymous dashboard access
+redirected; the invalid webhook check returned `403`; a synthetic CSP report
+returned `204`; queue depth and historical failed-job count remained stable; Reverb
+accepted a local connection; and no new high-severity application log entry appeared
+in the observation window. The expected browser headers are now visible on public
+application responses and enforced CSP remains absent. Authenticated browser role,
+XSS, inbox, attachment/provider, deletion, and real-email delivery journeys were not
+run because no approved production synthetic account/provider target was available.
 
 ## Local verification
 
@@ -181,13 +197,16 @@ evaluation.
 - attachment type/execution and public-storage behavior;
 - private attachment authorization, signed-provider URL expiry, HTTP Range support,
   and idempotent legacy-file migration;
-- deployed browser smoke for the tag/department/agent stored-XSS remediation;
+- authenticated production browser smoke for the tag/department/agent stored-XSS
+  remediation;
 - workspace roles and cross-tenant object access;
 - effective email verification and real mail delivery;
-- deployed owner transfer/deletion smoke and backup-linked restore evidence;
-- OAuth token encryption and key rotation;
-- deployed CSP report-only telemetry, inline-code reduction, narrowed sources, and
-  separately approved enforcement;
+- approved synthetic owner transfer/deletion smoke; backup-linked restore evidence
+  exists for the deployed migration;
+- provider smoke for deployed OAuth-token encryption and key rotation if exposure
+  evidence or an approved rotation plan requires it;
+- authenticated CSP report-only telemetry, inline-code reduction, narrowed sources,
+  and separately approved enforcement;
 - webhook duplicates, retries, ordering, and malformed provider payloads;
 - PostgreSQL migration/constraint behavior;
 - browser E2E, accessibility, and reliable frontend build;

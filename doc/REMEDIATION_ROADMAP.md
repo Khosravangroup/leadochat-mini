@@ -1,9 +1,10 @@
 # Phased remediation roadmap
 
-Status date: 20 September 2026. Phase 0 immediate containment is deployed and
-verified. Overall decision remains **NO-GO for a new production release** until the
-applicable Phase 1 release blockers are verified. Each phase should be handled as
-separate, reviewable tasks rather than one large change.
+Status date: 20 September 2026. Phase 0 immediate containment and the cumulative
+Phase 1 application release are deployed and verified at their documented scopes.
+Future production releases remain **NO-GO** unless their applicable release gates
+and residual-risk decisions are satisfied. Each phase should be handled as separate,
+reviewable tasks rather than one large change.
 
 ## Operating rules for every phase
 
@@ -78,15 +79,16 @@ and the application portion of `OPS-05`.
    and decide provider token rotation.
 7. Introduce CSP in report-only mode after removing unsafe inline DOM construction.
 
-**Current progress:** items 1 through 7 have implemented and locally verified
-candidates. Item 1 provides private message-attachment storage,
+**Current progress:** items 1 through 7 were implemented, locally verified, merged,
+and cumulatively deployed as
+`b7e948f4325c5fc318f4ab9f7274319d72b3d32a`. Item 1 provides private
+message-attachment storage,
 workspace-authorized browser delivery, short-lived signed Meta delivery, and an
 idempotent legacy-file migration. Item 2 replaces the identified tag, department,
 and agent `innerHTML` sinks with safe DOM construction and consistently allowlists
 colors at both controller and model boundaries. Item 3 introduces a documented,
 deny-by-default workspace role/capability matrix, route gates, owner-only privileged
-operations, and cross-workspace negative tests. These remain open until their exact
-revisions are approved, deployed, and verified in production. Item 4 makes email
+operations, and cross-workspace negative tests. Item 4 makes email
 verification effective, removes member pre-verification, adds dispatch/expiry/replay/
 rate-limit coverage, and introduces a secret-safe mail configuration check. It
 remains operationally blocked because production has no delivery-capable mail
@@ -97,21 +99,24 @@ Item 6 adds encrypted OAuth-token casts, a transactional idempotent data migrati
 count-only verification, and provider-boundary redaction; its PostgreSQL
 forward/rollback/forward drill passed. No confirmed exposure justified provider
 rotation, so rotation remains evidence-triggered rather than assumed.
-Item 1 additionally requires the production legacy-file migration and inventory
-check. Item 5 requires a fresh verified backup and exact-revision approval before
-its migration or deletion workflow reaches production. Item 6 likewise requires a
-fresh verified backup, preservation of the exact production `APP_KEY`, production
-migration verification, and a provider smoke test. Item 7 adds application-wide
+The production legacy-file migration found zero eligible records and zero failures.
+A fresh encrypted off-host backup passed checksum and isolated restore checks before
+the data migrations. The workspace-audit and OAuth-token migrations applied, the
+production `APP_KEY` was preserved, and count-only token verification found zero
+unencrypted or unreadable fields. Item 7 adds application-wide
 browser defense headers, HTTPS-only staged HSTS, report-only CSP, and a
 privacy-bounded, rate-limited report receiver. Its current broad inline/media/
-WebSocket allowances are explicitly temporary and enforcement is not enabled.
+WebSocket allowances are explicitly temporary and enforcement is not enabled. The
+headers and report receiver are live, and a synthetic report returned `204`.
 
-All seven Phase 1 application work packages now have merged or locally verified
-candidates. Phase 1 is not operationally closed: `AUTH-02` still lacks a production
-mail credential; no cumulative Phase 1 revision has been approved/deployed; data
-migrations and attachment migration still require fresh backup gates; and `OPS-05`
-still requires deployed browser/telemetry evidence before source narrowing or CSP
-enforcement.
+Phase 1 application implementation and production rollout are complete. Operational
+acceptance is not fully closed: `AUTH-02` still lacks a delivery-capable production
+mail credential; authenticated role, XSS, inbox, attachment/provider, and deletion
+smoke journeys need an approved synthetic production target; provider connectivity
+after token encryption has not been exercised; and `OPS-05` still needs browser
+telemetry observation before source narrowing or CSP enforcement. The owner approved
+the exact release with the known temporary `MAIL_MAILER=log` risk, but that approval
+does not close the finding.
 
 **Acceptance gate:** all relevant security regression tests pass; no ordinary member
 can perform owner/admin actions; no cross-workspace object is accessible; password
@@ -247,16 +252,14 @@ as current operating policy.
 
 ## Suggested execution order for the next tasks
 
-1. `SEC-01` containment and permanent upload fix.
-2. `OPS-01` backup plus successful isolated restore.
-3. `SEC-02` stored XSS removal.
-4. `AUTH-01` role matrix and authorization policies.
-5. `DATA-01` safe owner deletion/transfer.
-6. `DATA-02` encrypted OAuth-token migration.
-7. `AUTH-02` effective verification and mail delivery.
-8. CI plus reproducible frontend build, followed by dependency upgrades.
-9. Branch/deployment reconciliation and host hardening.
-10. Incremental architecture/test improvements.
+1. Configure and prove production transactional email to close `AUTH-02`.
+2. Run approved authenticated synthetic browser/provider smoke and observe CSP
+   telemetry for the deployed Phase 1 controls.
+3. Add CI plus reproducible frontend builds, then remediate dependency advisories.
+4. Enable branch protection and reconcile the production/deploy branch policy.
+5. Harden the host, remove public Reverb exposure, and automate backup/monitoring.
+6. Make deployments immutable and practice application rollback/data restore.
+7. Continue incremental architecture and test improvements.
 
 This order may change only with new evidence, active exploitation, an outage, or an
 explicit business priority decision. Record the reason rather than silently
