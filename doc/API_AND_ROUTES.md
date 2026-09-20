@@ -10,7 +10,8 @@ Generate the exact current inventory with:
 docker compose exec app php artisan route:list
 ```
 
-The audited revision registered 127 routes.
+The audited revision registered 127 routes. The cumulative Phase 1 candidate,
+including the two `DATA-01` ownership routes below, registers 131 routes.
 
 ## Public pages
 
@@ -39,8 +40,22 @@ Routes under the `auth` and effective `verified` middleware cover:
   Meta commerce sync/diagnostics/evidence, orders, product sets, collections, and
   promotions.
 
-Profile edit, password, and account deletion routes require `auth` but are outside
-the `verified` group.
+Profile edit, password, account deletion, and workspace ownership-resolution routes
+require `auth` but are outside the `verified` group. Keeping ownership resolution
+available to an unverified authenticated owner prevents verification state from
+making a workspace impossible to transfer or explicitly delete.
+
+### Profile ownership routes
+
+| Method | Path | Named route | Contract |
+| --- | --- | --- | --- |
+| `POST` | `/profile/workspaces/{workspace}/transfer-ownership` | `profile.workspaces.transfer` | Current owner only; requires current password and an existing non-self member; transfers authoritative ownership atomically |
+| `DELETE` | `/profile/workspaces/{workspace}` | `profile.workspaces.destroy` | Current owner only; requires current password and the exact workspace slug; intentionally cascades scoped data |
+| `DELETE` | `/profile` | `profile.destroy` | Requires current password and is rejected while any owned workspace remains |
+
+Foreign workspace identifiers return `404`. The transfer and delete operations
+write audit evidence. They are browser form endpoints with CSRF protection, not a
+public JSON API.
 
 `User` implements Laravel's email-verification contract. New registrations and
 owner-created members remain unverified and receive a verification notification;

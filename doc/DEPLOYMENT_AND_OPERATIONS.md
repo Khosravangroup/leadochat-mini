@@ -60,6 +60,9 @@ and protect both branches first.
 - Confirm no critical/high security or dependency blockers remain.
 - Back up PostgreSQL and verify the artifact before migrations.
 - Review migration forward/rollback behavior on PostgreSQL 16.
+- For the `DATA-01` candidate, create and restore-verify a fresh encrypted database
+  and upload backup before migrating; do not exercise workspace deletion until the
+  exact release revision and destructive test target are explicitly approved.
 - Confirm `.env` permissions and required configuration without printing values.
 - Run `php artisan app:mail-check`; require a real verification and password-reset
   message to arrive through the configured production provider.
@@ -125,6 +128,12 @@ This snapshot is not a backup schedule. Before any production data migration:
 - verify checksums and readability;
 - test restoration into an isolated environment;
 - record RPO, RTO, operator, and evidence.
+
+Workspace deletion has no application-level undo. The supported recovery path is
+an isolated restore from a verified backup, followed by an explicitly reviewed
+selective/full recovery plan. Never test the deletion workflow against a real
+customer workspace; use an approved synthetic workspace and record its exact ID and
+slug before the operation.
 
 Target RPO is 24 hours and target RTO is 4 hours until the owner defines stricter
 requirements. Phase 3 must automate encrypted capture, retention, freshness alerts,

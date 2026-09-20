@@ -41,6 +41,14 @@ tests passed on PostgreSQL 16 with 83 assertions. Production verification/reset
 delivery remains blocked until a real mail transport is configured and inbox
 delivery is proven.
 
+For the Phase 1 safe owner-deletion candidate on 20 September 2026, the cumulative
+SQLite suite passed with 99 tests and 822 assertions. Six focused account-block,
+transfer-validation, successful-transfer, explicit-cascade, foreign-workspace, and
+multiple-owned-workspace tests passed on PostgreSQL 16 with 41 assertions. A fresh
+PostgreSQL migration, one-step rollback of `workspace_audit_events`, and forward
+migration all passed. Production deletion and migration smoke tests remain gated on
+a fresh verified backup and explicit exact-revision approval.
+
 ## Local verification
 
 Start with the smallest affected check:
@@ -154,7 +162,7 @@ evaluation.
 - deployed browser smoke for the tag/department/agent stored-XSS remediation;
 - workspace roles and cross-tenant object access;
 - effective email verification and real mail delivery;
-- owner transfer/deletion and cascade protection;
+- deployed owner transfer/deletion smoke and backup-linked restore evidence;
 - OAuth token encryption and key rotation;
 - webhook duplicates, retries, ordering, and malformed provider payloads;
 - PostgreSQL migration/constraint behavior;
