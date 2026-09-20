@@ -2,9 +2,19 @@
 
 ## Supported code
 
-Security work targets the active `develop` line and the production revision that
-is explicitly verified at the start of an incident. `main` must not be assumed to
-match production.
+Security work targets the active `develop` integration line, the `main` release
+line, and the production revision explicitly verified at the start of an incident.
+`main` must not be assumed to match production until an approved deployment proves
+the running revision.
+
+## Repository controls
+
+Both long-lived branches require review, current CI checks, dependency audits,
+full-history secret scanning, and focused code scanning. GitHub secret scanning and
+push protection plus Dependabot alerts/security updates are enabled. The sole
+repository administrator is exempt from branch protection to avoid deadlock in this
+single-collaborator personal repository; using that exemption still requires the
+same evidence and must be disclosed in the pull request record.
 
 ## Reporting a vulnerability
 
