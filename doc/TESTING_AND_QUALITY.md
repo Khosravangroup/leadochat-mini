@@ -99,6 +99,13 @@ this foundation candidate because they still report 50 and 14 advisories
 respectively; they are not yet release gates. The candidate does not become a
 repository control until it is merged and required by branch protection.
 
+For the Phase 2 Composer-remediation candidate
+`f2617c1c43b12521c15a97729bb9fe9201f57fe2` in pull request `#20`, the locked
+dependency audit reported zero advisories. The exact head passed the complete suite
+on SQLite and PostgreSQL 16, with 114 tests and 911 assertions in each job, plus the
+clean frontend build and secret/SAST jobs. This is merge-candidate evidence; the
+dependency audit remains non-blocking until the enforcement change lands.
+
 ## Local verification
 
 Start with the smallest affected check:

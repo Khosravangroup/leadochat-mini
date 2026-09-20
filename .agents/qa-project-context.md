@@ -121,6 +121,9 @@ authenticated browser/provider smoke remains pending an approved synthetic targe
   records a time-bounded exception with containment and an owner.
 - Zero unresolved critical/high dependency advisories at release time unless a
   documented exception proves non-reachability and defines an expiry date.
+- The Phase 2 Composer-remediation candidate in pull request `#20` reports zero
+  locked Composer advisories and passed the complete SQLite and PostgreSQL 16
+  suites on its exact head. Merge and required-check enforcement remain pending.
 - The post-deploy smoke suite must complete in under 5 minutes and cover health,
   authentication, dashboard/inbox read, a safe webhook negative check, and queue
   health.

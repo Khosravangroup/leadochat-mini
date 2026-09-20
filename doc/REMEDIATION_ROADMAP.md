@@ -158,6 +158,11 @@ locked Composer and npm trees still contain known advisories. Dependency upgrade
 GitHub security-feature enablement, effective branch protection, and non-destructive
 `develop` to `main` promotion remain required before this phase can close.
 
+Pull request `#20` is the Composer-remediation candidate. Its lockfile has zero
+known Composer advisories and its exact head passed both 114-test database jobs,
+the clean frontend build, and the secret/SAST job. Merge and required-check
+enforcement remain necessary before `DEP-01` can close.
+
 **Acceptance gate:** required checks are green on the exact head; a clean frontend
 artifact is reproducible; no unaccepted critical/high dependency advisory remains;
 branch protection is effective; secret/code scanning reports are triaged.
