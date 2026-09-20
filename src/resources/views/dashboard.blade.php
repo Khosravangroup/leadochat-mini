@@ -119,9 +119,11 @@
                         <a href="{{ route('social.index') }}" class="inline-flex items-center rounded-lg border border-teal-100 bg-white px-5 py-3 text-sm font-black text-teal-900 transition hover:bg-teal-50">
                             Open Social
                         </a>
-                        <a href="{{ route('settings.index') }}" class="inline-flex items-center rounded-lg border border-amber-200 bg-amber-50 px-5 py-3 text-sm font-black text-amber-900 transition hover:bg-amber-100">
-                            Open Settings
-                        </a>
+                        @can('workspace.manage')
+                            <a href="{{ route('settings.index') }}" class="inline-flex items-center rounded-lg border border-amber-200 bg-amber-50 px-5 py-3 text-sm font-black text-amber-900 transition hover:bg-amber-100">
+                                Open Settings
+                            </a>
+                        @endcan
                     </div>
                 </div>
             </div>

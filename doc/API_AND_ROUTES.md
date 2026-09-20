@@ -79,6 +79,25 @@ visibility, request IDs, or route-model binding as authorization. Negative tests
 must cover cross-workspace IDs, ordinary-member attempts, deleted/inactive records,
 and unauthenticated requests.
 
+### Workspace role/capability matrix
+
+The current application uses two explicit gates. Unknown or missing roles are
+denied by default.
+
+| Role | `workspace.access` | `workspace.manage` | Intended scope |
+| --- | --- | --- | --- |
+| `owner` | Allow | Allow | Inbox operations plus workspace configuration, team, channels, catalogs, commerce, OAuth, publishing, and moderation |
+| `agent` | Allow | Deny | Dashboard, inbox operations, attachments, and read-only social views |
+| `member` | Allow | Deny | Same current operational surface as `agent`; keep separate for future least-privilege refinement |
+| Unknown/missing | Deny | Deny | No workspace application access |
+
+The application treats `workspaces.owner_id` as authoritative owner evidence even
+if a legacy pivot role is inconsistent. Every route in the authenticated workspace
+group requires `workspace.access`. All `settings.*` routes, connection/OAuth routes,
+social publish/moderation routes, and workspace-tag creation additionally require
+`workspace.manage`. Route-bound controllers must still return `404` for a resource
+owned by another workspace; a role gate does not replace object ownership checks.
+
 ## Validation and response rules
 
 - Use focused Form Requests where request validation or authorization is complex.

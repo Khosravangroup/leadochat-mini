@@ -28,7 +28,7 @@ and infrastructure may change.
 | `SEC-01` | Critical | In progress | Executable public attachment path | 0-1 |
 | `OPS-01` | Critical | In progress | No verified backup/restore | 0, 3 |
 | `SEC-02` | High | In progress | Stored DOM XSS sinks | 1 |
-| `AUTH-01` | High | Open | Missing workspace role authorization | 1 |
+| `AUTH-01` | High | In progress | Missing workspace role authorization | 1 |
 | `AUTH-02` | High | Open | Ineffective email verification and mail delivery | 1 |
 | `DATA-01` | High | Open | Owner deletion can cascade workspace data | 1 |
 | `DATA-02` | High | Open | OAuth tokens stored plaintext | 1 |
@@ -149,6 +149,18 @@ project policy/gate layer was found for the audited routes.
 **Impact:** ordinary members can perform owner/admin actions, create pre-verified
 users, or mutate workspace data beyond their role. Other route-bound records may be
 susceptible to cross-workspace access if a controller misses a manual check.
+
+**Phase 1 candidate:** a deny-by-default role/capability matrix now backs Laravel
+gates for workspace access and owner-only management. All authenticated workspace
+routes require membership with a recognized role. Settings, team, labels, catalog,
+commerce, connection/OAuth, social publish/moderation, and workspace-tag creation
+also require owner management capability. Cross-workspace negative tests cover
+inbox, settings, catalog, commerce, and social resource groups; a structural test
+asserts middleware coverage for every protected named route. The full SQLite suite
+passed with 82 tests and 737 assertions, while the six focused tests passed on
+PostgreSQL 16 with 192 assertions. Invitation identity behavior remains part of
+`AUTH-02`; production deployment and role smoke tests remain required before this
+finding closes.
 
 **Close when:** a documented role/capability matrix exists; Laravel policies/gates
 protect every privileged workspace resource; invitation/member creation does not

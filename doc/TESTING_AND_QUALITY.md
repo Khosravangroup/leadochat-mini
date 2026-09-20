@@ -29,6 +29,11 @@ fresh `npm ci --no-audit --no-fund` installed 172 packages and the Vite 8.0.8
 production build passed. Browser smoke on the exact deployed revision remains
 required.
 
+For the Phase 1 workspace-authorization candidate on 20 September 2026, the full
+SQLite suite passed with 82 tests and 737 assertions. Six focused role-matrix,
+route-coverage, ordinary-role, unknown-role, owner, and cross-workspace tests passed
+on PostgreSQL 16 with 192 assertions. Production role smoke tests remain required.
+
 ## Local verification
 
 Start with the smallest affected check:
