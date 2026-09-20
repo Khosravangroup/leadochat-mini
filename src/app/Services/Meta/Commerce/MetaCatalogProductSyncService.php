@@ -6,6 +6,7 @@ use App\Models\Catalog;
 use App\Models\CatalogProduct;
 use App\Models\CatalogProductOffer;
 use App\Models\ProviderConnection;
+use App\Support\ProviderSecretRedactor;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
@@ -112,20 +113,24 @@ class MetaCatalogProductSyncService
                 'mode' => 'local_debug',
                 'endpoint' => $endpoint,
                 'payload' => $payload,
-                'handle' => 'local-debug-meta-catalog-batch-' . now()->timestamp,
+                'handle' => 'local-debug-meta-catalog-batch-'.now()->timestamp,
                 'body' => [
-                    'handles' => ['local-debug-meta-catalog-batch-' . now()->timestamp],
+                    'handles' => ['local-debug-meta-catalog-batch-'.now()->timestamp],
                 ],
             ];
         }
 
-        $response = Http::withToken($this->resolveAccessToken($connection))
+        $accessToken = $this->resolveAccessToken($connection);
+        $response = Http::withToken($accessToken)
             ->asForm()
             ->acceptJson()
             ->post($endpoint, $payload);
 
         $json = $response->json();
-        $body = is_array($json) ? $json : ['raw' => mb_substr($response->body(), 0, 1000)];
+        $body = ProviderSecretRedactor::payload(
+            is_array($json) ? $json : ['raw' => mb_substr($response->body(), 0, 1000)],
+            [$accessToken]
+        );
 
         return [
             'ok' => $response->successful(),
@@ -134,7 +139,10 @@ class MetaCatalogProductSyncService
             'payload' => $payload,
             'status' => $response->status(),
             'handle' => Arr::get($body, 'handles.0') ?? Arr::get($body, 'handle'),
-            'error' => $response->successful() ? null : Arr::get($body, 'error.message', $response->body()),
+            'error' => $response->successful() ? null : ProviderSecretRedactor::text(
+                (string) Arr::get($body, 'error.message', $response->body()),
+                [$accessToken]
+            ),
             'body' => $body,
         ];
     }
@@ -189,8 +197,8 @@ class MetaCatalogProductSyncService
 
     protected function retailerIdForProduct(CatalogProduct $product): string
     {
-        $candidate = trim((string) ($product->sku ?: $product->external_product_id ?: 'leadochat-product-' . $product->id));
-        $candidate = preg_replace('/[^A-Za-z0-9._:-]+/', '-', $candidate) ?: 'leadochat-product-' . $product->id;
+        $candidate = trim((string) ($product->sku ?: $product->external_product_id ?: 'leadochat-product-'.$product->id));
+        $candidate = preg_replace('/[^A-Za-z0-9._:-]+/', '-', $candidate) ?: 'leadochat-product-'.$product->id;
 
         return mb_substr($candidate, 0, 100);
     }
@@ -208,7 +216,7 @@ class MetaCatalogProductSyncService
     {
         $amount = $amount ?? ($product->price !== null ? (float) $product->price : 0);
 
-        return number_format($amount, 2, '.', '') . ' ' . strtoupper((string) ($product->currency ?: 'USD'));
+        return number_format($amount, 2, '.', '').' '.strtoupper((string) ($product->currency ?: 'USD'));
     }
 
     protected function resolveAccessToken(ProviderConnection $connection): string

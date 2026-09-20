@@ -2,6 +2,7 @@
 
 use App\Models\ProviderConnection;
 use App\Services\Meta\Instagram\InstagramWebhookSubscriptionService;
+use App\Support\ProviderSecretRedactor;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Http;
@@ -45,7 +46,7 @@ Artisan::command('instagram:webhooks:subscribe {connection? : Provider connectio
                 'verified_fields' => $result['verified_fields'] ?? [],
                 'missing_fields' => $result['missing_fields'] ?? [],
             ], JSON_UNESCAPED_SLASHES));
-        } catch (\Throwable $exception) {
+        } catch (Throwable $exception) {
             $failed++;
 
             $this->error(json_encode([
@@ -84,7 +85,7 @@ Artisan::command('instagram:diagnose-messaging {connection? : Provider connectio
         ->where('token_type', 'access_token')
         ->where('is_primary', true)
         ->latest('id')
-        ->value('access_token') ?? '');
+        ->first()?->access_token ?? '');
 
     if ($accessToken === '') {
         $this->warn('No primary Instagram access token found.');
@@ -136,8 +137,11 @@ Artisan::command('instagram:diagnose-messaging {connection? : Provider connectio
             'status' => $response->status(),
             'ok' => $response->successful(),
             'data_count' => is_array(data_get($json, 'data')) ? count(data_get($json, 'data')) : null,
-            'error' => data_get($json, 'error.message'),
-            'body' => sanitize_instagram_diagnostic_payload($json ?: ['raw' => mb_substr($response->body(), 0, 1000)]),
+            'error' => ProviderSecretRedactor::text((string) data_get($json, 'error.message', ''), [$accessToken]),
+            'body' => ProviderSecretRedactor::payload(
+                $json ?: ['raw' => mb_substr($response->body(), 0, 1000)],
+                [$accessToken]
+            ),
         ];
     };
 
@@ -170,27 +174,3 @@ Artisan::command('instagram:diagnose-messaging {connection? : Provider connectio
 
     return 0;
 })->purpose('Diagnose Instagram messaging token, subscription, and Conversations API visibility');
-
-if (! function_exists('sanitize_instagram_diagnostic_payload')) {
-    function sanitize_instagram_diagnostic_payload(mixed $payload): mixed
-    {
-        if (! is_array($payload)) {
-            return $payload;
-        }
-
-        $sanitized = [];
-
-        foreach ($payload as $key => $value) {
-            $normalizedKey = strtolower((string) $key);
-
-            if (str_contains($normalizedKey, 'token') || str_contains($normalizedKey, 'secret')) {
-                $sanitized[$key] = '[redacted]';
-                continue;
-            }
-
-            $sanitized[$key] = sanitize_instagram_diagnostic_payload($value);
-        }
-
-        return $sanitized;
-    }
-}

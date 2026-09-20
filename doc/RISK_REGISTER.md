@@ -31,7 +31,7 @@ and infrastructure may change.
 | `AUTH-01` | High | In progress | Missing workspace role authorization | 1 |
 | `AUTH-02` | High | In progress | Ineffective email verification and mail delivery | 1 |
 | `DATA-01` | High | In progress | Owner deletion can cascade workspace data | 1 |
-| `DATA-02` | High | Open | OAuth tokens stored plaintext | 1 |
+| `DATA-02` | High | In progress | OAuth tokens stored plaintext | 1 |
 | `DEP-01` | High | Open | Composer security advisories | 2 |
 | `DEP-02` | High | Open | npm security advisories | 2 |
 | `CI-01` | High | Open | No CI gate or branch protection | 2 |
@@ -235,6 +235,31 @@ a verified backup.
 encrypted values.
 
 **Impact:** database read access or an exposed backup yields provider credentials.
+
+**Phase 1 candidate:** `OauthToken` now encrypts access and refresh fields at the
+model boundary and hides them from serialization. A transactional, idempotent data
+migration encrypts existing plaintext rows and supports an explicit compatibility
+rollback. The secret-safe `oauth-tokens:check-encryption` command reports only row
+and field counts and fails closed on plaintext or unreadable ciphertext. Raw token
+queries in runtime consumers were replaced with hydrated model reads. Provider
+errors, diagnostics, local-debug responses, and persisted Meta sync metadata now
+redact secret-bearing keys and known values while tests prove real outbound requests
+still receive the credential.
+
+The cumulative SQLite suite passed with 108 tests and 868 assertions. Eleven focused
+encryption, redaction, Instagram, and commerce tests passed on PostgreSQL 16 with
+58 assertions. A PostgreSQL forward/rollback/forward drill proved plaintext input
+becomes unreadable in the raw column, remains usable through the model, returns to
+plaintext on explicit rollback, and re-encrypts successfully. Production inventory
+found one token row, no refresh token, a configured `APP_KEY`, and no previous keys;
+no token value was printed. No confirmed credential exposure was found, so provider
+rotation was not performed. Reassess and rotate immediately if exposure evidence
+appears.
+
+**Residual risk:** production remains on the Phase 0 revision, so the row is not yet
+migrated. Closure requires a fresh restore-verified encrypted backup, approval of
+the exact cumulative revision, migration plus count-only verification, provider
+smoke evidence, and confirmation that the existing `APP_KEY` was preserved.
 
 **Close when:** tokens are encrypted at rest with managed keys; existing rows are
 migrated safely; reads/writes/refresh continue to work; logs and errors cannot leak

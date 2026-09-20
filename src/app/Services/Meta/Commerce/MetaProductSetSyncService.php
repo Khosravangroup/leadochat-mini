@@ -5,6 +5,7 @@ namespace App\Services\Meta\Commerce;
 use App\Models\CatalogProduct;
 use App\Models\CatalogProductSet;
 use App\Models\ProviderConnection;
+use App\Support\ProviderSecretRedactor;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
@@ -97,19 +98,21 @@ class MetaProductSetSyncService
     protected function createProductSet(ProviderConnection $connection, string $externalCatalogId, array $payload): array
     {
         $endpoint = "https://graph.facebook.com/{$this->resolveGraphVersion()}/{$externalCatalogId}/product_sets";
+        $accessToken = $this->resolveAccessToken($connection);
         $requestPayload = array_merge($payload, [
-            'access_token' => $this->resolveAccessToken($connection),
+            'access_token' => $accessToken,
         ]);
+        $safePayload = ProviderSecretRedactor::payload($requestPayload, [$accessToken]);
 
         if (app()->environment('local')) {
             return [
                 'ok' => true,
                 'mode' => 'local_debug',
                 'endpoint' => $endpoint,
-                'payload' => $requestPayload,
-                'external_id' => 'local-debug-meta-product-set-' . now()->timestamp,
+                'payload' => $safePayload,
+                'external_id' => 'local-debug-meta-product-set-'.now()->timestamp,
                 'body' => [
-                    'id' => 'local-debug-meta-product-set-' . now()->timestamp,
+                    'id' => 'local-debug-meta-product-set-'.now()->timestamp,
                 ],
             ];
         }
@@ -119,16 +122,22 @@ class MetaProductSetSyncService
             ->post($endpoint, $requestPayload);
 
         $json = $response->json();
-        $body = is_array($json) ? $json : ['raw' => mb_substr($response->body(), 0, 1000)];
+        $body = ProviderSecretRedactor::payload(
+            is_array($json) ? $json : ['raw' => mb_substr($response->body(), 0, 1000)],
+            [$accessToken]
+        );
 
         return [
             'ok' => $response->successful(),
             'mode' => 'live',
             'endpoint' => $endpoint,
-            'payload' => $requestPayload,
+            'payload' => $safePayload,
             'status' => $response->status(),
             'external_id' => (string) (Arr::get($body, 'id') ?? ''),
-            'error' => $response->successful() ? null : Arr::get($body, 'error.message', $response->body()),
+            'error' => $response->successful() ? null : ProviderSecretRedactor::text(
+                (string) Arr::get($body, 'error.message', $response->body()),
+                [$accessToken]
+            ),
             'body' => $body,
         ];
     }
@@ -136,16 +145,18 @@ class MetaProductSetSyncService
     protected function updateProductSet(ProviderConnection $connection, string $externalProductSetId, array $payload): array
     {
         $endpoint = "https://graph.facebook.com/{$this->resolveGraphVersion()}/{$externalProductSetId}";
+        $accessToken = $this->resolveAccessToken($connection);
         $requestPayload = array_merge($payload, [
-            'access_token' => $this->resolveAccessToken($connection),
+            'access_token' => $accessToken,
         ]);
+        $safePayload = ProviderSecretRedactor::payload($requestPayload, [$accessToken]);
 
         if (app()->environment('local')) {
             return [
                 'ok' => true,
                 'mode' => 'local_debug',
                 'endpoint' => $endpoint,
-                'payload' => $requestPayload,
+                'payload' => $safePayload,
                 'external_id' => $externalProductSetId,
                 'body' => [
                     'success' => true,
@@ -159,16 +170,22 @@ class MetaProductSetSyncService
             ->post($endpoint, $requestPayload);
 
         $json = $response->json();
-        $body = is_array($json) ? $json : ['raw' => mb_substr($response->body(), 0, 1000)];
+        $body = ProviderSecretRedactor::payload(
+            is_array($json) ? $json : ['raw' => mb_substr($response->body(), 0, 1000)],
+            [$accessToken]
+        );
 
         return [
             'ok' => $response->successful(),
             'mode' => 'live',
             'endpoint' => $endpoint,
-            'payload' => $requestPayload,
+            'payload' => $safePayload,
             'status' => $response->status(),
             'external_id' => $externalProductSetId,
-            'error' => $response->successful() ? null : Arr::get($body, 'error.message', $response->body()),
+            'error' => $response->successful() ? null : ProviderSecretRedactor::text(
+                (string) Arr::get($body, 'error.message', $response->body()),
+                [$accessToken]
+            ),
             'body' => $body,
         ];
     }

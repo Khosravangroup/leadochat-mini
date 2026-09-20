@@ -3,6 +3,7 @@
 namespace App\Services\Meta\Instagram;
 
 use App\Models\ProviderConnection;
+use App\Support\ProviderSecretRedactor;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
 
@@ -41,9 +42,9 @@ class InstagramStoryService
                 'mode' => 'local_debug',
                 'container_endpoint' => $containerEndpoint,
                 'publish_endpoint' => $publishEndpoint,
-                'container_payload' => $containerPayload,
-                'creation_id' => 'local-debug-story-container-' . now()->timestamp,
-                'id' => 'local-debug-story-' . now()->timestamp,
+                'container_payload' => ProviderSecretRedactor::payload($containerPayload, [$accessToken]),
+                'creation_id' => 'local-debug-story-container-'.now()->timestamp,
+                'id' => 'local-debug-story-'.now()->timestamp,
                 'container_status' => 'FINISHED',
             ];
         }
@@ -51,7 +52,10 @@ class InstagramStoryService
         $containerResponse = Http::timeout(90)->asForm()->post($containerEndpoint, $containerPayload);
 
         if (! $containerResponse->successful()) {
-            throw new RuntimeException('Instagram story container creation failed: ' . $containerResponse->body());
+            throw new RuntimeException('Instagram story container creation failed: '.ProviderSecretRedactor::text(
+                $containerResponse->body(),
+                [$accessToken]
+            ));
         }
 
         $creationId = (string) ($containerResponse->json('id') ?? '');
@@ -68,7 +72,10 @@ class InstagramStoryService
         ]);
 
         if (! $publishResponse->successful()) {
-            throw new RuntimeException('Instagram story publish failed: ' . $publishResponse->body());
+            throw new RuntimeException('Instagram story publish failed: '.ProviderSecretRedactor::text(
+                $publishResponse->body(),
+                [$accessToken]
+            ));
         }
 
         return array_merge($publishResponse->json(), [
@@ -102,7 +109,10 @@ class InstagramStoryService
             ]);
 
         if (! $response->successful()) {
-            throw new RuntimeException('Instagram story sync failed: ' . $response->body());
+            throw new RuntimeException('Instagram story sync failed: '.ProviderSecretRedactor::text(
+                $response->body(),
+                [$accessToken]
+            ));
         }
 
         $stories = $response->json('data');
@@ -139,7 +149,10 @@ class InstagramStoryService
                     ];
                 }
 
-                throw new RuntimeException('Instagram story container status check failed: ' . $response->body());
+                throw new RuntimeException('Instagram story container status check failed: '.ProviderSecretRedactor::text(
+                    $response->body(),
+                    [$accessToken]
+                ));
             }
 
             $lastStatus = (string) ($response->json('status_code') ?? '');
@@ -154,14 +167,16 @@ class InstagramStoryService
             }
 
             if (in_array($lastStatus, ['ERROR', 'EXPIRED'], true)) {
-                throw new RuntimeException('Instagram story container failed with status ' . $lastStatus . ': ' . json_encode($lastBody));
+                throw new RuntimeException('Instagram story container failed with status '.$lastStatus.': '.json_encode(
+                    ProviderSecretRedactor::payload($lastBody, [$accessToken])
+                ));
             }
 
             usleep($sleepMicroseconds);
         }
 
         if ($mediaType === 'VIDEO') {
-            throw new RuntimeException('Instagram story video is still processing after ' . $attempts . ' checks. Last status: ' . ($lastStatus ?: 'unknown') . '.');
+            throw new RuntimeException('Instagram story video is still processing after '.$attempts.' checks. Last status: '.($lastStatus ?: 'unknown').'.');
         }
 
         return [

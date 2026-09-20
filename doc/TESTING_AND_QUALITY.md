@@ -49,6 +49,18 @@ PostgreSQL migration, one-step rollback of `workspace_audit_events`, and forward
 migration all passed. Production deletion and migration smoke tests remain gated on
 a fresh verified backup and explicit exact-revision approval.
 
+For the Phase 1 OAuth-token encryption candidate on 20 September 2026, the
+cumulative SQLite suite passed with 108 tests and 868 assertions. Eleven focused
+encryption, rollback, redaction, Instagram request, and Meta metadata tests passed
+on PostgreSQL 16 with 58 assertions. A separate PostgreSQL
+forward/rollback/forward drill used synthetic values and proved raw plaintext
+matches changed from one to zero after migration, model reads still matched, the
+explicit rollback restored one plaintext match, and the second forward migration
+passed `oauth-tokens:check-encryption`. No token value appeared in verification
+output. Missing-key and unreadable-foreign-ciphertext cases fail closed instead of
+double-encrypting data; the former failed transactionally as expected before the
+successful run with an explicit non-production test key.
+
 ## Local verification
 
 Start with the smallest affected check:

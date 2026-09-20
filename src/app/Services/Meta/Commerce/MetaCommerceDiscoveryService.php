@@ -3,6 +3,7 @@
 namespace App\Services\Meta\Commerce;
 
 use App\Models\ProviderConnection;
+use App\Support\ProviderSecretRedactor;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
@@ -109,14 +110,21 @@ class MetaCommerceDiscoveryService
                 ->get($url, $query);
 
             $json = $response->json();
+            $body = ProviderSecretRedactor::payload(
+                is_array($json) ? $json : ['raw' => mb_substr($response->body(), 0, 1000)],
+                [$accessToken]
+            );
 
             return [
                 'url' => $url,
                 'query' => $query,
                 'status' => $response->status(),
                 'ok' => $response->successful(),
-                'error' => $response->successful() ? null : Arr::get($json, 'error.message', $response->body()),
-                'body' => is_array($json) ? $json : ['raw' => mb_substr($response->body(), 0, 1000)],
+                'error' => $response->successful() ? null : ProviderSecretRedactor::text(
+                    (string) Arr::get($body, 'error.message', $response->body()),
+                    [$accessToken]
+                ),
+                'body' => $body,
             ];
         } catch (\Throwable $exception) {
             return [
@@ -124,7 +132,7 @@ class MetaCommerceDiscoveryService
                 'query' => $query,
                 'status' => null,
                 'ok' => false,
-                'error' => $exception->getMessage(),
+                'error' => ProviderSecretRedactor::text($exception->getMessage(), [$accessToken]),
                 'body' => [],
             ];
         }
@@ -140,7 +148,7 @@ class MetaCommerceDiscoveryService
             ->filter(fn ($catalog) => is_array($catalog) && filled($catalog['id'] ?? null))
             ->map(fn ($catalog) => [
                 'id' => (string) $catalog['id'],
-                'name' => (string) ($catalog['name'] ?? 'Meta Catalog ' . $catalog['id']),
+                'name' => (string) ($catalog['name'] ?? 'Meta Catalog '.$catalog['id']),
                 'business_id' => $businessId,
                 'relationship' => $relationship,
                 'vertical' => $catalog['vertical'] ?? null,

@@ -88,6 +88,13 @@ records. Webhook verification and request-signature checking occur in
 and dispatched to `ProcessInstagramWebhookEvent`. Signature checking, event
 idempotency, workspace resolution, and queue behavior are protected contracts.
 
+The Phase 1 `DATA-02` candidate makes `OauthToken` the application encryption
+boundary: access and refresh values are encrypted at rest, omitted from model
+serialization, and read through hydrated models rather than raw query values.
+Provider requests may receive decrypted credentials only in memory. Returned
+diagnostics, exceptions, debug payloads, and persisted provider metadata must pass
+through `ProviderSecretRedactor` before leaving the provider-service boundary.
+
 ### Realtime updates
 
 `WorkspaceRealtimeUpdated` broadcasts workspace-scoped updates through Reverb.

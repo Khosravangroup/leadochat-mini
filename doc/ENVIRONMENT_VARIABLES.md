@@ -15,6 +15,14 @@ committed template is `src/.env.example`; actual environment files remain ignore
 | `APP_LOCALE`, `APP_FALLBACK_LOCALE` | yes | no | Locale behavior |
 | `APP_PREVIOUS_KEYS` | during rotation | yes | Safe Laravel key rotation support |
 
+`APP_KEY` is also the encryption root for stored OAuth access and refresh tokens in
+the Phase 1 `DATA-02` candidate. A deploy must never generate or replace it when
+token rows already exist. Losing the active key and all applicable previous keys
+makes those provider credentials unreadable. `APP_PREVIOUS_KEYS` permits a staged
+read transition; it does not by itself prove every ciphertext has been re-encrypted
+under the new primary key. Treat key rotation as a separate data migration with a
+fresh backup, row-count verification, provider smoke test, and rollback window.
+
 ## Database, cache, queue, and session
 
 | Variable group | Production expectation |
@@ -104,3 +112,5 @@ Before starting an environment:
 5. Restrict the environment file to the service account; target mode is `600`.
 6. Validate configuration without printing secret values.
 7. Cache production configuration only after all values are correct.
+8. Run `php artisan oauth-tokens:check-encryption` after the `DATA-02` migration;
+   record counts and exit status only, never token values.

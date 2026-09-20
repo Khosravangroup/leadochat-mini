@@ -5,6 +5,7 @@ namespace App\Services\Meta\Instagram;
 use App\Models\ProviderConnection;
 use App\Models\SocialPost;
 use App\Models\SocialPostMedia;
+use App\Support\ProviderSecretRedactor;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -26,7 +27,7 @@ class InstagramContentService
             'access_token' => $accessToken,
         ];
 
-        if (!empty($options['after'])) {
+        if (! empty($options['after'])) {
             $query['after'] = $options['after'];
         }
 
@@ -36,7 +37,7 @@ class InstagramContentService
             return [
                 'mode' => 'local_debug',
                 'endpoint' => $endpoint,
-                'query' => $query,
+                'query' => ProviderSecretRedactor::payload($query, [$accessToken]),
                 'data' => [
                     [
                         'id' => 'local-debug-media-1',
@@ -97,7 +98,10 @@ class InstagramContentService
         $response = Http::acceptJson()->get($endpoint, $query);
 
         if (! $response->successful()) {
-            throw new RuntimeException('Instagram fetchMediaFeed failed: ' . $response->body());
+            throw new RuntimeException('Instagram fetchMediaFeed failed: '.ProviderSecretRedactor::text(
+                $response->body(),
+                [$accessToken]
+            ));
         }
 
         return $response->json();
@@ -118,7 +122,7 @@ class InstagramContentService
                 'endpoint' => $endpoint,
                 'query' => [
                     'fields' => $fields,
-                    'access_token' => $accessToken,
+                    'access_token' => '[redacted]',
                 ],
                 'data' => null,
             ];
@@ -130,7 +134,10 @@ class InstagramContentService
         ]);
 
         if (! $response->successful()) {
-            throw new RuntimeException('Instagram fetchMediaDetails failed: ' . $response->body());
+            throw new RuntimeException('Instagram fetchMediaDetails failed: '.ProviderSecretRedactor::text(
+                $response->body(),
+                [$accessToken]
+            ));
         }
 
         return $response->json();
@@ -160,7 +167,10 @@ class InstagramContentService
             ->delete($endpoint);
 
         if (! $response->successful()) {
-            throw new RuntimeException('Instagram deleteMedia failed: ' . $response->body());
+            throw new RuntimeException('Instagram deleteMedia failed: '.ProviderSecretRedactor::text(
+                $response->body(),
+                [$accessToken]
+            ));
         }
 
         return $response->json();
@@ -212,14 +222,14 @@ class InstagramContentService
         }
 
         if (app()->environment('local')) {
-            $providerMediaId = 'local-debug-post-' . now()->timestamp;
+            $providerMediaId = 'local-debug-post-'.now()->timestamp;
             $localPost = $this->upsertSocialPostWithMedia($connection, [
                 'id' => $providerMediaId,
                 'caption' => $caption,
                 'media_type' => $mediaType === 'VIDEO' ? 'REELS' : 'IMAGE',
                 'media_url' => $mediaType === 'IMAGE' ? $mediaUrl : null,
                 'thumbnail_url' => null,
-                'permalink' => 'https://instagram.local/debug/media/' . $providerMediaId,
+                'permalink' => 'https://instagram.local/debug/media/'.$providerMediaId,
                 'timestamp' => now()->toIso8601String(),
                 'like_count' => 0,
                 'comments_count' => 0,
@@ -232,10 +242,10 @@ class InstagramContentService
 
             return [
                 'mode' => 'local_debug',
-                'creation_id' => 'local-debug-container-' . now()->timestamp,
+                'creation_id' => 'local-debug-container-'.now()->timestamp,
                 'id' => $providerMediaId,
                 'container_status' => 'FINISHED',
-                'container_payload' => $containerPayload,
+                'container_payload' => ProviderSecretRedactor::payload($containerPayload, [$accessToken]),
                 'product_tags' => $productTags,
                 'post' => $localPost,
             ];
@@ -244,7 +254,10 @@ class InstagramContentService
         $containerResponse = Http::timeout(90)->asForm()->post($containerEndpoint, $containerPayload);
 
         if (! $containerResponse->successful()) {
-            throw new RuntimeException('Instagram post container creation failed: ' . $containerResponse->body());
+            throw new RuntimeException('Instagram post container creation failed: '.ProviderSecretRedactor::text(
+                $containerResponse->body(),
+                [$accessToken]
+            ));
         }
 
         $creationId = (string) ($containerResponse->json('id') ?? '');
@@ -263,7 +276,10 @@ class InstagramContentService
         ]);
 
         if (! $publishResponse->successful()) {
-            throw new RuntimeException('Instagram post publish failed: ' . $publishResponse->body());
+            throw new RuntimeException('Instagram post publish failed: '.ProviderSecretRedactor::text(
+                $publishResponse->body(),
+                [$accessToken]
+            ));
         }
 
         $providerMediaId = (string) ($publishResponse->json('id') ?? '');
@@ -309,7 +325,7 @@ class InstagramContentService
             'container_status' => $containerStatus['status_code'] ?? null,
             'container_status_attempts' => $containerStatus['attempts'] ?? null,
             'container_status_response' => $containerStatus['response'] ?? null,
-            'container_payload' => $containerPayload,
+            'container_payload' => ProviderSecretRedactor::payload($containerPayload, [$accessToken]),
             'product_tags' => $productTags,
             'post' => $post,
         ]);
@@ -323,7 +339,7 @@ class InstagramContentService
 
         DB::transaction(function () use ($connection, $items, &$synced) {
             foreach ($items as $item) {
-                if (!is_array($item)) {
+                if (! is_array($item)) {
                     continue;
                 }
 
@@ -367,11 +383,11 @@ class InstagramContentService
     {
         $children = $item['children']['data'] ?? [];
 
-        if (is_array($children) && !empty($children)) {
+        if (is_array($children) && ! empty($children)) {
             $mediaItems = [];
 
             foreach (array_values($children) as $index => $child) {
-                if (!is_array($child)) {
+                if (! is_array($child)) {
                     continue;
                 }
 
@@ -438,7 +454,7 @@ class InstagramContentService
             $keepIds[] = $postMedia->id;
         }
 
-        if (!empty($keepIds)) {
+        if (! empty($keepIds)) {
             SocialPostMedia::query()
                 ->where('social_post_id', $socialPost->id)
                 ->whereNotIn('id', $keepIds)
@@ -569,7 +585,10 @@ class InstagramContentService
                 ]);
 
             if (! $response->successful()) {
-                throw new RuntimeException('Instagram post container status check failed: ' . $response->body());
+                throw new RuntimeException('Instagram post container status check failed: '.ProviderSecretRedactor::text(
+                    $response->body(),
+                    [$accessToken]
+                ));
             }
 
             $lastStatus = (string) ($response->json('status_code') ?? '');
@@ -584,13 +603,15 @@ class InstagramContentService
             }
 
             if (in_array($lastStatus, ['ERROR', 'EXPIRED'], true)) {
-                throw new RuntimeException('Instagram post container failed with status ' . $lastStatus . ': ' . json_encode($lastBody));
+                throw new RuntimeException('Instagram post container failed with status '.$lastStatus.': '.json_encode(
+                    ProviderSecretRedactor::payload($lastBody, [$accessToken])
+                ));
             }
 
             usleep(3000000);
         }
 
-        throw new RuntimeException('Instagram post video is still processing after ' . $attempts . ' checks. Last status: ' . ($lastStatus ?: 'unknown') . '.');
+        throw new RuntimeException('Instagram post video is still processing after '.$attempts.' checks. Last status: '.($lastStatus ?: 'unknown').'.');
     }
 
     protected function normalizeProductTags(mixed $productTags, string $mediaType): array

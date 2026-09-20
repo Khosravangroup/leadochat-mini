@@ -5,6 +5,7 @@ namespace App\Services\Meta\Instagram;
 use App\Models\ProviderConnection;
 use App\Models\SocialComment;
 use App\Models\SocialPost;
+use App\Support\ProviderSecretRedactor;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -25,7 +26,7 @@ class InstagramCommentService
             'access_token' => $accessToken,
         ];
 
-        if (!empty($options['after'])) {
+        if (! empty($options['after'])) {
             $query['after'] = $options['after'];
         }
 
@@ -35,7 +36,7 @@ class InstagramCommentService
             return [
                 'mode' => 'local_debug',
                 'endpoint' => $endpoint,
-                'query' => $query,
+                'query' => ProviderSecretRedactor::payload($query, [$accessToken]),
                 'data' => [
                     [
                         'id' => 'local-debug-comment-1',
@@ -192,7 +193,10 @@ class InstagramCommentService
         $response = Http::acceptJson()->get($endpoint, $query);
 
         if (! $response->successful()) {
-            throw new RuntimeException('Instagram fetchMediaComments failed: ' . $response->body());
+            throw new RuntimeException('Instagram fetchMediaComments failed: '.ProviderSecretRedactor::text(
+                $response->body(),
+                [$accessToken]
+            ));
         }
 
         return $response->json();
@@ -209,16 +213,16 @@ class InstagramCommentService
 
         DB::transaction(function () use ($connection, $socialPost, $items, &$synced) {
             foreach ($items as $item) {
-                if (!is_array($item)) {
+                if (! is_array($item)) {
                     continue;
                 }
 
                 $synced[] = $this->upsertComment($connection, $socialPost, $item);
 
                 $replyItems = $item['replies']['data'] ?? [];
-                if (is_array($replyItems) && !empty($replyItems)) {
+                if (is_array($replyItems) && ! empty($replyItems)) {
                     foreach ($replyItems as $replyItem) {
-                        if (!is_array($replyItem)) {
+                        if (! is_array($replyItem)) {
                             continue;
                         }
 
@@ -260,15 +264,18 @@ class InstagramCommentService
             return [
                 'mode' => 'local_debug',
                 'endpoint' => $endpoint,
-                'payload' => $payload,
-                'id' => 'local-debug-comment-reply-' . now()->timestamp,
+                'payload' => ProviderSecretRedactor::payload($payload, [$accessToken]),
+                'id' => 'local-debug-comment-reply-'.now()->timestamp,
             ];
         }
 
         $response = Http::asForm()->post($endpoint, $payload);
 
         if (! $response->successful()) {
-            throw new RuntimeException('Instagram replyToComment failed: ' . $response->body());
+            throw new RuntimeException('Instagram replyToComment failed: '.ProviderSecretRedactor::text(
+                $response->body(),
+                [$accessToken]
+            ));
         }
 
         return $response->json();
@@ -302,7 +309,10 @@ class InstagramCommentService
             ->delete($endpoint);
 
         if (! $response->successful()) {
-            throw new RuntimeException('Instagram deleteComment failed: ' . $response->body());
+            throw new RuntimeException('Instagram deleteComment failed: '.ProviderSecretRedactor::text(
+                $response->body(),
+                [$accessToken]
+            ));
         }
 
         return $response->json();
@@ -413,7 +423,7 @@ class InstagramCommentService
             return [
                 'mode' => 'local_debug',
                 'endpoint' => $endpoint,
-                'payload' => $payload,
+                'payload' => ProviderSecretRedactor::payload($payload, [$accessToken]),
                 'success' => true,
             ];
         }
@@ -421,7 +431,10 @@ class InstagramCommentService
         $response = Http::asForm()->post($endpoint, $payload);
 
         if (! $response->successful()) {
-            throw new RuntimeException('Instagram setCommentHiddenState failed: ' . $response->body());
+            throw new RuntimeException('Instagram setCommentHiddenState failed: '.ProviderSecretRedactor::text(
+                $response->body(),
+                [$accessToken]
+            ));
         }
 
         return $response->json();
@@ -442,10 +455,10 @@ class InstagramCommentService
         $username = $this->normalizeNullableString($item['username'] ?? ($item['from']['username'] ?? null));
 
         if ($username !== null) {
-            return 'local-debug-comment-author-' . sha1($username);
+            return 'local-debug-comment-author-'.sha1($username);
         }
 
-        return 'local-debug-comment-author-' . sha1($providerCommentId);
+        return 'local-debug-comment-author-'.sha1($providerCommentId);
     }
 
     protected function fetchCommentAuthorProfileIfAvailable(
@@ -486,7 +499,7 @@ class InstagramCommentService
 
         if (app()->environment('local')) {
             return [
-                'profile_pic' => 'https://ui-avatars.com/api/?name=' . urlencode($comment->username ?: 'Instagram user') . '&background=e2e8f0&color=334155',
+                'profile_pic' => 'https://ui-avatars.com/api/?name='.urlencode($comment->username ?: 'Instagram user').'&background=e2e8f0&color=334155',
             ];
         }
 

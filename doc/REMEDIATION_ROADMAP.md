@@ -78,7 +78,7 @@ and the application portion of `OPS-05`.
    and decide provider token rotation.
 7. Introduce CSP in report-only mode after removing unsafe inline DOM construction.
 
-**Current progress:** items 1 through 5 have implemented and locally verified
+**Current progress:** items 1 through 6 have implemented and locally verified
 candidates. Item 1 provides private message-attachment storage,
 workspace-authorized browser delivery, short-lived signed Meta delivery, and an
 idempotent legacy-file migration. Item 2 replaces the identified tag, department,
@@ -93,9 +93,15 @@ remains operationally blocked because production has no delivery-capable mail
 credential. Item 5 blocks account deletion until every owned workspace is resolved,
 adds password-protected ownership transfer and slug-confirmed workspace deletion,
 preserves audit evidence, and proves the intentional cascade on PostgreSQL 16.
+Item 6 adds encrypted OAuth-token casts, a transactional idempotent data migration,
+count-only verification, and provider-boundary redaction; its PostgreSQL
+forward/rollback/forward drill passed. No confirmed exposure justified provider
+rotation, so rotation remains evidence-triggered rather than assumed.
 Item 1 additionally requires the production legacy-file migration and inventory
 check. Item 5 requires a fresh verified backup and exact-revision approval before
-its migration or deletion workflow reaches production.
+its migration or deletion workflow reaches production. Item 6 likewise requires a
+fresh verified backup, preservation of the exact production `APP_KEY`, production
+migration verification, and a provider smoke test. Item 7 remains outstanding.
 
 **Acceptance gate:** all relevant security regression tests pass; no ordinary member
 can perform owner/admin actions; no cross-workspace object is accessible; password
