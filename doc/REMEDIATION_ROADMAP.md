@@ -168,6 +168,14 @@ cleanly from the official npm registry, built with Vite 8.3.0, and reported zero
 vulnerabilities. Both database jobs and the security job also passed. Merge and
 required-check enforcement remain necessary before `DEP-02` can close.
 
+Pull request `#22` is the enforcement candidate. Its exact head
+`26e9763c4b51d081daa6c1f5c73a21643af75a73` passed the newly blocking Composer and
+npm audit job, both database jobs, the frontend build, full-history Gitleaks, and
+focused Semgrep. The Semgrep SARIF upload created a successful GitHub code-scanning
+check with zero results across four rules. Weekly scheduling and Ubuntu 24.04 runner
+pinning are included. Merge, repository security settings, protected-branch
+requirements, and `develop` to `main` promotion remain.
+
 **Acceptance gate:** required checks are green on the exact head; a clean frontend
 artifact is reproducible; no unaccepted critical/high dependency advisory remains;
 branch protection is effective; secret/code scanning reports are triaged.

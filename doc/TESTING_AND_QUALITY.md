@@ -189,13 +189,14 @@ Add a pull-request workflow that, at minimum:
 Pin action versions and least-privilege workflow permissions. Do not expose deploy
 secrets to pull-request code.
 
-The Phase 2 foundation implements this shape in `.github/workflows/ci.yml`. Until
-the existing dependency advisories are remediated, the two audit steps remain
-visible but non-blocking. Pint is intentionally scoped to PHP files changed against
-the pull-request base while the 26-file legacy formatting baseline is handled
-separately; syntax and both PHPUnit database jobs still cover the complete current
-tree. Promotion requires making dependency audits blocking and requiring every
-named job on protected `develop` and `main` branches.
+The Phase 2 foundation implements this shape in `.github/workflows/ci.yml`. Pull
+requests `#20` and `#21` reduced both locked dependency audits to zero findings, and
+the enforcement candidate in pull request `#22` makes both audits blocking, uploads
+Semgrep SARIF to GitHub code scanning, schedules a weekly full run, and pins Ubuntu
+24.04. Pint is intentionally scoped to PHP files changed against the pull-request
+base while the 26-file legacy formatting baseline is handled separately; syntax and
+both PHPUnit database jobs still cover the complete current tree. Promotion still
+requires every named job on protected `develop` and `main` branches.
 
 ## Release gate
 

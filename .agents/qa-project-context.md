@@ -59,13 +59,13 @@ Critical user journeys are:
 ## 4. CI/CD
 
 - GitHub Actions contains the manual `Deploy Production` workflow. Phase 2 pull
-  request `#19` adds a candidate validation workflow for PHP syntax, changed-file
-  Pint, full SQLite and PostgreSQL 16 tests, a clean frontend build, dependency
-  reports, full-history secret scanning, and focused SAST.
-- All five candidate jobs passed on exact head
-  `34e32795a884b39fb7435e7f4c60a6cb6c80c65d`; dependency audits remain
-  report-only pending advisory remediation, and no validation check currently gates
-  either protected branch.
+  request `#19` added validation for PHP syntax, changed-file Pint, full SQLite and
+  PostgreSQL 16 tests, a clean frontend build, dependency audits, full-history
+  secret scanning, and focused SAST.
+- Composer and npm remediation are merged into `develop` with zero locked audit
+  findings. Pull request `#22` makes the audits blocking, schedules weekly runs,
+  pins Ubuntu 24.04, and uploads Semgrep SARIF to GitHub code scanning. All checks
+  passed on its exact head; protected-branch requirements remain pending.
 - `main` and `develop` had no branch protection at the audit date.
 - GitHub Dependabot, secret scanning, and code scanning were disabled or had no
   analysis at the audit date.
@@ -121,13 +121,11 @@ authenticated browser/provider smoke remains pending an approved synthetic targe
   records a time-bounded exception with containment and an owner.
 - Zero unresolved critical/high dependency advisories at release time unless a
   documented exception proves non-reachability and defines an expiry date.
-- The Phase 2 Composer-remediation candidate in pull request `#20` reports zero
-  locked Composer advisories and passed the complete SQLite and PostgreSQL 16
-  suites on its exact head. Merge and required-check enforcement remain pending.
-- The Phase 2 npm-remediation candidate in pull request `#21` reports zero npm
+- The Phase 2 Composer remediation from pull request `#20` is merged, reports zero
+  locked Composer advisories, and passed both complete database suites.
+- The Phase 2 npm remediation from pull request `#21` is merged, reports zero npm
   vulnerabilities, passed a clean Node 24 install and Vite 8.3.0 build, and passed
-  both complete database suites. Merge and required-check enforcement remain
-  pending.
+  both complete database suites.
 - The post-deploy smoke suite must complete in under 5 minutes and cover health,
   authentication, dashboard/inbox read, a safe webhook negative check, and queue
   health.
