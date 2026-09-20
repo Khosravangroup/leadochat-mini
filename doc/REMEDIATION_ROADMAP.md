@@ -78,7 +78,7 @@ and the application portion of `OPS-05`.
    and decide provider token rotation.
 7. Introduce CSP in report-only mode after removing unsafe inline DOM construction.
 
-**Current progress:** items 1 through 3 have implemented and locally verified
+**Current progress:** items 1 through 4 have implemented and locally verified
 candidates. Item 1 provides private message-attachment storage,
 workspace-authorized browser delivery, short-lived signed Meta delivery, and an
 idempotent legacy-file migration. Item 2 replaces the identified tag, department,
@@ -86,9 +86,12 @@ and agent `innerHTML` sinks with safe DOM construction and consistently allowlis
 colors at both controller and model boundaries. Item 3 introduces a documented,
 deny-by-default workspace role/capability matrix, route gates, owner-only privileged
 operations, and cross-workspace negative tests. These remain open until their exact
-revisions are approved, deployed, and verified in production; item 1 additionally
-requires the production legacy-file migration and inventory check, while invitation
-identity behavior continues in item 4.
+revisions are approved, deployed, and verified in production. Item 4 makes email
+verification effective, removes member pre-verification, adds dispatch/expiry/replay/
+rate-limit coverage, and introduces a secret-safe mail configuration check. It
+remains operationally blocked because production has no delivery-capable mail
+credential. Item 1 additionally requires the production legacy-file migration and
+inventory check.
 
 **Acceptance gate:** all relevant security regression tests pass; no ordinary member
 can perform owner/admin actions; no cross-workspace object is accessible; password

@@ -46,6 +46,18 @@ Compose files, documentation, shell history, CI logs, or command arguments.
 verification delivery. The verified production snapshot used `MAIL_MAILER=log`,
 which does not deliver messages to users and is an open release blocker.
 
+`AUTH_EMAIL_VERIFICATION_EXPIRE` controls signed verification-link lifetime in
+minutes and defaults to `60`. Password-reset expiry and token throttling remain in
+Laravel's `auth.passwords.users` configuration. Before release, run:
+
+```bash
+php artisan app:mail-check
+```
+
+The command checks delivery capability and required SMTP fields without printing
+credential values. A passing configuration check does not replace an inbox delivery
+test through the actual provider.
+
 ## Meta and Instagram
 
 | Variable | Secret | Purpose |

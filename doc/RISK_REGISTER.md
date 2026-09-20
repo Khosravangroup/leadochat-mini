@@ -29,7 +29,7 @@ and infrastructure may change.
 | `OPS-01` | Critical | In progress | No verified backup/restore | 0, 3 |
 | `SEC-02` | High | In progress | Stored DOM XSS sinks | 1 |
 | `AUTH-01` | High | In progress | Missing workspace role authorization | 1 |
-| `AUTH-02` | High | Open | Ineffective email verification and mail delivery | 1 |
+| `AUTH-02` | High | In progress | Ineffective email verification and mail delivery | 1 |
 | `DATA-01` | High | Open | Owner deletion can cascade workspace data | 1 |
 | `DATA-02` | High | Open | OAuth tokens stored plaintext | 1 |
 | `DEP-01` | High | Open | Composer security advisories | 2 |
@@ -175,6 +175,22 @@ an already verified timestamp in the current settings flow.
 
 **Impact:** email ownership is not proven, and password-reset/verification messages
 are not delivered to users. Account recovery and identity trust are unreliable.
+
+**Phase 1 candidate:** `User` now implements Laravel's verification contract. New
+registrations redirect to verification, owner-created members are no longer marked
+verified, registration/member/email-change flows send verification notifications,
+and unverified users cannot enter workspace routes. Verification and password-reset
+tests cover delivery dispatch, expiry, replay, and rate limits. A secret-safe
+`app:mail-check` command rejects non-delivering or incomplete SMTP configuration.
+The full SQLite suite passed with 93 tests and 781 assertions; the 25 focused tests
+passed on PostgreSQL 16 with 83 assertions.
+
+**Production blocker verified 20 September 2026:** the server still uses
+`MAIL_MAILER=log` and has no SMTP username/password. No matching SMTP credential was
+found in the Mac mini Keychain. Live DNS has MX, SPF, and DKIM (`x` selector), while
+DMARC is monitoring-only (`p=none`). A real provider credential, secret-safe server
+configuration, end-to-end delivery checks, and an owner-approved DMARC enforcement
+plan are required before closing this finding.
 
 **Close when:** product requirements define which identities need verification;
 `User` and registration/invitation flows enforce it; a real production mail provider

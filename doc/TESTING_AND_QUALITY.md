@@ -34,6 +34,13 @@ SQLite suite passed with 82 tests and 737 assertions. Six focused role-matrix,
 route-coverage, ordinary-role, unknown-role, owner, and cross-workspace tests passed
 on PostgreSQL 16 with 192 assertions. Production role smoke tests remain required.
 
+For the Phase 1 email-verification candidate on 20 September 2026, the full SQLite
+suite passed with 93 tests and 781 assertions. Twenty-five focused registration,
+verification, password-reset, profile-email, member-creation, and mail-configuration
+tests passed on PostgreSQL 16 with 83 assertions. Production verification/reset
+delivery remains blocked until a real mail transport is configured and inbox
+delivery is proven.
+
 ## Local verification
 
 Start with the smallest affected check:

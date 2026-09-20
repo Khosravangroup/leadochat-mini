@@ -27,7 +27,7 @@ Public pages must not expose authenticated workspace or provider data.
 
 ## Authenticated application
 
-Routes under the `auth` and nominal `verified` middleware cover:
+Routes under the `auth` and effective `verified` middleware cover:
 
 - `/dashboard`;
 - `/connections` and Instagram OAuth connect/callback;
@@ -42,10 +42,11 @@ Routes under the `auth` and nominal `verified` middleware cover:
 Profile edit, password, and account deletion routes require `auth` but are outside
 the `verified` group.
 
-`verified` is not an effective access control until `User` implements Laravel's
-email-verification contract and production mail delivery works. Workspace
-membership is not sufficient for privileged settings operations; explicit role
-policies are required.
+`User` implements Laravel's email-verification contract. New registrations and
+owner-created members remain unverified and receive a verification notification;
+email changes clear verification and send a fresh link. Production access still
+depends on configuring a delivery-capable mail transport. Workspace membership is
+not sufficient for privileged settings operations; the role gates below apply.
 
 ## Meta webhook
 
