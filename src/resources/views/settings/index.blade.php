@@ -545,28 +545,43 @@
                                 el.style.display = 'block';
                             };
 
+                            const normalizeTagColor = (value) => {
+                                const color = String(value || '');
+                                return /^#[0-9a-fA-F]{6}$/.test(color) ? color.toLowerCase() : '#6366f1';
+                            };
+
                             const buildTagRow = (tag) => {
                                 const wrapper = document.createElement('div');
                                 wrapper.className = 'ws-tag-row';
                                 wrapper.setAttribute('data-tag-id', String(tag.id));
-                                wrapper.innerHTML = `
-                                    <div class="ws-tag-chip-wrap">
-                                        <span class="ws-tag-chip" style="background: ${tag.color}20; border-color: ${tag.color}55;">
-                                            <span class="ws-tag-label">${tag.name}</span>
-                                        </span>
-                                    </div>
 
-                                    <div class="ws-tag-actions">
-                                        <button
-                                            type="button"
-                                            class="ws-tag-delete"
-                                            data-delete-url="/settings/tags/${tag.id}"
-                                            title="Remove tag"
-                                        >
-                                            Remove
-                                        </button>
-                                    </div>
-                                `;
+                                const color = normalizeTagColor(tag.color);
+                                const chipWrap = document.createElement('div');
+                                chipWrap.className = 'ws-tag-chip-wrap';
+
+                                const chip = document.createElement('span');
+                                chip.className = 'ws-tag-chip';
+                                chip.style.backgroundColor = `${color}20`;
+                                chip.style.borderColor = `${color}55`;
+
+                                const label = document.createElement('span');
+                                label.className = 'ws-tag-label';
+                                label.textContent = String(tag.name || '');
+                                chip.append(label);
+                                chipWrap.append(chip);
+
+                                const actions = document.createElement('div');
+                                actions.className = 'ws-tag-actions';
+
+                                const deleteButton = document.createElement('button');
+                                deleteButton.type = 'button';
+                                deleteButton.className = 'ws-tag-delete';
+                                deleteButton.dataset.deleteUrl = `/settings/tags/${encodeURIComponent(String(tag.id))}`;
+                                deleteButton.title = 'Remove tag';
+                                deleteButton.textContent = 'Remove';
+                                actions.append(deleteButton);
+
+                                wrapper.append(chipWrap, actions);
                                 return wrapper;
                             };
 
@@ -883,28 +898,43 @@
                                 el.style.display = 'block';
                             };
 
+                            const normalizeDepartmentColor = (value) => {
+                                const color = String(value || '');
+                                return /^#[0-9a-fA-F]{6}$/.test(color) ? color.toLowerCase() : '#6366f1';
+                            };
+
                             const buildDepartmentRow = (department) => {
                                 const wrapper = document.createElement('div');
                                 wrapper.className = 'ws-department-row';
                                 wrapper.setAttribute('data-department-id', String(department.id));
-                                wrapper.innerHTML = `
-                                    <div class="ws-department-chip-wrap">
-                                        <span class="ws-department-chip" style="background: ${department.color}20; border-color: ${department.color}55;">
-                                            <span class="ws-department-label">${department.name}</span>
-                                        </span>
-                                    </div>
 
-                                    <div class="ws-department-actions">
-                                        <button
-                                            type="button"
-                                            class="ws-department-delete"
-                                            data-delete-url="/settings/departments/${department.id}"
-                                            title="Remove department"
-                                        >
-                                            Remove
-                                        </button>
-                                    </div>
-                                `;
+                                const color = normalizeDepartmentColor(department.color);
+                                const chipWrap = document.createElement('div');
+                                chipWrap.className = 'ws-department-chip-wrap';
+
+                                const chip = document.createElement('span');
+                                chip.className = 'ws-department-chip';
+                                chip.style.backgroundColor = `${color}20`;
+                                chip.style.borderColor = `${color}55`;
+
+                                const label = document.createElement('span');
+                                label.className = 'ws-department-label';
+                                label.textContent = String(department.name || '');
+                                chip.append(label);
+                                chipWrap.append(chip);
+
+                                const actions = document.createElement('div');
+                                actions.className = 'ws-department-actions';
+
+                                const deleteButton = document.createElement('button');
+                                deleteButton.type = 'button';
+                                deleteButton.className = 'ws-department-delete';
+                                deleteButton.dataset.deleteUrl = `/settings/departments/${encodeURIComponent(String(department.id))}`;
+                                deleteButton.title = 'Remove department';
+                                deleteButton.textContent = 'Remove';
+                                actions.append(deleteButton);
+
+                                wrapper.append(chipWrap, actions);
                                 return wrapper;
                             };
 

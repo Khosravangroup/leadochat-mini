@@ -78,11 +78,14 @@ and the application portion of `OPS-05`.
    and decide provider token rotation.
 7. Introduce CSP in report-only mode after removing unsafe inline DOM construction.
 
-**Current progress:** item 1 has an implemented and locally verified candidate:
-private message-attachment storage, workspace-authorized browser delivery,
-short-lived signed Meta delivery, and idempotent legacy-file migration. It remains
-open until the exact revision is deployed and the production migration/inventory is
-verified.
+**Current progress:** items 1 and 2 have implemented and locally verified
+candidates. Item 1 provides private message-attachment storage,
+workspace-authorized browser delivery, short-lived signed Meta delivery, and an
+idempotent legacy-file migration. Item 2 replaces the identified tag, department,
+and agent `innerHTML` sinks with safe DOM construction and consistently allowlists
+colors at both controller and model boundaries. Both remain open until their exact
+revisions are approved, deployed, and verified in production; item 1 additionally
+requires the production legacy-file migration and inventory check.
 
 **Acceptance gate:** all relevant security regression tests pass; no ordinary member
 can perform owner/admin actions; no cross-workspace object is accessible; password

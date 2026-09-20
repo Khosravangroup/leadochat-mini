@@ -27,7 +27,7 @@ and infrastructure may change.
 | --- | --- | --- | --- | --- |
 | `SEC-01` | Critical | In progress | Executable public attachment path | 0-1 |
 | `OPS-01` | Critical | In progress | No verified backup/restore | 0, 3 |
-| `SEC-02` | High | Open | Stored DOM XSS sinks | 1 |
+| `SEC-02` | High | In progress | Stored DOM XSS sinks | 1 |
 | `AUTH-01` | High | Open | Missing workspace role authorization | 1 |
 | `AUTH-02` | High | Open | Ineffective email verification and mail delivery | 1 |
 | `DATA-01` | High | Open | Owner deletion can cascade workspace data | 1 |
@@ -123,6 +123,18 @@ and `resources/js/pages/inbox-tags.js`.
 
 **Impact:** a stored workspace-controlled value may execute script in another
 authenticated user's browser and act with that user's session.
+
+**Phase 1 candidate:** tag, department, agent, and local attachment-preview markup
+is now constructed with DOM element creation plus `textContent`, `dataset`, and
+direct property/style assignment.
+Tag and department colors require an exact six-digit hexadecimal value at every
+write endpoint; model accessors normalize valid colors and replace unsafe legacy
+values with `#6366f1`. Regression coverage exercises malicious names in settings
+and inbox rendering, unsafe/blank input, legacy database values, and the targeted
+DOM sinks. The full SQLite suite passed with 76 tests and 545 assertions; the five
+focused tests passed on PostgreSQL 16 with 54 assertions; and a fresh Vite 8.0.8
+build completed. Production deployment and browser smoke evidence are still
+required before closing this finding.
 
 **Close when:** untrusted values use safe DOM text/attribute assignment, color/style
 values are allowlisted, server validation is consistent, and regression tests cover

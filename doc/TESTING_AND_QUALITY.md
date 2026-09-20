@@ -22,6 +22,13 @@ For the Phase 1 private-attachment candidate on 20 September 2026, a fresh
 completed successfully with Vite 8.0.8. This is local evidence, not yet a
 reproducible CI gate.
 
+For the Phase 1 stored-XSS candidate on 20 September 2026, the full SQLite suite
+passed with 76 tests and 545 assertions. Five focused validation, legacy-data,
+view-escaping, and DOM-sink tests passed on PostgreSQL 16 with 54 assertions. A
+fresh `npm ci --no-audit --no-fund` installed 172 packages and the Vite 8.0.8
+production build passed. Browser smoke on the exact deployed revision remains
+required.
+
 ## Local verification
 
 Start with the smallest affected check:
@@ -132,7 +139,7 @@ evaluation.
 - attachment type/execution and public-storage behavior;
 - private attachment authorization, signed-provider URL expiry, HTTP Range support,
   and idempotent legacy-file migration;
-- tag/department/agent stored XSS;
+- deployed browser smoke for the tag/department/agent stored-XSS remediation;
 - workspace roles and cross-tenant object access;
 - effective email verification and real mail delivery;
 - owner transfer/deletion and cascade protection;

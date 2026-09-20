@@ -23,6 +23,10 @@ use App\Services\Meta\Instagram\InstagramService;
 
 class InboxController extends Controller
 {
+    private const TAG_NAME_RULES = ['required', 'string', 'max:80', 'not_regex:/\A\s*\z/u'];
+
+    private const TAG_COLOR_RULES = ['required', 'string', 'regex:/\A#[0-9A-Fa-f]{6}\z/'];
+
     private const MESSAGE_ATTACHMENT_EXTENSIONS = [
         'jpg',
         'jpeg',
@@ -977,8 +981,8 @@ class InboxController extends Controller
         }
 
         $validated = $request->validate([
-            'name' => ['required', 'string', 'max:80'],
-            'color' => ['required', 'string', 'max:20'],
+            'name' => self::TAG_NAME_RULES,
+            'color' => self::TAG_COLOR_RULES,
         ]);
 
         $name = trim($validated['name']);
@@ -1002,7 +1006,7 @@ class InboxController extends Controller
         $tag = WorkspaceTag::create([
             'workspace_id' => $workspace->id,
             'name' => $name,
-            'color' => $validated['color'],
+            'color' => strtolower($validated['color']),
             'is_active' => true,
             'sort_order' => $nextSortOrder + 1,
         ]);
