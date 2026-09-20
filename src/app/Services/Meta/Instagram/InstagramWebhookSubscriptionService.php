@@ -3,6 +3,7 @@
 namespace App\Services\Meta\Instagram;
 
 use App\Models\ProviderConnection;
+use App\Support\ProviderSecretRedactor;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -42,7 +43,10 @@ class InstagramWebhookSubscriptionService
                 'endpoint' => $endpoint,
                 'requested_fields' => $subscribedFields,
                 'status' => $response->status(),
-                'error' => $response->json('error.message') ?: $response->body(),
+                'error' => ProviderSecretRedactor::text(
+                    (string) ($response->json('error.message') ?: $response->body()),
+                    [$accessToken]
+                ),
                 'verified_fields' => [],
                 'missing_fields' => $subscribedFields,
             ];
@@ -56,7 +60,7 @@ class InstagramWebhookSubscriptionService
                 'requested_fields' => $subscribedFields,
             ], 'warning');
 
-            throw new RuntimeException('Instagram webhook subscription failed: ' . $result['error']);
+            throw new RuntimeException('Instagram webhook subscription failed: '.$result['error']);
         }
 
         $verification = $this->fetchSubscription($accountId, $accessToken);
@@ -96,7 +100,10 @@ class InstagramWebhookSubscriptionService
 
         if (! $response->successful()) {
             return [
-                'error' => $response->json('error.message') ?: $response->body(),
+                'error' => ProviderSecretRedactor::text(
+                    (string) ($response->json('error.message') ?: $response->body()),
+                    [$accessToken]
+                ),
                 'status' => $response->status(),
             ];
         }
@@ -126,24 +133,7 @@ class InstagramWebhookSubscriptionService
 
     protected function sanitizeResponse(mixed $payload): mixed
     {
-        if (! is_array($payload)) {
-            return $payload;
-        }
-
-        $sanitized = [];
-
-        foreach ($payload as $key => $value) {
-            $normalizedKey = strtolower((string) $key);
-
-            if (str_contains($normalizedKey, 'token') || str_contains($normalizedKey, 'secret')) {
-                $sanitized[$key] = '[redacted]';
-                continue;
-            }
-
-            $sanitized[$key] = $this->sanitizeResponse($value);
-        }
-
-        return $sanitized;
+        return ProviderSecretRedactor::payload($payload);
     }
 
     protected function normalizeFields(array|string $fields): array
@@ -166,7 +156,7 @@ class InstagramWebhookSubscriptionService
             ->where('token_type', 'access_token')
             ->where('is_primary', true)
             ->latest('id')
-            ->value('access_token') ?? '');
+            ->first()?->access_token ?? '');
 
         if ($accessToken === '') {
             throw new RuntimeException('No primary Instagram access token found for webhook subscription.');

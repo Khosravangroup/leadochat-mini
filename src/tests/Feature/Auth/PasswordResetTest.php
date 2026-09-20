@@ -5,6 +5,7 @@ namespace Tests\Feature\Auth;
 use App\Models\User;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 
@@ -69,5 +70,64 @@ class PasswordResetTest extends TestCase
 
             return true;
         });
+    }
+
+    public function test_expired_password_reset_token_is_rejected(): void
+    {
+        Notification::fake();
+        config()->set('auth.passwords.users.expire', 1);
+        $user = User::factory()->create();
+
+        $this->post('/forgot-password', ['email' => $user->email]);
+
+        Notification::assertSentTo($user, ResetPassword::class, function ($notification) use ($user) {
+            $this->travel(2)->minutes();
+
+            $this->post('/reset-password', [
+                'token' => $notification->token,
+                'email' => $user->email,
+                'password' => 'replacement-password',
+                'password_confirmation' => 'replacement-password',
+            ])->assertSessionHasErrors('email');
+
+            $this->assertTrue(Hash::check('password', $user->fresh()->password));
+
+            return true;
+        });
+    }
+
+    public function test_password_reset_token_cannot_be_replayed(): void
+    {
+        Notification::fake();
+        $user = User::factory()->create();
+
+        $this->post('/forgot-password', ['email' => $user->email]);
+
+        Notification::assertSentTo($user, ResetPassword::class, function ($notification) use ($user) {
+            $payload = [
+                'token' => $notification->token,
+                'email' => $user->email,
+                'password' => 'replacement-password',
+                'password_confirmation' => 'replacement-password',
+            ];
+
+            $this->post('/reset-password', $payload)->assertSessionHasNoErrors();
+            $this->post('/reset-password', $payload)->assertSessionHasErrors('email');
+
+            return true;
+        });
+    }
+
+    public function test_password_reset_requests_are_rate_limited(): void
+    {
+        Notification::fake();
+        $user = User::factory()->create();
+
+        for ($attempt = 1; $attempt <= 6; $attempt++) {
+            $this->post('/forgot-password', ['email' => $user->email]);
+        }
+
+        $this->post('/forgot-password', ['email' => $user->email])
+            ->assertTooManyRequests();
     }
 }

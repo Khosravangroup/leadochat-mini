@@ -3,6 +3,7 @@
 namespace App\Services\Meta\Instagram;
 
 use App\Models\ProviderConnection;
+use App\Support\ProviderSecretRedactor;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
@@ -31,7 +32,7 @@ class InstagramMessagingService
             'messaging_type' => $options['messaging_type'] ?? 'RESPONSE',
         ];
 
-        if (!empty($options['tag'])) {
+        if (! empty($options['tag'])) {
             $payload['tag'] = $options['tag'];
         }
 
@@ -98,7 +99,7 @@ class InstagramMessagingService
             'messaging_type' => $options['messaging_type'] ?? 'RESPONSE',
         ];
 
-        if (!empty($options['tag'])) {
+        if (! empty($options['tag'])) {
             $payload['tag'] = $options['tag'];
         }
 
@@ -139,7 +140,7 @@ class InstagramMessagingService
             'messaging_type' => $options['messaging_type'] ?? 'RESPONSE',
         ];
 
-        if (!empty($options['tag'])) {
+        if (! empty($options['tag'])) {
             $payload['tag'] = $options['tag'];
         }
 
@@ -198,14 +199,18 @@ class InstagramMessagingService
             ];
         }
 
-        $response = Http::withToken($this->resolveAccessToken($connection))
+        $accessToken = $this->resolveAccessToken($connection);
+        $response = Http::withToken($accessToken)
             ->acceptJson()
             ->get("https://graph.instagram.com/{$this->resolveGraphVersion()}/{$instagramScopedUserId}", [
                 'fields' => 'id,username,name,profile_pic',
             ]);
 
         if (! $response->successful()) {
-            throw new RuntimeException('Instagram user profile fetch failed: ' . $response->body());
+            throw new RuntimeException('Instagram user profile fetch failed: '.ProviderSecretRedactor::text(
+                $response->body(),
+                [$accessToken]
+            ));
         }
 
         $profile = $response->json();
@@ -221,9 +226,9 @@ class InstagramMessagingService
         if (app()->environment('local')) {
             $recipientId = Arr::get($payload, 'recipient.id')
                 ?: (Arr::get($payload, 'recipient.comment_id')
-                    ? 'local-debug-comment-author-' . sha1((string) Arr::get($payload, 'recipient.comment_id'))
+                    ? 'local-debug-comment-author-'.sha1((string) Arr::get($payload, 'recipient.comment_id'))
                     : null);
-            $messageId = 'local-debug-instagram-msg-' . now()->timestamp;
+            $messageId = 'local-debug-instagram-msg-'.now()->timestamp;
 
             return [
                 'mode' => 'local_debug',
@@ -244,7 +249,10 @@ class InstagramMessagingService
             ->post($endpoint, $payload);
 
         if (! $response->successful()) {
-            throw new RuntimeException('Instagram ' . $kind . ' send failed: ' . $response->body());
+            throw new RuntimeException('Instagram '.$kind.' send failed: '.ProviderSecretRedactor::text(
+                $response->body(),
+                [$accessToken]
+            ));
         }
 
         $result = $response->json();
@@ -402,6 +410,6 @@ class InstagramMessagingService
             return $value;
         }
 
-        return rtrim(mb_substr($value, 0, max(1, $limit - 3))) . '...';
+        return rtrim(mb_substr($value, 0, max(1, $limit - 3))).'...';
     }
 }

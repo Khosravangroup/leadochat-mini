@@ -1,0 +1,77 @@
+version: 2
+updates:
+  - package-ecosystem: composer
+    directory: /src
+    target-branch: develop
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Asia/Tehran
+    open-pull-requests-limit: 5
+    groups:
+      laravel-runtime:
+        dependency-type: production
+        patterns:
+          - filament/*
+          - guzzlehttp/*
+          - laravel/*
+          - league/*
+          - livewire/*
+          - symfony/*
+        update-types:
+          - minor
+          - patch
+      php-development:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: npm
+    directory: /src
+    target-branch: develop
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:15"
+      timezone: Asia/Tehran
+    open-pull-requests-limit: 5
+    groups:
+      frontend-build:
+        patterns:
+          - "@tailwindcss/*"
+          - autoprefixer
+          - laravel-vite-plugin
+          - postcss
+          - tailwindcss
+          - vite
+        update-types:
+          - minor
+          - patch
+      frontend-runtime:
+        patterns:
+          - alpinejs
+          - axios
+          - laravel-echo
+          - pusher-js
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:30"
+      timezone: Asia/Tehran
+    open-pull-requests-limit: 5
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch

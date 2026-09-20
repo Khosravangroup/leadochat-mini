@@ -48,6 +48,7 @@
                             <li><a href="{{ route('about') }}">About</a></li>
                             <li><a href="{{ route('contact') }}">Contact</a></li>
                             <li><a href="{{ route('privacy-policy') }}">Privacy Policy</a></li>
+                            <li><a href="{{ route('policies-and-procedures') }}">Policies and Procedures</a></li>
                             <li><a href="{{ route('data-deletion') }}">Data Deletion</a></li>
                         </ul>
                     </div>
@@ -62,6 +63,7 @@
                 <div class="col-md-8">
                     <ul class="ud-footer-bottom-left">
                         <li><a href="{{ route('privacy-policy') }}">Privacy Policy</a></li>
+                        <li><a href="{{ route('policies-and-procedures') }}">Policies and Procedures</a></li>
                         <li><a href="{{ route('data-deletion') }}">Data Deletion</a></li>
                         <li><a href="{{ route('contact') }}">Contact</a></li>
                     </ul>

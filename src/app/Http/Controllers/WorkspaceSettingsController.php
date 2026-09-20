@@ -8,11 +8,12 @@ use App\Models\CatalogProduct;
 use App\Models\CatalogProductSet;
 use App\Models\CommerceOrder;
 use App\Models\CommercePromotionCampaign;
-use App\Models\WorkspaceTag;
 use App\Models\ProviderConnection;
 use App\Models\SocialPost;
 use App\Models\User;
 use App\Models\WorkspaceDepartment;
+use App\Models\WorkspaceTag;
+use Illuminate\Auth\Events\Registered;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -24,6 +25,10 @@ use Illuminate\Validation\Rules\Password;
 
 class WorkspaceSettingsController extends Controller
 {
+    private const LABEL_NAME_RULES = ['required', 'string', 'max:80', 'not_regex:/\A\s*\z/u'];
+
+    private const LABEL_COLOR_RULES = ['required', 'string', 'regex:/\A#[0-9A-Fa-f]{6}\z/'];
+
     public function index(Request $request): View
     {
         $user = $request->user();
@@ -46,7 +51,7 @@ class WorkspaceSettingsController extends Controller
             'advanced' => 'Advanced',
         ];
 
-        if (!array_key_exists($section, $sections)) {
+        if (! array_key_exists($section, $sections)) {
             $section = 'general';
         }
 
@@ -336,22 +341,25 @@ class WorkspaceSettingsController extends Controller
             'password' => ['required', 'confirmed', Password::defaults()],
         ]);
 
-        DB::transaction(function () use ($workspace, $validated) {
+        $member = DB::transaction(function () use ($workspace, $validated): User {
             $member = User::create([
                 'name' => trim($validated['name']),
                 'email' => Str::lower(trim($validated['email'])),
                 'password' => Hash::make($validated['password']),
-                'email_verified_at' => now(),
             ]);
 
             $workspace->members()->attach($member->id, [
                 'role' => 'agent',
             ]);
+
+            return $member;
         });
+
+        event(new Registered($member));
 
         return redirect()->route('settings.index', [
             'section' => 'team',
-        ])->with('status', 'Team member account created successfully.');
+        ])->with('status', 'Team member created. They must verify their email before accessing the workspace.');
     }
 
     public function updateGeneral(Request $request): RedirectResponse
@@ -359,7 +367,7 @@ class WorkspaceSettingsController extends Controller
         $user = $request->user();
         $workspace = $user?->currentWorkspace();
 
-        if (!$workspace) {
+        if (! $workspace) {
             abort(404);
         }
 
@@ -381,13 +389,13 @@ class WorkspaceSettingsController extends Controller
         $user = $request->user();
         $workspace = $user?->currentWorkspace();
 
-        if (!$workspace) {
+        if (! $workspace) {
             abort(404);
         }
 
         $validated = $request->validate([
-            'name' => ['required', 'string', 'max:80'],
-            'color' => ['required', 'string', 'max:20'],
+            'name' => self::LABEL_NAME_RULES,
+            'color' => self::LABEL_COLOR_RULES,
         ]);
 
         $name = trim($validated['name']);
@@ -410,7 +418,7 @@ class WorkspaceSettingsController extends Controller
         $department = WorkspaceDepartment::create([
             'workspace_id' => $workspace->id,
             'name' => $name,
-            'color' => $validated['color'],
+            'color' => strtolower($validated['color']),
             'sort_order' => $maxSort + 1,
         ]);
 
@@ -425,7 +433,7 @@ class WorkspaceSettingsController extends Controller
         $user = $request->user();
         $workspace = $user?->currentWorkspace();
 
-        if (!$workspace || $department->workspace_id !== $workspace->id) {
+        if (! $workspace || $department->workspace_id !== $workspace->id) {
             abort(404);
         }
 
@@ -441,13 +449,13 @@ class WorkspaceSettingsController extends Controller
         $user = $request->user();
         $workspace = $user?->currentWorkspace();
 
-        if (!$workspace) {
+        if (! $workspace) {
             abort(404);
         }
 
         $validated = $request->validate([
-            'name' => ['required', 'string', 'max:80'],
-            'color' => ['required', 'string', 'max:20'],
+            'name' => self::LABEL_NAME_RULES,
+            'color' => self::LABEL_COLOR_RULES,
         ]);
 
         $name = trim($validated['name']);
@@ -470,7 +478,7 @@ class WorkspaceSettingsController extends Controller
         $tag = WorkspaceTag::create([
             'workspace_id' => $workspace->id,
             'name' => $name,
-            'color' => $validated['color'],
+            'color' => strtolower($validated['color']),
             'is_active' => true,
             'sort_order' => $maxSort + 1,
         ]);
@@ -486,13 +494,13 @@ class WorkspaceSettingsController extends Controller
         $user = $request->user();
         $workspace = $user?->currentWorkspace();
 
-        if (!$workspace || $tag->workspace_id !== $workspace->id) {
+        if (! $workspace || $tag->workspace_id !== $workspace->id) {
             abort(404);
         }
 
         $validated = $request->validate([
-            'name' => ['required', 'string', 'max:80'],
-            'color' => ['required', 'string', 'max:20'],
+            'name' => self::LABEL_NAME_RULES,
+            'color' => self::LABEL_COLOR_RULES,
             'is_active' => ['required', 'boolean'],
         ]);
 
@@ -512,7 +520,7 @@ class WorkspaceSettingsController extends Controller
 
         $tag->update([
             'name' => $name,
-            'color' => $validated['color'],
+            'color' => strtolower($validated['color']),
             'is_active' => (bool) $validated['is_active'],
         ]);
 
@@ -527,7 +535,7 @@ class WorkspaceSettingsController extends Controller
         $user = $request->user();
         $workspace = $user?->currentWorkspace();
 
-        if (!$workspace || $tag->workspace_id !== $workspace->id) {
+        if (! $workspace || $tag->workspace_id !== $workspace->id) {
             abort(404);
         }
 

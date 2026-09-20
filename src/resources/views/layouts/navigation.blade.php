@@ -27,9 +27,11 @@
                         {{ __('Inbox') }}
                     </x-nav-link>
 
-                    <x-nav-link :href="route('settings.index')" :active="request()->routeIs('settings.*')">
-                        {{ __('Settings') }}
-                    </x-nav-link>
+                    @can('workspace.manage')
+                        <x-nav-link :href="route('settings.index')" :active="request()->routeIs('settings.*')">
+                            {{ __('Settings') }}
+                        </x-nav-link>
+                    @endcan
 
                     <x-nav-link :href="route('social.index')" :active="request()->routeIs('social.*')">
                         {{ __('Social') }}
@@ -107,9 +109,11 @@
                 {{ __('Inbox') }}
             </x-responsive-nav-link>
 
-            <x-responsive-nav-link :href="route('settings.index')" :active="request()->routeIs('settings.*')">
-                {{ __('Settings') }}
-            </x-responsive-nav-link>
+            @can('workspace.manage')
+                <x-responsive-nav-link :href="route('settings.index')" :active="request()->routeIs('settings.*')">
+                    {{ __('Settings') }}
+                </x-responsive-nav-link>
+            @endcan
 
             <x-responsive-nav-link :href="route('social.index')" :active="request()->routeIs('social.*')">
                 {{ __('Social') }}

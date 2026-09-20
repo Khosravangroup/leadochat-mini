@@ -2,6 +2,8 @@
 
 return [
 
+    'attachment_provider_url_ttl' => (int) env('ATTACHMENT_PROVIDER_URL_TTL_MINUTES', 60),
+
     /*
     |--------------------------------------------------------------------------
     | Default Filesystem Disk

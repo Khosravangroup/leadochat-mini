@@ -7,8 +7,8 @@ use App\Models\ProviderConnection;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Services\Meta\Instagram\InstagramContentService;
-use Illuminate\Http\Client\Request as HttpRequest;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\Request as HttpRequest;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -104,5 +104,17 @@ class InstagramContentServiceTest extends TestCase
 
         $this->assertJson($result['container_payload']['product_tags']);
         $this->assertEquals($result['product_tags'], json_decode($result['container_payload']['product_tags'], true));
+        $this->assertSame('[redacted]', $result['container_payload']['access_token']);
+        $this->assertStringNotContainsString('test-access-token', json_encode($result, JSON_THROW_ON_ERROR));
+
+        Http::assertSent(function (HttpRequest $request): bool {
+            if ($request->method() !== 'POST' || $request->url() !== 'https://graph.instagram.com/v25.0/test-instagram-account/media') {
+                return false;
+            }
+
+            parse_str($request->body(), $body);
+
+            return ($body['access_token'] ?? null) === 'test-access-token';
+        });
     }
 }

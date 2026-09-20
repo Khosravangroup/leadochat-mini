@@ -4,17 +4,27 @@
             {{ __('Delete Account') }}
         </h2>
 
-        <p class="mt-1 text-sm text-gray-600">
-            {{ __('Once your account is deleted, all of its resources and data will be permanently deleted. Before deleting your account, please download any data or information that you wish to retain.') }}
-        </p>
+        @if ($ownedWorkspaces->isNotEmpty())
+            <p class="mt-1 text-sm text-red-700">
+                Account deletion is blocked while you own a workspace. Resolve every owned workspace above first.
+            </p>
+            <x-input-error :messages="$errors->userDeletion->get('workspace')" class="mt-2" />
+        @else
+            <p class="mt-1 text-sm text-gray-600">
+                {{ __('Once your account is deleted, your personal account data will be permanently deleted. Before deleting your account, please download any information that you wish to retain.') }}
+            </p>
+        @endif
     </header>
 
-    <x-danger-button
-        x-data=""
-        x-on:click.prevent="$dispatch('open-modal', 'confirm-user-deletion')"
-    >{{ __('Delete Account') }}</x-danger-button>
+    @if ($ownedWorkspaces->isEmpty())
+        <x-danger-button
+            x-data=""
+            x-on:click.prevent="$dispatch('open-modal', 'confirm-user-deletion')"
+        >{{ __('Delete Account') }}</x-danger-button>
+    @endif
 
-    <x-modal name="confirm-user-deletion" :show="$errors->userDeletion->isNotEmpty()" focusable>
+    @if ($ownedWorkspaces->isEmpty())
+        <x-modal name="confirm-user-deletion" :show="$errors->userDeletion->isNotEmpty()" focusable>
         <form method="post" action="{{ route('profile.destroy') }}" class="p-6">
             @csrf
             @method('delete')
@@ -51,5 +61,6 @@
                 </x-danger-button>
             </div>
         </form>
-    </x-modal>
+        </x-modal>
+    @endif
 </section>

@@ -27,6 +27,7 @@ class PublicPageController extends Controller
 
         return view('public.landing-page', [
             'page' => $this->landingPages()[$slug],
+            'slug' => $slug,
         ]);
     }
 
@@ -38,6 +39,11 @@ class PublicPageController extends Controller
     public function privacyPolicy(): View
     {
         return view('public.privacy-policy');
+    }
+
+    public function policiesAndProcedures(): View
+    {
+        return view('public.policies-and-procedures');
     }
 
     public function dataDeletion(): View

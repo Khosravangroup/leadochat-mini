@@ -7,6 +7,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class OauthToken extends Model
 {
+    protected $hidden = [
+        'access_token',
+        'refresh_token',
+    ];
+
     protected $fillable = [
         'provider_connection_id',
         'token_type',
@@ -20,6 +25,8 @@ class OauthToken extends Model
     protected function casts(): array
     {
         return [
+            'access_token' => 'encrypted',
+            'refresh_token' => 'encrypted',
             'expires_at' => 'datetime',
             'is_primary' => 'boolean',
         ];

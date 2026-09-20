@@ -3,12 +3,21 @@
     :meta="'Compare Leadochat plans for messaging, automation, shared inbox workflows, analytics, and customer operations.'"
 >
     <section class="lc-page-hero">
-        <div class="container text-center">
-            <span class="lc-channel-pill mb-4">Pricing</span>
-            <h1 class="display-4 fw-bold mb-4">Start with one channel. Scale into full customer operations.</h1>
-            <p class="lead mx-auto" style="max-width: 760px;">
-                Choose a practical starting plan for inbox and automation, then expand as your team adds channels, agents, analytics, and advanced workflows.
-            </p>
+        <div class="container">
+            <div class="row align-items-center g-5">
+                <div class="col-lg-7">
+                    <span class="lc-channel-pill mb-4">Pricing</span>
+                    <h1 class="display-4 fw-bold mb-4">Start with one channel. Scale into full customer operations.</h1>
+                    <p class="lead">
+                        Choose a practical starting plan for inbox and automation, then expand as your team adds channels, agents, analytics, and advanced workflows.
+                    </p>
+                </div>
+                <div class="col-lg-5">
+                    <div class="lc-hero-panel wow fadeInUp" data-wow-delay=".2s">
+                        <x-public.pricing-animation />
+                    </div>
+                </div>
+            </div>
         </div>
     </section>
 

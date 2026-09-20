@@ -5,24 +5,80 @@ namespace App\Http\Controllers;
 use App\Events\WorkspaceRealtimeUpdated;
 use App\Models\CatalogProduct;
 use App\Models\Conversation;
-use App\Models\Message;
-use App\Models\MessageAttachment;
-use App\Models\WorkspaceTag;
 use App\Models\ConversationParticipant;
 use App\Models\ConversationProductShare;
-use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\DB;
+use App\Models\Message;
+use App\Models\MessageAttachment;
 use App\Models\WorkspaceDepartment;
+use App\Models\WorkspaceTag;
+use App\Services\Meta\Instagram\InstagramService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
-use App\Services\Meta\Instagram\InstagramService;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\URL;
 
 class InboxController extends Controller
 {
+    private const TAG_NAME_RULES = ['required', 'string', 'max:80', 'not_regex:/\A\s*\z/u'];
+
+    private const TAG_COLOR_RULES = ['required', 'string', 'regex:/\A#[0-9A-Fa-f]{6}\z/'];
+
+    private const MESSAGE_ATTACHMENT_EXTENSIONS = [
+        'jpg',
+        'jpeg',
+        'jfif',
+        'png',
+        'gif',
+        'webp',
+        'bmp',
+        'mp4',
+        'm4v',
+        'mov',
+        'webm',
+        'avi',
+        'mkv',
+        'mp3',
+        'wav',
+        'ogg',
+        'oga',
+        'opus',
+        'm4a',
+        'aac',
+        'flac',
+        'pdf',
+    ];
+
+    private const MESSAGE_ATTACHMENT_MIME_TYPES = [
+        'image/jpeg',
+        'image/png',
+        'image/gif',
+        'image/webp',
+        'image/bmp',
+        'image/x-ms-bmp',
+        'video/mp4',
+        'video/quicktime',
+        'video/webm',
+        'video/x-msvideo',
+        'video/x-matroska',
+        'video/x-m4v',
+        'audio/mpeg',
+        'audio/wav',
+        'audio/x-wav',
+        'audio/ogg',
+        'application/ogg',
+        'audio/mp4',
+        'audio/x-m4a',
+        'audio/aac',
+        'audio/x-hx-aac-adts',
+        'audio/flac',
+        'audio/x-flac',
+        'application/pdf',
+    ];
+
     public function index(Request $request, ?Conversation $conversation = null): View|RedirectResponse
     {
         $user = $request->user();
@@ -37,15 +93,15 @@ class InboxController extends Controller
         }
 
         if ($conversation) {
-            if ($conversation->status === 'trashed' && !$showTrashed) {
+            if ($conversation->status === 'trashed' && ! $showTrashed) {
                 return redirect()->route('inbox.index', ['view' => 'trash']);
             }
 
-            if ($conversation->is_archived && !$showArchived && !$showTrashed) {
+            if ($conversation->is_archived && ! $showArchived && ! $showTrashed) {
                 return redirect()->route('inbox.index', ['view' => 'archived']);
             }
 
-            if (!$conversation->is_archived && $showArchived) {
+            if (! $conversation->is_archived && $showArchived) {
                 return redirect()->route('inbox.index');
             }
 
@@ -149,7 +205,7 @@ class InboxController extends Controller
             $selectedConversation = $conversations->firstWhere('id', $conversation->id);
         }
 
-        if (!$selectedConversation) {
+        if (! $selectedConversation) {
             $selectedConversation = $conversations->first();
         }
 
@@ -242,7 +298,7 @@ class InboxController extends Controller
                 'text_body' => $dmText,
                 'provider_message_id' => $providerMessageId !== null && $providerMessageId !== ''
                     ? $providerMessageId
-                    : ('product-card-' . now()->timestamp . '-' . random_int(1000, 9999)),
+                    : ('product-card-'.now()->timestamp.'-'.random_int(1000, 9999)),
                 'status' => $status,
                 'failed_at' => $failedAt,
                 'last_error' => $lastError,
@@ -267,7 +323,7 @@ class InboxController extends Controller
 
         $this->updateConversationSnapshot(
             $conversation,
-            'Product: ' . $product->title,
+            'Product: '.$product->title,
             $message?->sent_at ?? now()
         );
 
@@ -299,19 +355,24 @@ class InboxController extends Controller
         $validated = $request->validate([
             'message_text' => ['nullable', 'string', 'max:5000', 'required_without:attachment_files'],
             'attachment_files' => ['nullable', 'array', 'required_without:message_text'],
-            'attachment_files.*' => ['file', 'max:10240'],
+            'attachment_files.*' => [
+                'file',
+                'max:10240',
+                'mimetypes:'.implode(',', self::MESSAGE_ATTACHMENT_MIME_TYPES),
+                'extensions:'.implode(',', self::MESSAGE_ATTACHMENT_EXTENSIONS),
+            ],
             'reply_to_message_id' => ['nullable', 'integer'],
         ]);
 
         $selfParticipant = $this->resolveSelfParticipant($conversation);
         $replyToMessageId = $this->resolveReplyToMessageId(
             $conversation,
-            !empty($validated['reply_to_message_id']) ? (int) $validated['reply_to_message_id'] : null
+            ! empty($validated['reply_to_message_id']) ? (int) $validated['reply_to_message_id'] : null
         );
 
         $uploadedFiles = $request->file('attachment_files', []);
         $messageText = trim((string) ($validated['message_text'] ?? ''));
-        
+
         if (empty($uploadedFiles)) {
             if ($conversation->provider === 'instagram') {
                 try {
@@ -329,7 +390,7 @@ class InboxController extends Controller
                         'text_body' => $messageText,
                         'provider_message_id' => $providerMessageId !== ''
                             ? $providerMessageId
-                            : ('instagram-outbound-' . now()->timestamp . '-' . random_int(1000, 9999)),
+                            : ('instagram-outbound-'.now()->timestamp.'-'.random_int(1000, 9999)),
                         'status' => 'sent',
                         'meta' => $this->withAgentMeta($user, [
                             'provider' => 'instagram',
@@ -433,7 +494,7 @@ class InboxController extends Controller
                     $caption = $index === 0 && $messageText !== '' ? $messageText : null;
 
                     try {
-                        $sendResult = $this->sendInstagramAttachmentMessage($conversation, $upload['public_url'], [
+                        $sendResult = $this->sendInstagramAttachmentMessage($conversation, $upload['provider_url'], [
                             'attachment_type' => $attachmentType,
                             'messaging_type' => 'RESPONSE',
                         ]);
@@ -450,20 +511,20 @@ class InboxController extends Controller
                             'caption' => $caption,
                             'provider_message_id' => $providerMessageId !== ''
                                 ? $providerMessageId
-                                : ('instagram-outbound-attachment-' . now()->timestamp . '-' . random_int(1000, 9999)),
+                                : ('instagram-outbound-attachment-'.now()->timestamp.'-'.random_int(1000, 9999)),
                             'status' => 'sent',
                             'meta' => $this->withAgentMeta($user, [
                                 'provider' => 'instagram',
                                 'multi_upload' => true,
                                 'delivery_mode' => 'instagram_service_attachment',
-                                'send_result' => $sendResult,
+                                'send_result' => $this->withoutTemporaryAttachmentUrl($sendResult),
                             ]),
                         ]);
 
                         MessageAttachment::create([
                             'message_id' => $message->id,
                             'attachment_type' => $attachmentType,
-                            'url' => $upload['public_url'],
+                            'url' => null,
                             'thumbnail_url' => null,
                             'mime_type' => $upload['mime_type'],
                             'file_name' => $upload['file_name'],
@@ -472,7 +533,7 @@ class InboxController extends Controller
                             'height' => $upload['height'],
                             'duration_seconds' => null,
                             'meta' => [
-                                'disk' => 'public',
+                                'disk' => 'local',
                                 'path' => $upload['stored_path'],
                                 'provider' => 'instagram',
                                 'source' => 'storeMessage',
@@ -499,7 +560,7 @@ class InboxController extends Controller
                         MessageAttachment::create([
                             'message_id' => $message->id,
                             'attachment_type' => $attachmentType,
-                            'url' => $upload['public_url'],
+                            'url' => null,
                             'thumbnail_url' => null,
                             'mime_type' => $upload['mime_type'],
                             'file_name' => $upload['file_name'],
@@ -508,7 +569,7 @@ class InboxController extends Controller
                             'height' => $upload['height'],
                             'duration_seconds' => null,
                             'meta' => [
-                                'disk' => 'public',
+                                'disk' => 'local',
                                 'path' => $upload['stored_path'],
                                 'provider' => 'instagram',
                                 'source' => 'storeMessage',
@@ -523,7 +584,7 @@ class InboxController extends Controller
                         'image' => '📷 Image',
                         'video' => '🎬 Video',
                         'voice' => '🎤 Voice message',
-                        default => '📎 ' . $upload['file_name'],
+                        default => '📎 '.$upload['file_name'],
                     };
                 }
             });
@@ -561,7 +622,7 @@ class InboxController extends Controller
                         'image' => '📷 Image',
                         'video' => '🎬 Video',
                         'voice' => '🎤 Voice message',
-                        default => '📎 ' . $uploadedFile->getClientOriginalName(),
+                        default => '📎 '.$uploadedFile->getClientOriginalName(),
                     };
                 }
             });
@@ -570,7 +631,7 @@ class InboxController extends Controller
         $this->updateConversationSnapshot(
             $conversation,
             count($uploadedFiles) > 1
-                ? ('📎 ' . count($uploadedFiles) . ' attachments')
+                ? ('📎 '.count($uploadedFiles).' attachments')
                 : $lastPreview,
             now()
         );
@@ -619,7 +680,7 @@ class InboxController extends Controller
             $upload = $this->storeInstagramOutboundUpload($voiceFile);
 
             try {
-                $sendResult = $this->sendInstagramAttachmentMessage($conversation, $upload['public_url'], [
+                $sendResult = $this->sendInstagramAttachmentMessage($conversation, $upload['provider_url'], [
                     'attachment_type' => 'audio',
                     'messaging_type' => 'RESPONSE',
                 ]);
@@ -648,21 +709,21 @@ class InboxController extends Controller
                     'message_type' => 'voice',
                     'provider_message_id' => $providerMessageId !== ''
                         ? $providerMessageId
-                        : ('instagram-outbound-voice-' . now()->timestamp . '-' . random_int(1000, 9999)),
+                        : ('instagram-outbound-voice-'.now()->timestamp.'-'.random_int(1000, 9999)),
                     'status' => $status,
                     'failed_at' => $failedAt,
                     'last_error' => $lastError,
                     'meta' => $this->withAgentMeta($user, [
                         'provider' => 'instagram',
                         'delivery_mode' => 'instagram_service_audio',
-                        'send_result' => $sendResult,
+                        'send_result' => $this->withoutTemporaryAttachmentUrl($sendResult),
                     ]),
                 ]);
 
                 MessageAttachment::create([
                     'message_id' => $message->id,
                     'attachment_type' => 'audio',
-                    'url' => $upload['public_url'],
+                    'url' => null,
                     'thumbnail_url' => null,
                     'mime_type' => $upload['mime_type'],
                     'file_name' => $upload['file_name'],
@@ -672,7 +733,7 @@ class InboxController extends Controller
                     'duration_seconds' => $durationSeconds,
                     'sort_order' => 0,
                     'meta' => [
-                        'disk' => 'public',
+                        'disk' => 'local',
                         'path' => $upload['stored_path'],
                         'provider' => 'instagram',
                         'source' => 'storeVoice',
@@ -861,7 +922,7 @@ class InboxController extends Controller
         $user = $request->user();
         $workspace = $user?->currentWorkspace();
 
-        if (!$workspace || $conversation->workspace_id !== $workspace->id) {
+        if (! $workspace || $conversation->workspace_id !== $workspace->id) {
             abort(404);
         }
 
@@ -894,7 +955,7 @@ class InboxController extends Controller
         $user = $request->user();
         $workspace = $user?->currentWorkspace();
 
-        if (!$workspace) {
+        if (! $workspace) {
             abort(404);
         }
 
@@ -915,13 +976,13 @@ class InboxController extends Controller
         $user = $request->user();
         $workspace = $user?->currentWorkspace();
 
-        if (!$workspace) {
+        if (! $workspace) {
             abort(404);
         }
 
         $validated = $request->validate([
-            'name' => ['required', 'string', 'max:80'],
-            'color' => ['required', 'string', 'max:20'],
+            'name' => self::TAG_NAME_RULES,
+            'color' => self::TAG_COLOR_RULES,
         ]);
 
         $name = trim($validated['name']);
@@ -945,7 +1006,7 @@ class InboxController extends Controller
         $tag = WorkspaceTag::create([
             'workspace_id' => $workspace->id,
             'name' => $name,
-            'color' => $validated['color'],
+            'color' => strtolower($validated['color']),
             'is_active' => true,
             'sort_order' => $nextSortOrder + 1,
         ]);
@@ -961,7 +1022,7 @@ class InboxController extends Controller
         $user = $request->user();
         $workspace = $user?->currentWorkspace();
 
-        if (!$workspace || $conversation->workspace_id !== $workspace->id) {
+        if (! $workspace || $conversation->workspace_id !== $workspace->id) {
             abort(404);
         }
 
@@ -1005,7 +1066,7 @@ class InboxController extends Controller
         $user = $request->user();
         $workspace = $user?->currentWorkspace();
 
-        if (!$workspace || $conversation->workspace_id !== $workspace->id) {
+        if (! $workspace || $conversation->workspace_id !== $workspace->id) {
             abort(404);
         }
 
@@ -1045,7 +1106,7 @@ class InboxController extends Controller
         $user = $request->user();
         $workspace = $user?->currentWorkspace();
 
-        if (!$workspace || $conversation->workspace_id !== $workspace->id) {
+        if (! $workspace || $conversation->workspace_id !== $workspace->id) {
             abort(404);
         }
 
@@ -1085,7 +1146,7 @@ class InboxController extends Controller
         $user = $request->user();
         $workspace = $user?->currentWorkspace();
 
-        if (!$workspace || $conversation->workspace_id !== $workspace->id || $conversation->status === 'trashed') {
+        if (! $workspace || $conversation->workspace_id !== $workspace->id || $conversation->status === 'trashed') {
             abort(404);
         }
 
@@ -1102,7 +1163,7 @@ class InboxController extends Controller
         $user = $request->user();
         $workspace = $user?->currentWorkspace();
 
-        if (!$workspace || $conversation->workspace_id !== $workspace->id || $conversation->status === 'trashed') {
+        if (! $workspace || $conversation->workspace_id !== $workspace->id || $conversation->status === 'trashed') {
             abort(404);
         }
 
@@ -1119,7 +1180,7 @@ class InboxController extends Controller
         $user = $request->user();
         $workspace = $user?->currentWorkspace();
 
-        if (!$workspace || $conversation->workspace_id !== $workspace->id) {
+        if (! $workspace || $conversation->workspace_id !== $workspace->id) {
             abort(404);
         }
 
@@ -1136,7 +1197,7 @@ class InboxController extends Controller
         $user = $request->user();
         $workspace = $user?->currentWorkspace();
 
-        if (!$workspace || $conversation->workspace_id !== $workspace->id) {
+        if (! $workspace || $conversation->workspace_id !== $workspace->id) {
             abort(404);
         }
 
@@ -1167,10 +1228,10 @@ class InboxController extends Controller
     protected function guardWorkspaceConversationAccess(?Conversation $conversation, ?object $workspace, bool $allowArchived = false): void
     {
         if (
-            !$workspace ||
-            !$conversation ||
+            ! $workspace ||
+            ! $conversation ||
             $conversation->workspace_id !== $workspace->id ||
-            (!$allowArchived && $conversation->is_archived) ||
+            (! $allowArchived && $conversation->is_archived) ||
             $conversation->status === 'trashed'
         ) {
             abort(404);
@@ -1390,7 +1451,7 @@ class InboxController extends Controller
         $isImage = str_starts_with($mimeType, 'image/');
         $isVideo = str_starts_with($mimeType, 'video/');
         $isAudio = str_starts_with($mimeType, 'audio/');
-        $storedPath = $uploadedFile->store('message-attachments', 'public');
+        $storedPath = $this->storePrivateMessageAttachment($uploadedFile);
 
         $width = null;
         $height = null;
@@ -1405,7 +1466,7 @@ class InboxController extends Controller
 
         return [
             'stored_path' => $storedPath,
-            'public_url' => $this->publicStorageUrl($storedPath),
+            'provider_url' => $this->privateAttachmentProviderUrl($storedPath),
             'mime_type' => $mimeType,
             'message_type' => $isImage ? 'image' : ($isVideo ? 'video' : ($isAudio ? 'voice' : 'file')),
             'instagram_attachment_type' => $isImage ? 'image' : ($isVideo ? 'video' : ($isAudio ? 'audio' : 'file')),
@@ -1418,10 +1479,10 @@ class InboxController extends Controller
             'height' => $height,
         ];
     }
-    
+
     protected function resolveReplyToMessageId(Conversation $conversation, ?int $candidateReplyId): ?int
     {
-        if (!$candidateReplyId) {
+        if (! $candidateReplyId) {
             return null;
         }
 
@@ -1458,7 +1519,7 @@ class InboxController extends Controller
         ];
 
         if (($snapshot['price'] ?? null) !== null) {
-            $lines[] = strtoupper((string) ($snapshot['currency'] ?? 'USD')) . ' ' . number_format((float) $snapshot['price'], 2);
+            $lines[] = strtoupper((string) ($snapshot['currency'] ?? 'USD')).' '.number_format((float) $snapshot['price'], 2);
         }
 
         if (! blank($snapshot['description'] ?? null)) {
@@ -1466,11 +1527,11 @@ class InboxController extends Controller
         }
 
         if (! blank($snapshot['product_url'] ?? null)) {
-            $lines[] = 'View product: ' . $snapshot['product_url'];
+            $lines[] = 'View product: '.$snapshot['product_url'];
         }
 
         if ($note !== '') {
-            $lines[] = 'Note: ' . $note;
+            $lines[] = 'Note: '.$note;
         }
 
         return implode("\n", array_filter($lines, fn ($line) => trim((string) $line) !== ''));
@@ -1483,12 +1544,12 @@ class InboxController extends Controller
         $price = null;
 
         if (($snapshot['price'] ?? null) !== null) {
-            $price = strtoupper((string) ($snapshot['currency'] ?? 'USD')) . ' ' . number_format((float) $snapshot['price'], 2);
+            $price = strtoupper((string) ($snapshot['currency'] ?? 'USD')).' '.number_format((float) $snapshot['price'], 2);
         }
 
         $subtitleParts = array_filter([
             $price,
-            $note !== '' ? 'Note: ' . $note : null,
+            $note !== '' ? 'Note: '.$note : null,
             $description !== '' ? $description : null,
         ], fn ($value) => trim((string) $value) !== '');
 
@@ -1528,7 +1589,7 @@ class InboxController extends Controller
             return $value;
         }
 
-        return rtrim(mb_substr($value, 0, max(1, $limit - 3))) . '...';
+        return rtrim(mb_substr($value, 0, max(1, $limit - 3))).'...';
     }
 
     protected function createOutboundMessage(
@@ -1538,7 +1599,7 @@ class InboxController extends Controller
     ): Message {
         $sentAt = $attributes['sent_at'] ?? now();
         $providerMessageId = $attributes['provider_message_id']
-            ?? ('mock-msg-' . now()->timestamp . '-' . random_int(1000, 9999));
+            ?? ('mock-msg-'.now()->timestamp.'-'.random_int(1000, 9999));
 
         return Message::create([
             'conversation_id' => $conversation->id,
@@ -1568,7 +1629,7 @@ class InboxController extends Controller
     ): Message {
         $sentAt = $attributes['sent_at'] ?? now();
         $providerMessageId = $attributes['provider_message_id']
-            ?? ('mock-incoming-' . now()->timestamp . '-' . random_int(1000, 9999));
+            ?? ('mock-incoming-'.now()->timestamp.'-'.random_int(1000, 9999));
 
         return Message::create([
             'conversation_id' => $conversation->id,
@@ -1598,7 +1659,7 @@ class InboxController extends Controller
     ): MessageAttachment {
         $mimeType = $uploadedFile->getMimeType() ?: 'application/octet-stream';
         $isImage = str_starts_with($mimeType, 'image/');
-        $storedPath = $uploadedFile->store('message-attachments', 'public');
+        $storedPath = $this->storePrivateMessageAttachment($uploadedFile);
 
         $width = null;
         $height = null;
@@ -1614,7 +1675,7 @@ class InboxController extends Controller
         return MessageAttachment::create([
             'message_id' => $message->id,
             'attachment_type' => $meta['attachment_type'] ?? ($isImage ? 'image' : 'file'),
-            'url' => $this->publicStorageUrl($storedPath),
+            'url' => null,
             'thumbnail_url' => $meta['thumbnail_url'] ?? null,
             'mime_type' => $mimeType,
             'file_name' => $uploadedFile->getClientOriginalName(),
@@ -1624,7 +1685,7 @@ class InboxController extends Controller
             'duration_seconds' => $meta['duration_seconds'] ?? null,
             'sort_order' => $meta['sort_order'] ?? 0,
             'meta' => array_merge([
-                'disk' => 'public',
+                'disk' => 'local',
                 'path' => $storedPath,
                 'is_mock' => true,
             ], $meta['meta'] ?? []),
@@ -1649,9 +1710,38 @@ class InboxController extends Controller
         $conversation->update($payload);
     }
 
-    protected function publicStorageUrl(string $storedPath): string
+    protected function privateAttachmentProviderUrl(string $storedPath): string
     {
-        return url(Storage::url($storedPath));
+        $ttlMinutes = max(
+            1,
+            min(1440, (int) config('filesystems.attachment_provider_url_ttl', 60))
+        );
+
+        return URL::temporarySignedRoute(
+            'attachments.provider',
+            now()->addMinutes($ttlMinutes),
+            ['path' => $storedPath]
+        );
+    }
+
+    protected function storePrivateMessageAttachment(UploadedFile $uploadedFile): string
+    {
+        $storedPath = $uploadedFile->store('message-attachments', 'local');
+
+        if (! is_string($storedPath) || $storedPath === '') {
+            throw new \RuntimeException('Message attachment could not be stored.');
+        }
+
+        return $storedPath;
+    }
+
+    protected function withoutTemporaryAttachmentUrl(array $sendResult): array
+    {
+        if (isset($sendResult['payload']['message']['attachment']['payload']['url'])) {
+            $sendResult['payload']['message']['attachment']['payload']['url'] = '[redacted-temporary-url]';
+        }
+
+        return $sendResult;
     }
 
     protected function applyMessageReaction(Message $message, string $metaKey, array $reaction): void
@@ -1662,13 +1752,13 @@ class InboxController extends Controller
 
         if (($reaction['status'] ?? null) === 'failed') {
             unset($meta[$metaKey]);
-            $meta[$metaKey . '_error'] = $reaction;
+            $meta[$metaKey.'_error'] = $reaction;
         } elseif (($reaction['action'] ?? 'react') === 'unreact') {
             unset($meta[$metaKey]);
-            unset($meta[$metaKey . '_error']);
+            unset($meta[$metaKey.'_error']);
         } else {
             $meta[$metaKey] = $reaction;
-            unset($meta[$metaKey . '_error']);
+            unset($meta[$metaKey.'_error']);
         }
 
         $meta['reaction_history'] = array_slice($history, -25);

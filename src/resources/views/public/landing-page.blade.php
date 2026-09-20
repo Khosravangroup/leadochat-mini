@@ -18,7 +18,7 @@
 
                 <div class="col-lg-5">
                     <div class="lc-hero-panel wow fadeInUp" data-wow-delay=".2s">
-                        <x-public.conversation-animation :label="$page['eyebrow'] . ' workflow'" />
+                        <x-public.landing-animation :variant="$slug" :label="$page['eyebrow'] . ' workflow'" />
                     </div>
                 </div>
             </div>

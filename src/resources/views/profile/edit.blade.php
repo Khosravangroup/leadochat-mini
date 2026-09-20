@@ -23,6 +23,14 @@
                 </div>
             </div>
 
+            @if ($ownedWorkspaces->isNotEmpty())
+                <div class="lc-app-card">
+                    <div class="max-w-3xl">
+                        @include('profile.partials.workspace-ownership-form')
+                    </div>
+                </div>
+            @endif
+
             <div class="lc-app-card">
                 <div class="max-w-xl">
                     @include('profile.partials.delete-user-form')

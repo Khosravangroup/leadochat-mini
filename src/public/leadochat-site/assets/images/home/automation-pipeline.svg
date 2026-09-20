@@ -1,0 +1,28 @@
+<svg width="720" height="420" viewBox="0 0 720 420" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Lead automation pipeline</title>
+  <desc id="desc">A clean workflow from incoming messages to qualification, routing, follow-up, and conversion.</desc>
+  <rect width="720" height="420" rx="18" fill="#F7FBFA"/>
+  <path d="M116 210H604" stroke="#D9E7E3" stroke-width="10" stroke-linecap="round"/>
+  <path d="M116 210H474" stroke="#0F766E" stroke-width="10" stroke-linecap="round"/>
+  <circle cx="116" cy="210" r="50" fill="#0F766E"/>
+  <circle cx="236" cy="210" r="50" fill="white" stroke="#D9E7E3" stroke-width="2"/>
+  <circle cx="356" cy="210" r="50" fill="#FFF8D7" stroke="#F6C55B" stroke-width="2"/>
+  <circle cx="476" cy="210" r="50" fill="white" stroke="#D9E7E3" stroke-width="2"/>
+  <circle cx="604" cy="210" r="50" fill="#F97316"/>
+  <path d="M96 202H136M96 218H126" stroke="white" stroke-width="9" stroke-linecap="round"/>
+  <path d="M215 205L230 220L258 190" stroke="#0F766E" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M338 228L356 184L374 228" stroke="#134E4A" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M458 194H494M458 210H486M458 226H476" stroke="#0F766E" stroke-width="8" stroke-linecap="round"/>
+  <path d="M584 210H624M608 190L628 210L608 230" stroke="white" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="70" y="300" width="92" height="24" rx="8" fill="#134E4A"/>
+  <rect x="194" y="300" width="84" height="24" rx="8" fill="#134E4A"/>
+  <rect x="311" y="300" width="90" height="24" rx="8" fill="#134E4A"/>
+  <rect x="435" y="300" width="82" height="24" rx="8" fill="#134E4A"/>
+  <rect x="558" y="300" width="92" height="24" rx="8" fill="#134E4A"/>
+  <rect x="78" y="94" width="206" height="58" rx="12" fill="white" stroke="#D9E7E3"/>
+  <rect x="102" y="114" width="118" height="10" rx="5" fill="#0F766E"/>
+  <rect x="102" y="133" width="84" height="8" rx="4" fill="#8AA39D"/>
+  <rect x="438" y="94" width="206" height="58" rx="12" fill="white" stroke="#D9E7E3"/>
+  <rect x="462" y="114" width="124" height="10" rx="5" fill="#F97316"/>
+  <rect x="462" y="133" width="94" height="8" rx="4" fill="#8AA39D"/>
+</svg>
