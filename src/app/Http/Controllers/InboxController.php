@@ -5,21 +5,21 @@ namespace App\Http\Controllers;
 use App\Events\WorkspaceRealtimeUpdated;
 use App\Models\CatalogProduct;
 use App\Models\Conversation;
-use App\Models\Message;
-use App\Models\MessageAttachment;
-use App\Models\WorkspaceTag;
 use App\Models\ConversationParticipant;
 use App\Models\ConversationProductShare;
-use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\DB;
+use App\Models\Message;
+use App\Models\MessageAttachment;
 use App\Models\WorkspaceDepartment;
+use App\Models\WorkspaceTag;
+use App\Services\Meta\Instagram\InstagramService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\URL;
-use App\Services\Meta\Instagram\InstagramService;
 
 class InboxController extends Controller
 {
@@ -93,15 +93,15 @@ class InboxController extends Controller
         }
 
         if ($conversation) {
-            if ($conversation->status === 'trashed' && !$showTrashed) {
+            if ($conversation->status === 'trashed' && ! $showTrashed) {
                 return redirect()->route('inbox.index', ['view' => 'trash']);
             }
 
-            if ($conversation->is_archived && !$showArchived && !$showTrashed) {
+            if ($conversation->is_archived && ! $showArchived && ! $showTrashed) {
                 return redirect()->route('inbox.index', ['view' => 'archived']);
             }
 
-            if (!$conversation->is_archived && $showArchived) {
+            if (! $conversation->is_archived && $showArchived) {
                 return redirect()->route('inbox.index');
             }
 
@@ -205,7 +205,7 @@ class InboxController extends Controller
             $selectedConversation = $conversations->firstWhere('id', $conversation->id);
         }
 
-        if (!$selectedConversation) {
+        if (! $selectedConversation) {
             $selectedConversation = $conversations->first();
         }
 
@@ -298,7 +298,7 @@ class InboxController extends Controller
                 'text_body' => $dmText,
                 'provider_message_id' => $providerMessageId !== null && $providerMessageId !== ''
                     ? $providerMessageId
-                    : ('product-card-' . now()->timestamp . '-' . random_int(1000, 9999)),
+                    : ('product-card-'.now()->timestamp.'-'.random_int(1000, 9999)),
                 'status' => $status,
                 'failed_at' => $failedAt,
                 'last_error' => $lastError,
@@ -323,7 +323,7 @@ class InboxController extends Controller
 
         $this->updateConversationSnapshot(
             $conversation,
-            'Product: ' . $product->title,
+            'Product: '.$product->title,
             $message?->sent_at ?? now()
         );
 
@@ -358,8 +358,8 @@ class InboxController extends Controller
             'attachment_files.*' => [
                 'file',
                 'max:10240',
-                'mimetypes:' . implode(',', self::MESSAGE_ATTACHMENT_MIME_TYPES),
-                'extensions:' . implode(',', self::MESSAGE_ATTACHMENT_EXTENSIONS),
+                'mimetypes:'.implode(',', self::MESSAGE_ATTACHMENT_MIME_TYPES),
+                'extensions:'.implode(',', self::MESSAGE_ATTACHMENT_EXTENSIONS),
             ],
             'reply_to_message_id' => ['nullable', 'integer'],
         ]);
@@ -367,12 +367,12 @@ class InboxController extends Controller
         $selfParticipant = $this->resolveSelfParticipant($conversation);
         $replyToMessageId = $this->resolveReplyToMessageId(
             $conversation,
-            !empty($validated['reply_to_message_id']) ? (int) $validated['reply_to_message_id'] : null
+            ! empty($validated['reply_to_message_id']) ? (int) $validated['reply_to_message_id'] : null
         );
 
         $uploadedFiles = $request->file('attachment_files', []);
         $messageText = trim((string) ($validated['message_text'] ?? ''));
-        
+
         if (empty($uploadedFiles)) {
             if ($conversation->provider === 'instagram') {
                 try {
@@ -390,7 +390,7 @@ class InboxController extends Controller
                         'text_body' => $messageText,
                         'provider_message_id' => $providerMessageId !== ''
                             ? $providerMessageId
-                            : ('instagram-outbound-' . now()->timestamp . '-' . random_int(1000, 9999)),
+                            : ('instagram-outbound-'.now()->timestamp.'-'.random_int(1000, 9999)),
                         'status' => 'sent',
                         'meta' => $this->withAgentMeta($user, [
                             'provider' => 'instagram',
@@ -511,7 +511,7 @@ class InboxController extends Controller
                             'caption' => $caption,
                             'provider_message_id' => $providerMessageId !== ''
                                 ? $providerMessageId
-                                : ('instagram-outbound-attachment-' . now()->timestamp . '-' . random_int(1000, 9999)),
+                                : ('instagram-outbound-attachment-'.now()->timestamp.'-'.random_int(1000, 9999)),
                             'status' => 'sent',
                             'meta' => $this->withAgentMeta($user, [
                                 'provider' => 'instagram',
@@ -584,7 +584,7 @@ class InboxController extends Controller
                         'image' => '📷 Image',
                         'video' => '🎬 Video',
                         'voice' => '🎤 Voice message',
-                        default => '📎 ' . $upload['file_name'],
+                        default => '📎 '.$upload['file_name'],
                     };
                 }
             });
@@ -622,7 +622,7 @@ class InboxController extends Controller
                         'image' => '📷 Image',
                         'video' => '🎬 Video',
                         'voice' => '🎤 Voice message',
-                        default => '📎 ' . $uploadedFile->getClientOriginalName(),
+                        default => '📎 '.$uploadedFile->getClientOriginalName(),
                     };
                 }
             });
@@ -631,7 +631,7 @@ class InboxController extends Controller
         $this->updateConversationSnapshot(
             $conversation,
             count($uploadedFiles) > 1
-                ? ('📎 ' . count($uploadedFiles) . ' attachments')
+                ? ('📎 '.count($uploadedFiles).' attachments')
                 : $lastPreview,
             now()
         );
@@ -709,7 +709,7 @@ class InboxController extends Controller
                     'message_type' => 'voice',
                     'provider_message_id' => $providerMessageId !== ''
                         ? $providerMessageId
-                        : ('instagram-outbound-voice-' . now()->timestamp . '-' . random_int(1000, 9999)),
+                        : ('instagram-outbound-voice-'.now()->timestamp.'-'.random_int(1000, 9999)),
                     'status' => $status,
                     'failed_at' => $failedAt,
                     'last_error' => $lastError,
@@ -922,7 +922,7 @@ class InboxController extends Controller
         $user = $request->user();
         $workspace = $user?->currentWorkspace();
 
-        if (!$workspace || $conversation->workspace_id !== $workspace->id) {
+        if (! $workspace || $conversation->workspace_id !== $workspace->id) {
             abort(404);
         }
 
@@ -955,7 +955,7 @@ class InboxController extends Controller
         $user = $request->user();
         $workspace = $user?->currentWorkspace();
 
-        if (!$workspace) {
+        if (! $workspace) {
             abort(404);
         }
 
@@ -976,7 +976,7 @@ class InboxController extends Controller
         $user = $request->user();
         $workspace = $user?->currentWorkspace();
 
-        if (!$workspace) {
+        if (! $workspace) {
             abort(404);
         }
 
@@ -1022,7 +1022,7 @@ class InboxController extends Controller
         $user = $request->user();
         $workspace = $user?->currentWorkspace();
 
-        if (!$workspace || $conversation->workspace_id !== $workspace->id) {
+        if (! $workspace || $conversation->workspace_id !== $workspace->id) {
             abort(404);
         }
 
@@ -1066,7 +1066,7 @@ class InboxController extends Controller
         $user = $request->user();
         $workspace = $user?->currentWorkspace();
 
-        if (!$workspace || $conversation->workspace_id !== $workspace->id) {
+        if (! $workspace || $conversation->workspace_id !== $workspace->id) {
             abort(404);
         }
 
@@ -1106,7 +1106,7 @@ class InboxController extends Controller
         $user = $request->user();
         $workspace = $user?->currentWorkspace();
 
-        if (!$workspace || $conversation->workspace_id !== $workspace->id) {
+        if (! $workspace || $conversation->workspace_id !== $workspace->id) {
             abort(404);
         }
 
@@ -1146,7 +1146,7 @@ class InboxController extends Controller
         $user = $request->user();
         $workspace = $user?->currentWorkspace();
 
-        if (!$workspace || $conversation->workspace_id !== $workspace->id || $conversation->status === 'trashed') {
+        if (! $workspace || $conversation->workspace_id !== $workspace->id || $conversation->status === 'trashed') {
             abort(404);
         }
 
@@ -1163,7 +1163,7 @@ class InboxController extends Controller
         $user = $request->user();
         $workspace = $user?->currentWorkspace();
 
-        if (!$workspace || $conversation->workspace_id !== $workspace->id || $conversation->status === 'trashed') {
+        if (! $workspace || $conversation->workspace_id !== $workspace->id || $conversation->status === 'trashed') {
             abort(404);
         }
 
@@ -1180,7 +1180,7 @@ class InboxController extends Controller
         $user = $request->user();
         $workspace = $user?->currentWorkspace();
 
-        if (!$workspace || $conversation->workspace_id !== $workspace->id) {
+        if (! $workspace || $conversation->workspace_id !== $workspace->id) {
             abort(404);
         }
 
@@ -1197,7 +1197,7 @@ class InboxController extends Controller
         $user = $request->user();
         $workspace = $user?->currentWorkspace();
 
-        if (!$workspace || $conversation->workspace_id !== $workspace->id) {
+        if (! $workspace || $conversation->workspace_id !== $workspace->id) {
             abort(404);
         }
 
@@ -1228,10 +1228,10 @@ class InboxController extends Controller
     protected function guardWorkspaceConversationAccess(?Conversation $conversation, ?object $workspace, bool $allowArchived = false): void
     {
         if (
-            !$workspace ||
-            !$conversation ||
+            ! $workspace ||
+            ! $conversation ||
             $conversation->workspace_id !== $workspace->id ||
-            (!$allowArchived && $conversation->is_archived) ||
+            (! $allowArchived && $conversation->is_archived) ||
             $conversation->status === 'trashed'
         ) {
             abort(404);
@@ -1479,10 +1479,10 @@ class InboxController extends Controller
             'height' => $height,
         ];
     }
-    
+
     protected function resolveReplyToMessageId(Conversation $conversation, ?int $candidateReplyId): ?int
     {
-        if (!$candidateReplyId) {
+        if (! $candidateReplyId) {
             return null;
         }
 
@@ -1519,7 +1519,7 @@ class InboxController extends Controller
         ];
 
         if (($snapshot['price'] ?? null) !== null) {
-            $lines[] = strtoupper((string) ($snapshot['currency'] ?? 'USD')) . ' ' . number_format((float) $snapshot['price'], 2);
+            $lines[] = strtoupper((string) ($snapshot['currency'] ?? 'USD')).' '.number_format((float) $snapshot['price'], 2);
         }
 
         if (! blank($snapshot['description'] ?? null)) {
@@ -1527,11 +1527,11 @@ class InboxController extends Controller
         }
 
         if (! blank($snapshot['product_url'] ?? null)) {
-            $lines[] = 'View product: ' . $snapshot['product_url'];
+            $lines[] = 'View product: '.$snapshot['product_url'];
         }
 
         if ($note !== '') {
-            $lines[] = 'Note: ' . $note;
+            $lines[] = 'Note: '.$note;
         }
 
         return implode("\n", array_filter($lines, fn ($line) => trim((string) $line) !== ''));
@@ -1544,12 +1544,12 @@ class InboxController extends Controller
         $price = null;
 
         if (($snapshot['price'] ?? null) !== null) {
-            $price = strtoupper((string) ($snapshot['currency'] ?? 'USD')) . ' ' . number_format((float) $snapshot['price'], 2);
+            $price = strtoupper((string) ($snapshot['currency'] ?? 'USD')).' '.number_format((float) $snapshot['price'], 2);
         }
 
         $subtitleParts = array_filter([
             $price,
-            $note !== '' ? 'Note: ' . $note : null,
+            $note !== '' ? 'Note: '.$note : null,
             $description !== '' ? $description : null,
         ], fn ($value) => trim((string) $value) !== '');
 
@@ -1589,7 +1589,7 @@ class InboxController extends Controller
             return $value;
         }
 
-        return rtrim(mb_substr($value, 0, max(1, $limit - 3))) . '...';
+        return rtrim(mb_substr($value, 0, max(1, $limit - 3))).'...';
     }
 
     protected function createOutboundMessage(
@@ -1599,7 +1599,7 @@ class InboxController extends Controller
     ): Message {
         $sentAt = $attributes['sent_at'] ?? now();
         $providerMessageId = $attributes['provider_message_id']
-            ?? ('mock-msg-' . now()->timestamp . '-' . random_int(1000, 9999));
+            ?? ('mock-msg-'.now()->timestamp.'-'.random_int(1000, 9999));
 
         return Message::create([
             'conversation_id' => $conversation->id,
@@ -1629,7 +1629,7 @@ class InboxController extends Controller
     ): Message {
         $sentAt = $attributes['sent_at'] ?? now();
         $providerMessageId = $attributes['provider_message_id']
-            ?? ('mock-incoming-' . now()->timestamp . '-' . random_int(1000, 9999));
+            ?? ('mock-incoming-'.now()->timestamp.'-'.random_int(1000, 9999));
 
         return Message::create([
             'conversation_id' => $conversation->id,
@@ -1752,13 +1752,13 @@ class InboxController extends Controller
 
         if (($reaction['status'] ?? null) === 'failed') {
             unset($meta[$metaKey]);
-            $meta[$metaKey . '_error'] = $reaction;
+            $meta[$metaKey.'_error'] = $reaction;
         } elseif (($reaction['action'] ?? 'react') === 'unreact') {
             unset($meta[$metaKey]);
-            unset($meta[$metaKey . '_error']);
+            unset($meta[$metaKey.'_error']);
         } else {
             $meta[$metaKey] = $reaction;
-            unset($meta[$metaKey . '_error']);
+            unset($meta[$metaKey.'_error']);
         }
 
         $meta['reaction_history'] = array_slice($history, -25);

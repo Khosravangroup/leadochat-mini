@@ -8,11 +8,11 @@ use App\Models\CatalogProduct;
 use App\Models\CatalogProductSet;
 use App\Models\CommerceOrder;
 use App\Models\CommercePromotionCampaign;
-use App\Models\WorkspaceTag;
 use App\Models\ProviderConnection;
 use App\Models\SocialPost;
 use App\Models\User;
 use App\Models\WorkspaceDepartment;
+use App\Models\WorkspaceTag;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
@@ -51,7 +51,7 @@ class WorkspaceSettingsController extends Controller
             'advanced' => 'Advanced',
         ];
 
-        if (!array_key_exists($section, $sections)) {
+        if (! array_key_exists($section, $sections)) {
             $section = 'general';
         }
 
@@ -367,7 +367,7 @@ class WorkspaceSettingsController extends Controller
         $user = $request->user();
         $workspace = $user?->currentWorkspace();
 
-        if (!$workspace) {
+        if (! $workspace) {
             abort(404);
         }
 
@@ -389,7 +389,7 @@ class WorkspaceSettingsController extends Controller
         $user = $request->user();
         $workspace = $user?->currentWorkspace();
 
-        if (!$workspace) {
+        if (! $workspace) {
             abort(404);
         }
 
@@ -433,7 +433,7 @@ class WorkspaceSettingsController extends Controller
         $user = $request->user();
         $workspace = $user?->currentWorkspace();
 
-        if (!$workspace || $department->workspace_id !== $workspace->id) {
+        if (! $workspace || $department->workspace_id !== $workspace->id) {
             abort(404);
         }
 
@@ -449,7 +449,7 @@ class WorkspaceSettingsController extends Controller
         $user = $request->user();
         $workspace = $user?->currentWorkspace();
 
-        if (!$workspace) {
+        if (! $workspace) {
             abort(404);
         }
 
@@ -494,7 +494,7 @@ class WorkspaceSettingsController extends Controller
         $user = $request->user();
         $workspace = $user?->currentWorkspace();
 
-        if (!$workspace || $tag->workspace_id !== $workspace->id) {
+        if (! $workspace || $tag->workspace_id !== $workspace->id) {
             abort(404);
         }
 
@@ -535,7 +535,7 @@ class WorkspaceSettingsController extends Controller
         $user = $request->user();
         $workspace = $user?->currentWorkspace();
 
-        if (!$workspace || $tag->workspace_id !== $workspace->id) {
+        if (! $workspace || $tag->workspace_id !== $workspace->id) {
             abort(404);
         }
 
