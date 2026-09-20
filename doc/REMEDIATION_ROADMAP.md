@@ -176,6 +176,23 @@ check with zero results across four rules. Weekly scheduling and Ubuntu 24.04 ru
 pinning are included. Merge, repository security settings, protected-branch
 requirements, and `develop` to `main` promotion remain.
 
+**Result on 21 September 2026:** the scoped Phase 2 repository-governance work is
+complete. Pull requests `#19` through `#22` and `#31` are merged; pull request `#29`
+preserved both branch histories while promoting the complete `develop` tree to
+`main`. Composer and npm audits report zero findings and block merges. The six CI
+and code-scanning checks are required on protected `develop` and `main`; one approval,
+last-pusher separation, stale-review dismissal, conversation resolution, and current
+branch state are required; force-push and deletion are disabled. Dependabot alerts
+and security updates, secret scanning and push protection, weekly full scans, and
+Semgrep code scanning are enabled with zero open alerts at closure. The administrator
+exemption is retained because this personal repository has only one collaborator.
+
+Residual `FE-01`, `TEST-01`, and `REL-01` acceptance items are intentionally carried
+forward: production does not deploy the retained frontend artifact, database tests
+still lack deeper concurrency/JSONB breadth, and immutable production deployment
+with runtime files outside the checkout remains Phase 4 work. Production was not
+changed during Phase 2.
+
 **Acceptance gate:** required checks are green on the exact head; a clean frontend
 artifact is reproducible; no unaccepted critical/high dependency advisory remains;
 branch protection is effective; secret/code scanning reports are triaged.
@@ -283,11 +300,11 @@ as current operating policy.
 1. Configure and prove production transactional email to close `AUTH-02`.
 2. Run approved authenticated synthetic browser/provider smoke and observe CSP
    telemetry for the deployed Phase 1 controls.
-3. Add CI plus reproducible frontend builds, then remediate dependency advisories.
-4. Enable branch protection and reconcile the production/deploy branch policy.
-5. Harden the host, remove public Reverb exposure, and automate backup/monitoring.
-6. Make deployments immutable and practice application rollback/data restore.
-7. Continue incremental architecture and test improvements.
+3. Harden the host, remove public Reverb exposure, and automate backup/monitoring.
+4. Make deployments immutable, deploy the retained frontend artifact, and practice
+   application rollback/data restore.
+5. Expand PostgreSQL concurrency, JSONB, queue-claim, migration, and browser coverage.
+6. Continue incremental architecture and test improvements.
 
 This order may change only with new evidence, active exploitation, an outage, or an
 explicit business priority decision. Record the reason rather than silently

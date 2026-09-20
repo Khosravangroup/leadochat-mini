@@ -19,8 +19,12 @@
 - Pull requests to `main` must come from `develop`.
 - Do not merge, deploy, force-push, or delete a branch unless the active task
   explicitly authorizes it.
-- Current `main`/`develop` divergence is a tracked risk, not permission to reset one
-  branch to the other.
+- Promote releases from `develop` to `main` by pull request. Never reconcile the
+  branches with reset, rebase, squash, or force-push; merge promotion preserves the
+  audited history.
+- Both branches require current CI/code-scanning checks and review. The sole
+  administrator exemption prevents repository deadlock and is not permission to
+  bypass evidence or review casually.
 
 ## Scope and design
 

@@ -82,17 +82,19 @@ database backup gate, immutable artifact, maintenance/zero-downtime strategy,
 post-deploy smoke gate, or automated rollback. It also installs development
 Composer dependencies because `--no-dev` is absent.
 
-## Branch conflict
+## Branch promotion and remaining deployment risk
 
-Repository policy says feature/fix branches start from `develop`, and production was
-running `develop` at the snapshot time. `deploy.sh` defaults to `main`, while
-`main` and `develop` are diverged. Until `REL-01` is resolved, every deploy must be
-treated as `NO-GO` unless a human approver names the exact branch and commit and
-proves it is the intended release.
+Feature/fix branches start from `develop`; reviewed release promotion goes from
+`develop` to `main`. Pull request `#29` reconciled the earlier histories with a merge
+commit, without reset, rebase, squash, or force-push. At that promotion point the
+branch trees were identical and every `develop` commit was contained by `main`.
+Both branches are protected by review and required checks.
 
-Do not resolve the divergence with an automatic reset, rebase, or force-push.
-Inventory the unique commits, choose the canonical promotion flow, preserve history,
-and protect both branches first.
+Production still runs the older verified Phase 1 revision from `develop`, while
+`deploy.sh` defaults to `main`. Phase 2 did not deploy. Until Phase 4 makes deployment
+immutable and approved by exact revision, every deploy remains `NO-GO` unless a
+human approver names the exact `main` commit, proves it is the intended release, and
+satisfies the backup, runtime-file, migration, smoke, and rollback gates below.
 
 ## Runtime-managed files in the production checkout
 

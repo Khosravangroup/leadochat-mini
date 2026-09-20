@@ -191,12 +191,12 @@ secrets to pull-request code.
 
 The Phase 2 foundation implements this shape in `.github/workflows/ci.yml`. Pull
 requests `#20` and `#21` reduced both locked dependency audits to zero findings, and
-the enforcement candidate in pull request `#22` makes both audits blocking, uploads
+the enforcement change in pull request `#22` makes both audits blocking, uploads
 Semgrep SARIF to GitHub code scanning, schedules a weekly full run, and pins Ubuntu
 24.04. Pint is intentionally scoped to PHP files changed against the pull-request
 base while the 26-file legacy formatting baseline is handled separately; syntax and
-both PHPUnit database jobs still cover the complete current tree. Promotion still
-requires every named job on protected `develop` and `main` branches.
+both PHPUnit database jobs still cover the complete current tree. Every named job
+and the Semgrep code-scanning result are required on protected `develop` and `main`.
 
 ## Release gate
 

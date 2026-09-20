@@ -49,10 +49,10 @@ Critical user journeys are:
 - Latest cumulative Phase 1 baseline: 114 tests and 911 assertions, all passing.
 - PHP syntax validation passed for all PHP files in the audited revision.
 - No committed browser E2E, accessibility, visual-regression, or load suite is
-  present. The Phase 2 CI candidate runs the complete existing suite against both
+  present. The Phase 2 CI workflow runs the complete existing suite against both
   SQLite and PostgreSQL 16, but still lacks focused concurrency and JSONB breadth.
 - Clean Vite 8.0.8 builds passed locally for Phase 1 and again during the exact
-  production release. The Phase 2 CI candidate also passed a clean Node 24 build
+  production release. The Phase 2 CI workflow also passes a clean Node 24 build
   and retained its artifact for seven days; it is not yet a protected-branch gate
   or deployment input.
 
@@ -62,18 +62,23 @@ Critical user journeys are:
   request `#19` added validation for PHP syntax, changed-file Pint, full SQLite and
   PostgreSQL 16 tests, a clean frontend build, dependency audits, full-history
   secret scanning, and focused SAST.
-- Composer and npm remediation are merged into `develop` with zero locked audit
-  findings. Pull request `#22` makes the audits blocking, schedules weekly runs,
-  pins Ubuntu 24.04, and uploads Semgrep SARIF to GitHub code scanning. All checks
-  passed on its exact head; protected-branch requirements remain pending.
-- `main` and `develop` had no branch protection at the audit date.
-- GitHub Dependabot, secret scanning, and code scanning were disabled or had no
-  analysis at the audit date.
+- Composer and npm remediation are merged with zero locked audit findings. Pull
+  request `#22` made the audits blocking, schedules weekly runs, pins Ubuntu 24.04,
+  and uploads Semgrep SARIF to GitHub code scanning.
+- `develop` and `main` are protected. They require one approval, last-pusher
+  separation, stale-review dismissal, resolved conversations, current branch state,
+  and the six CI/code-scanning checks. Force-push and deletion are disabled. The
+  sole administrator is exempt to prevent a single-collaborator deadlock.
+- Dependabot alerts/security updates, secret scanning/push protection, weekly
+  Gitleaks/dependency scans, and Semgrep code scanning are enabled. Each GitHub
+  security alert surface reported zero open alerts at Phase 2 closure.
 - Production was verified on `develop` at revision
   `b7e948f4325c5fc318f4ab9f7274319d72b3d32a`, while `deploy.sh` defaults to
   `main`. Branch and deployment policy therefore conflict.
-- At the audit date, `main` had three unique commits and `develop` had four unique
-  commits relative to each other.
+- Pull request `#29` reconciled the audited branch histories without rewriting them.
+  At promotion, the trees were identical and `develop` had no commit absent from
+  `main`; the four commits unique to `main` were historical/promotion merge commits.
+  `develop` is the integration branch and `main` is the release branch.
 
 ## 5. Environments
 
@@ -149,7 +154,7 @@ authenticated browser/provider smoke remains pending an approved synthetic targe
 - Cascading owner deletion and workspace data loss.
 - Meta webhook idempotency, signature validation, retries, and tenant resolution.
 - Dependency advisories across Composer and npm packages.
-- PostgreSQL 16 now runs the complete existing suite in the Phase 2 CI candidate,
+- PostgreSQL 16 now runs the complete existing suite in the Phase 2 CI workflow,
   but focused JSONB, locking, queue-claim, concurrency, and migration breadth remains
   incomplete.
 - Missing automated backup/restore operations, host hardening, Nginx static/error

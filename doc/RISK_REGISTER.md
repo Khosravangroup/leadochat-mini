@@ -34,14 +34,14 @@ and infrastructure may change.
 | `AUTH-02` | High | In progress | Ineffective email verification and mail delivery | 1 |
 | `DATA-01` | High | In progress | Owner deletion can cascade workspace data | 1 |
 | `DATA-02` | High | In progress | OAuth tokens stored plaintext | 1 |
-| `DEP-01` | High | In progress | Composer security advisories | 2 |
-| `DEP-02` | High | In progress | npm security advisories | 2 |
-| `CI-01` | High | In progress | No CI gate or branch protection | 2 |
-| `REL-01` | High | Open | Branch divergence and deploy-target mismatch | 2-4 |
+| `DEP-01` | High | Closed | Composer security advisories | 2 |
+| `DEP-02` | High | Closed | npm security advisories | 2 |
+| `CI-01` | High | Closed | No CI gate or branch protection | 2 |
+| `REL-01` | High | In progress | Branch divergence and deploy-target mismatch | 2-4 |
 | `OPS-02` | High | In progress | Production environment files readable as `644` | 0, 3 |
 | `OPS-03` | High | Open | SSH and host firewall hardening gaps | 3 |
 | `FE-01` | Medium | In progress | Clean frontend build not proven | 2 |
-| `CI-02` | Medium | In progress | Security scanning disabled/missing | 2 |
+| `CI-02` | Medium | Closed | Security scanning disabled/missing | 2 |
 | `OPS-04` | Medium | Open | Reverb port publicly bound | 3 |
 | `OPS-05` | Medium | In progress | Missing browser security headers | 1, 3 |
 | `TEST-01` | Medium | In progress | SQLite-only automated database coverage | 2, 4 |
@@ -301,6 +301,12 @@ suites each passed 114 tests with 911 assertions; frontend build and secret/SAST
 jobs also passed. The finding remains in progress until this candidate is merged
 and the audit is enforced as a required check.
 
+**Phase 2 closure:** pull requests `#20` and `#22` are merged. Composer audit is a
+blocking protected-branch check, the current lockfile reports zero advisories, and
+no exception is recorded. The compatible update was exercised by the complete
+SQLite and PostgreSQL 16 suites. This finding is closed for the current lockfile;
+new advisories reopen it.
+
 **Close when:** dependencies are updated in reviewable groups; advisory reachability
 is assessed; application/security regression and PostgreSQL tests pass; the final
 audit has no unaccepted critical/high advisory; any exception has owner and expiry.
@@ -322,6 +328,11 @@ from the official registry, reported zero npm vulnerabilities, and completed the
 Vite build. Both database jobs passed 114 tests with 911 assertions, and the
 secret/SAST job passed. The finding remains in progress until the candidate is
 merged and the audit becomes a required blocking check.
+
+**Phase 2 closure:** pull requests `#21` and `#22` are merged. A clean Node 24
+install and Vite 8.3.0 build passed from the current lockfile, npm audit reports zero
+vulnerabilities, and the audit is a blocking protected-branch check. This finding
+is closed for the current lockfile; new advisories reopen it.
 
 **Close when:** direct and transitive packages are updated without unsafe forced
 major upgrades; clean lockfile install and Vite build pass; affected UI behavior and
@@ -348,6 +359,14 @@ SARIF. All workflow jobs passed on exact head
 `26e9763c4b51d081daa6c1f5c73a21643af75a73`. Branch protection and required-review
 policy remain necessary before this finding can close.
 
+**Phase 2 closure:** `develop` and `main` now require an up-to-date branch, one
+approval, stale-review dismissal, approval from someone other than the last pusher,
+resolved conversations, and six successful checks: both database jobs, frontend
+build, secret/SAST, dependency audit, and Semgrep code scanning. Force-push and
+branch deletion are disabled. The sole repository administrator remains exempt so
+the single-collaborator repository cannot deadlock; that exception is explicit and
+must be reassessed when another reviewer is added.
+
 **Close when:** protected branches require reviewed pull requests and current CI
 checks; force-push/deletion are restricted; least-privilege CI runs PHP, PostgreSQL,
 frontend build, lint, dependency, secret, and security checks.
@@ -363,6 +382,16 @@ silently destroy the active configuration or TLS material.
 
 **Impact:** a manual deploy can silently select different code, omit fixes, or
 reintroduce behavior. The release source is not reproducible.
+
+**Phase 2 governance update:** pull request `#29` merged `develop` into `main`
+without reset, rebase, squash, or force-push. At the reconciliation point, `main`
+contained every `develop` commit, both trees were identical, and the only four
+commits unique to `main` were its three historical merge commits plus the new
+promotion merge `2ddb5f543d49116bb11dd426c2091c07a405d7d4`. Both branches are now
+protected, with `develop` documented as the integration branch and `main` as the
+release branch. Production remains on the older verified Phase 1 revision and its
+runtime-managed files remain inside the checkout, so the deployment portion stays
+in progress for Phase 4.
 
 **Close when:** unique commits are reconciled without history loss; the canonical
 promotion path is documented and enforced; deployment requires an immutable,
@@ -424,6 +453,11 @@ and Vite build on its exact head and retained `src/public/build` for seven days.
 The artifact is not yet a required protected-branch output or the source of a
 production deployment, so the close condition is not yet met.
 
+**Phase 2 update:** frontend build is now a required check on both protected
+branches, and every run retains the exact-revision artifact for seven days. The
+artifact is still not the source of production deployment, so this finding remains
+in progress for Phase 4.
+
 **Close when:** a clean, isolated install from `package-lock.json` and `npm run build`
 pass in CI on a supported Node version, with the artifact retained and deployed from
 that exact revision.
@@ -447,6 +481,14 @@ focused Semgrep, then uploaded a zero-result SARIF analysis covering four rules 
 GitHub code scanning. The candidate also schedules weekly scans. Repository secret
 scanning, push protection, dependency alerts, and protected-branch enforcement
 remain to be enabled after merge.
+
+**Phase 2 closure:** Dependabot alerts and security updates, GitHub secret scanning
+and push protection, weekly full-history Gitleaks, weekly blocking dependency
+audits, and Semgrep SARIF code scanning are enabled. At closure, Dependabot, secret-
+scanning, and code-scanning each reported zero open alerts. The four focused
+Semgrep rules are required on both protected branches. Unsupported optional
+non-provider-pattern and validity-check toggles remain disabled and are not treated
+as active controls.
 
 **Close when:** secret scanning, dependency updates/alerts, SAST, and scheduled/full
 dependency scans are enabled; findings route to an owner; false-positive exceptions
@@ -515,7 +557,8 @@ transaction behavior may pass tests but fail in production.
 SQLite in pull request `#19`, with 114 tests and 911 assertions in each job. This
 establishes repeatable database-engine coverage for the existing suite, but does
 not by itself add the missing JSONB, locking, queue-claim, concurrency, or
-idempotency scenarios. The checks are not yet required by branch protection.
+idempotency scenarios. Both database jobs are now required by branch protection;
+the missing scenario breadth remains Phase 4/5 work.
 
 **Close when:** CI runs database-sensitive feature/migration tests on PostgreSQL 16,
 including ownership cascades, JSONB, queue claims, and concurrent/idempotent paths.
