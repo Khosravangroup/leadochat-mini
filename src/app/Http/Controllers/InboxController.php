@@ -23,6 +23,58 @@ use App\Services\Meta\Instagram\InstagramService;
 
 class InboxController extends Controller
 {
+    private const MESSAGE_ATTACHMENT_EXTENSIONS = [
+        'jpg',
+        'jpeg',
+        'jfif',
+        'png',
+        'gif',
+        'webp',
+        'bmp',
+        'mp4',
+        'm4v',
+        'mov',
+        'webm',
+        'avi',
+        'mkv',
+        'mp3',
+        'wav',
+        'ogg',
+        'oga',
+        'opus',
+        'm4a',
+        'aac',
+        'flac',
+        'pdf',
+    ];
+
+    private const MESSAGE_ATTACHMENT_MIME_TYPES = [
+        'image/jpeg',
+        'image/png',
+        'image/gif',
+        'image/webp',
+        'image/bmp',
+        'image/x-ms-bmp',
+        'video/mp4',
+        'video/quicktime',
+        'video/webm',
+        'video/x-msvideo',
+        'video/x-matroska',
+        'video/x-m4v',
+        'audio/mpeg',
+        'audio/wav',
+        'audio/x-wav',
+        'audio/ogg',
+        'application/ogg',
+        'audio/mp4',
+        'audio/x-m4a',
+        'audio/aac',
+        'audio/x-hx-aac-adts',
+        'audio/flac',
+        'audio/x-flac',
+        'application/pdf',
+    ];
+
     public function index(Request $request, ?Conversation $conversation = null): View|RedirectResponse
     {
         $user = $request->user();
@@ -299,7 +351,12 @@ class InboxController extends Controller
         $validated = $request->validate([
             'message_text' => ['nullable', 'string', 'max:5000', 'required_without:attachment_files'],
             'attachment_files' => ['nullable', 'array', 'required_without:message_text'],
-            'attachment_files.*' => ['file', 'max:10240'],
+            'attachment_files.*' => [
+                'file',
+                'max:10240',
+                'mimetypes:' . implode(',', self::MESSAGE_ATTACHMENT_MIME_TYPES),
+                'extensions:' . implode(',', self::MESSAGE_ATTACHMENT_EXTENSIONS),
+            ],
             'reply_to_message_id' => ['nullable', 'integer'],
         ]);
 

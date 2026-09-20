@@ -2865,7 +2865,7 @@
                                                         name="attachment_files[]"
                                                         id="lcAttachmentInput"
                                                         class="lc-hidden-file-input"
-                                                        accept="image/*,video/*,audio/*,application/pdf"
+                                                        accept=".jpg,.jpeg,.jfif,.png,.gif,.webp,.bmp,.mp4,.m4v,.mov,.webm,.avi,.mkv,.mp3,.wav,.ogg,.oga,.opus,.m4a,.aac,.flac,.pdf"
                                                         multiple
                                                     >
                                                 </label>
