@@ -13,6 +13,7 @@ use App\Models\ProviderConnection;
 use App\Models\SocialPost;
 use App\Models\User;
 use App\Models\WorkspaceDepartment;
+use Illuminate\Auth\Events\Registered;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -340,22 +341,25 @@ class WorkspaceSettingsController extends Controller
             'password' => ['required', 'confirmed', Password::defaults()],
         ]);
 
-        DB::transaction(function () use ($workspace, $validated) {
+        $member = DB::transaction(function () use ($workspace, $validated): User {
             $member = User::create([
                 'name' => trim($validated['name']),
                 'email' => Str::lower(trim($validated['email'])),
                 'password' => Hash::make($validated['password']),
-                'email_verified_at' => now(),
             ]);
 
             $workspace->members()->attach($member->id, [
                 'role' => 'agent',
             ]);
+
+            return $member;
         });
+
+        event(new Registered($member));
 
         return redirect()->route('settings.index', [
             'section' => 'team',
-        ])->with('status', 'Team member account created successfully.');
+        ])->with('status', 'Team member created. They must verify their email before accessing the workspace.');
     }
 
     public function updateGeneral(Request $request): RedirectResponse

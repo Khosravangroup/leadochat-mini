@@ -37,13 +37,13 @@ class RegisteredUserController extends Controller
             ]);
 
             $baseName = trim($user->name) !== '' ? $user->name : 'Workspace';
-            $workspaceName = $baseName . "'s Workspace";
-            $baseSlug = Str::slug($baseName . '-workspace');
+            $workspaceName = $baseName."'s Workspace";
+            $baseSlug = Str::slug($baseName.'-workspace');
             $slug = $baseSlug;
             $counter = 1;
 
             while (Workspace::where('slug', $slug)->exists()) {
-                $slug = $baseSlug . '-' . $counter;
+                $slug = $baseSlug.'-'.$counter;
                 $counter++;
             }
 
@@ -64,6 +64,6 @@ class RegisteredUserController extends Controller
 
         Auth::login($user);
 
-        return redirect(route('dashboard', absolute: false));
+        return redirect()->route('verification.notice');
     }
 }

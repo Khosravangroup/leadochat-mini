@@ -41,9 +41,10 @@ Local topology is in `docker-compose.yml`; production topology is in
 
 `PublicPageController` serves marketing, legal, contact, and landing pages.
 Laravel Breeze controllers provide registration, login, password reset, email
-verification routes, password confirmation, and logout. The `User` model does not
-currently implement Laravel's email-verification contract, so the presence of the
-`verified` middleware must not be interpreted as an effective control.
+verification routes, password confirmation, and logout. The `User` model implements
+Laravel's email-verification contract; registrations, owner-created members, and
+email changes require verification before workspace application access. A
+delivery-capable production mail transport remains an operational prerequisite.
 
 ### Workspace and settings
 

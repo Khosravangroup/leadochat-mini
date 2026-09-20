@@ -61,6 +61,8 @@ and protect both branches first.
 - Back up PostgreSQL and verify the artifact before migrations.
 - Review migration forward/rollback behavior on PostgreSQL 16.
 - Confirm `.env` permissions and required configuration without printing values.
+- Run `php artisan app:mail-check`; require a real verification and password-reset
+  message to arrive through the configured production provider.
 - Record current containers, image IDs, database migration status, queue depth,
   failed jobs, disk space, and recent error fingerprints.
 - Identify the previous known-good revision and rehearse the appropriate rollback.

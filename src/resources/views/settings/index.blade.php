@@ -1349,7 +1349,7 @@
                                     </div>
 
                                     <div class="ws-team-help">
-                                        The new teammate will be added directly to this workspace and can log in immediately.
+                                        The teammate will receive a verification email and cannot access the workspace until they verify the address.
                                     </div>
 
                                     <div style="display:flex; justify-content:flex-end;">
