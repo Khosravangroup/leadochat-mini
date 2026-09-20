@@ -84,6 +84,10 @@ and unauthenticated requests.
 - Use focused Form Requests where request validation or authorization is complex.
 - Allowlist attachment extensions, MIME types, and content expectations; store
   untrusted uploads outside any executable public path.
+- Serve locally stored message attachments through the authenticated
+  `attachments.show` route after workspace ownership checks. Provider delivery uses
+  the separate signed, expiring `attachments.provider` route; never persist or log
+  its temporary signature.
 - Escape untrusted names and labels. Build DOM nodes with safe text properties,
   not interpolated `innerHTML`.
 - Do not return tokens, secrets, raw exception messages, or provider payloads.

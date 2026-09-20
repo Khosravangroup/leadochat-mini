@@ -34,4 +34,20 @@ class MessageAttachment extends Model
     {
         return $this->belongsTo(Message::class);
     }
+
+    public function getDisplayUrlAttribute(): ?string
+    {
+        $meta = is_array($this->meta) ? $this->meta : [];
+        $disk = (string) ($meta['disk'] ?? '');
+        $path = (string) ($meta['path'] ?? '');
+
+        if (
+            in_array($disk, ['local', 'public'], true)
+            && str_starts_with($path, 'message-attachments/')
+        ) {
+            return route('attachments.show', $this);
+        }
+
+        return $this->url;
+    }
 }

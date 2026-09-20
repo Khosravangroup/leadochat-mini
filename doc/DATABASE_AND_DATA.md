@@ -69,6 +69,19 @@ Before a migration:
 After a migration, verify schema state, row counts, constraints, queue health, and
 the affected journeys. A successful Artisan exit code alone is insufficient.
 
+Legacy locally stored message attachments can be inventoried and moved from the
+public disk with:
+
+```bash
+php artisan attachments:migrate-private --dry-run
+php artisan attachments:migrate-private
+```
+
+The command is idempotent, verifies matching source/target checksums before deleting
+the public copy, preserves remote provider attachments, and updates `meta.disk` to
+`local`. Run it only after a fresh verified backup and verify both the row count
+and public/private file inventories afterward.
+
 ## Backup and restore
 
 No application/PostgreSQL backup job or successful restore drill was verified on

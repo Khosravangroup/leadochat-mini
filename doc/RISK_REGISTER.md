@@ -74,9 +74,17 @@ same finite set. Both Nginx configurations deny PHP-family extensions under
 Production inventory found zero legacy PHP-like public uploads. The full local suite
 passed with 60 tests and 421 assertions.
 
-**Residual risk:** message attachments are still intentionally public because Meta
-currently fetches a URL. Authorization-aware private storage and time-limited
-provider delivery remain Phase 1 work, so this finding is not closed.
+**Residual risk:** production remains on the Phase 0 public-storage design until the
+Phase 1 candidate is approved, deployed, and its legacy-file migration is verified.
+The finding is not closed before that evidence exists.
+
+**Phase 1 candidate:** new local message attachments use private storage; browser
+access requires authentication and owning-workspace membership; Meta receives a
+temporary signed URL; signatures are removed from persisted send metadata; and an
+idempotent command migrates legacy public message attachments after backup. Local
+SQLite coverage passed with 71 tests and 491 assertions, while the attachment
+security subset passed on PostgreSQL 16 with 15 tests and 93 assertions. Production
+migration and verification are still required before closing this finding.
 
 **Close when:** uploads are stored outside executable public paths or served through
 a controlled download response; content/extension/MIME allowlists are enforced;

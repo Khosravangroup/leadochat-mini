@@ -72,6 +72,9 @@ refresh tokens, app secrets, verify tokens, or full signed payloads.
 
 - `FILESYSTEM_DISK` chooses default storage; uploaded content must not become
   executable through a public disk.
+- `ATTACHMENT_PROVIDER_URL_TTL_MINUTES` controls the lifetime of signed private
+  attachment URLs supplied to external providers. It defaults to 60 minutes and is
+  clamped to a range of 1 through 1440 minutes.
 - `LOG_CHANNEL`, `LOG_STACK`, `LOG_LEVEL`, and provider-specific log variables
   control logging. Production logs must not contain secrets or customer payloads.
 - AWS, Redis, SQS, Pusher, Ably, Postmark, Resend, Slack, and Papertrail variables

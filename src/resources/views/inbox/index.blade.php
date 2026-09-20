@@ -2632,7 +2632,7 @@
                                                             @if ($message->message_type === 'image')
                                                                 @foreach ($message->attachments as $attachment)
                                                                     <div class="lc-image-card">
-                                                                        <img src="{{ $attachment->url }}" alt="Image attachment">
+                                                                        <img src="{{ $attachment->display_url }}" alt="Image attachment">
                                                                     </div>
                                                                 @endforeach
 
@@ -2647,7 +2647,7 @@
                                                                         <div class="lc-file-icon">📎</div>
                                                                         <div class="lc-file-meta">
                                                                             <div class="lc-file-name">
-                                                                                <a href="{{ $attachment->url }}" target="_blank" style="color: inherit; text-decoration: none;">
+                                                                                <a href="{{ $attachment->display_url }}" target="_blank" style="color: inherit; text-decoration: none;">
                                                                                     {{ $attachment->file_name ?: 'Attachment' }}
                                                                                 </a>
                                                                             </div>
@@ -2670,7 +2670,7 @@
                                                                 @foreach ($message->attachments as $attachment)
                                                                     <div class="lc-image-card">
                                                                         <video controls playsinline style="display:block;width:100%;max-height:360px;background:#000;">
-                                                                            <source src="{{ $attachment->url }}" type="{{ $attachment->mime_type }}">
+                                                                            <source src="{{ $attachment->display_url }}" type="{{ $attachment->mime_type }}">
                                                                         </video>
                                                                     </div>
                                                                 @endforeach
@@ -2686,7 +2686,7 @@
                                                                         <div class="lc-voice-title">Voice message</div>
                                                                         <div class="lc-voice-sub">Duration: {{ $attachment->duration_seconds ?? '-' }} sec</div>
                                                                         <audio controls>
-                                                                            <source src="{{ $attachment->url }}" type="{{ $attachment->mime_type }}">
+                                                                            <source src="{{ $attachment->display_url }}" type="{{ $attachment->mime_type }}">
                                                                         </audio>
                                                                     </div>
                                                                 @endforeach

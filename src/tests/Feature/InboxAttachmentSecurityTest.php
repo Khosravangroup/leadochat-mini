@@ -3,13 +3,18 @@
 namespace Tests\Feature;
 
 use App\Models\Conversation;
+use App\Models\Message;
 use App\Models\MessageAttachment;
 use App\Models\ProviderConnection;
 use App\Models\User;
 use App\Models\Workspace;
+use App\Services\Meta\Instagram\InstagramService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request as HttpRequest;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
+use Mockery;
 use Tests\TestCase;
 
 class InboxAttachmentSecurityTest extends TestCase
@@ -110,6 +115,7 @@ class InboxAttachmentSecurityTest extends TestCase
     public function test_allowed_pdf_attachment_is_stored_and_recorded(): void
     {
         Storage::fake('public');
+        Storage::fake('local');
 
         [$user, $conversation] = $this->createLocalConversation();
 
@@ -127,12 +133,16 @@ class InboxAttachmentSecurityTest extends TestCase
 
         $this->assertSame('application/pdf', $attachment->mime_type);
         $this->assertSame('brief.pdf', $attachment->file_name);
-        Storage::disk('public')->assertExists($attachment->meta['path']);
+        $this->assertSame('local', $attachment->meta['disk']);
+        $this->assertNull($attachment->url);
+        Storage::disk('local')->assertExists($attachment->meta['path']);
+        Storage::disk('public')->assertMissing($attachment->meta['path']);
     }
 
     public function test_allowed_image_video_and_audio_aliases_are_stored_and_recorded(): void
     {
         Storage::fake('public');
+        Storage::fake('local');
 
         [$user, $conversation] = $this->createLocalConversation();
         [$image, $imagePath] = $this->createRealUpload('image.jfif', $this->decodeFixture(self::JFIF_FIXTURE));
@@ -164,8 +174,82 @@ class InboxAttachmentSecurityTest extends TestCase
         $this->assertSame(['image/jpeg', 'video/mp4', 'audio/ogg', 'audio/x-hx-aac-adts'], $attachments->pluck('mime_type')->all());
 
         foreach ($attachments as $attachment) {
-            Storage::disk('public')->assertExists($attachment->meta['path']);
+            $this->assertSame('local', $attachment->meta['disk']);
+            $this->assertNull($attachment->url);
+            Storage::disk('local')->assertExists($attachment->meta['path']);
+            Storage::disk('public')->assertMissing($attachment->meta['path']);
         }
+    }
+
+    public function test_instagram_receives_temporary_signed_url_for_private_attachment(): void
+    {
+        Storage::fake('public');
+        Storage::fake('local');
+
+        [$user, $conversation, $connection] = $this->createInstagramConversation();
+        $providerUrl = null;
+
+        $instagram = Mockery::mock(InstagramService::class);
+        $instagram
+            ->shouldReceive('resolveConnectionFromConversation')
+            ->once()
+            ->withArgs(fn (Conversation $resolvedConversation): bool => $resolvedConversation->id === $conversation->id)
+            ->andReturn($connection);
+        $instagram
+            ->shouldReceive('sendAttachment')
+            ->once()
+            ->andReturnUsing(function (
+                ProviderConnection $resolvedConnection,
+                string $recipientId,
+                string $attachmentUrl,
+                array $options
+            ) use ($connection, &$providerUrl): array {
+                $this->assertTrue($resolvedConnection->is($connection));
+                $this->assertSame('instagram-customer-1', $recipientId);
+                $this->assertSame('file', $options['attachment_type']);
+                $providerUrl = $attachmentUrl;
+
+                return [
+                    'message_id' => 'instagram-message-1',
+                    'payload' => [
+                        'message' => [
+                            'attachment' => [
+                                'payload' => [
+                                    'url' => $attachmentUrl,
+                                ],
+                            ],
+                        ],
+                    ],
+                ];
+            });
+        $this->app->instance(InstagramService::class, $instagram);
+
+        $response = $this
+            ->actingAs($user)
+            ->postJson(route('inbox.messages.store', $conversation), [
+                'attachment_files' => [
+                    UploadedFile::fake()->create('brief.pdf', 10, 'application/pdf'),
+                ],
+            ]);
+
+        $response->assertOk();
+        $this->assertIsString($providerUrl);
+        $this->assertTrue(URL::hasValidSignature(HttpRequest::create($providerUrl)));
+
+        $attachment = MessageAttachment::query()->sole();
+
+        $this->assertNull($attachment->url);
+        $this->assertSame('local', $attachment->meta['disk']);
+        $this->assertStringNotContainsString(
+            $providerUrl,
+            json_encode(Message::query()->sole()->meta, JSON_THROW_ON_ERROR)
+        );
+        Storage::disk('local')->assertExists($attachment->meta['path']);
+        Storage::disk('public')->assertMissing($attachment->meta['path']);
+
+        auth()->logout();
+
+        $this->get($providerUrl)->assertOk();
     }
 
     public function test_nginx_storage_locations_never_dispatch_to_php_fpm(): void
@@ -257,5 +341,58 @@ class InboxAttachmentSecurityTest extends TestCase
         ]);
 
         return [$user, $conversation];
+    }
+
+    /**
+     * @return array{User, Conversation, ProviderConnection}
+     */
+    private function createInstagramConversation(): array
+    {
+        $user = User::factory()->create();
+
+        $workspace = Workspace::create([
+            'owner_id' => $user->id,
+            'name' => 'Instagram Attachment Workspace',
+            'slug' => 'instagram-attachment-workspace',
+        ]);
+
+        $workspace->members()->attach($user->id, [
+            'role' => 'owner',
+        ]);
+
+        $connection = ProviderConnection::create([
+            'workspace_id' => $workspace->id,
+            'provider' => 'instagram',
+            'provider_account_type' => 'instagram_business',
+            'provider_account_id' => 'instagram-business-1',
+            'provider_account_name' => 'Instagram Business',
+            'status' => 'connected',
+        ]);
+
+        $conversation = Conversation::create([
+            'workspace_id' => $workspace->id,
+            'provider_connection_id' => $connection->id,
+            'provider' => 'instagram',
+            'provider_conversation_id' => 'instagram-attachment-conversation',
+            'type' => 'direct',
+            'title' => 'Instagram Customer',
+            'status' => 'active',
+            'last_message_at' => now(),
+        ]);
+
+        $conversation->participants()->create([
+            'provider_user_id' => 'instagram-business-1',
+            'display_name' => 'Instagram Business',
+            'role' => 'business',
+            'is_self' => true,
+        ]);
+        $conversation->participants()->create([
+            'provider_user_id' => 'instagram-customer-1',
+            'display_name' => 'Instagram Customer',
+            'role' => 'customer',
+            'is_self' => false,
+        ]);
+
+        return [$user, $conversation, $connection];
     }
 }

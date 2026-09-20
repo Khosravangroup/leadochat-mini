@@ -61,6 +61,12 @@ archive/trash/restore operations, catalog-product messages, and a realtime
 snapshot. It is currently a large controller and must be decomposed only through
 behavior-preserving, test-backed phases.
 
+New locally uploaded message attachments are stored under the private `local`
+disk. `MessageAttachmentController` serves them to authenticated members of the
+owning workspace and supports HTTP Range responses for media. Meta receives a
+short-lived signed provider URL with no session requirement. Remote inbound
+provider URLs remain remote and are not rewritten as local files.
+
 ### Social and Instagram
 
 `SocialController` owns Instagram posts, comments, stories, publishing, moderation,
