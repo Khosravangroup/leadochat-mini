@@ -4,6 +4,8 @@ Assessment date: 20 September 2026. Revision assessed:
 `f65945d30c039532cd3109d3a78dfb33eacfa88d`.
 Phase 0 containment revision:
 `e8878e667e37115b07f86b9ddc634b5fabd72a24`.
+Phase 1 production revision:
+`b7e948f4325c5fc318f4ab9f7274319d72b3d32a`.
 
 This is an evidence-backed engineering risk register, not proof that every
 potential vulnerability has been exploited. No exploit payload was executed
@@ -38,7 +40,7 @@ and infrastructure may change.
 | `REL-01` | High | Open | Branch divergence and deploy-target mismatch | 2-4 |
 | `OPS-02` | High | In progress | Production environment files readable as `644` | 0, 3 |
 | `OPS-03` | High | Open | SSH and host firewall hardening gaps | 3 |
-| `FE-01` | Medium | Open | Clean frontend build not proven | 2 |
+| `FE-01` | Medium | In progress | Clean frontend build not proven | 2 |
 | `CI-02` | Medium | Open | Security scanning disabled/missing | 2 |
 | `OPS-04` | Medium | Open | Reverb port publicly bound | 3 |
 | `OPS-05` | Medium | In progress | Missing browser security headers | 1, 3 |
@@ -74,17 +76,18 @@ same finite set. Both Nginx configurations deny PHP-family extensions under
 Production inventory found zero legacy PHP-like public uploads. The full local suite
 passed with 60 tests and 421 assertions.
 
-**Residual risk:** production remains on the Phase 0 public-storage design until the
-Phase 1 candidate is approved, deployed, and its legacy-file migration is verified.
-The finding is not closed before that evidence exists.
-
-**Phase 1 candidate:** new local message attachments use private storage; browser
+**Phase 1 implementation:** new local message attachments use private storage; browser
 access requires authentication and owning-workspace membership; Meta receives a
 temporary signed URL; signatures are removed from persisted send metadata; and an
 idempotent command migrates legacy public message attachments after backup. Local
 SQLite coverage passed with 71 tests and 491 assertions, while the attachment
-security subset passed on PostgreSQL 16 with 15 tests and 93 assertions. Production
-migration and verification are still required before closing this finding.
+security subset passed on PostgreSQL 16 with 15 tests and 93 assertions. The exact
+cumulative revision was deployed after a fresh restore-verified backup. The
+production legacy-file migration found zero eligible records and zero failures.
+
+**Residual risk:** an approved authenticated production attachment send/download
+and provider-delivery smoke was not available. Keep the finding in progress until
+that intended-environment evidence is recorded.
 
 **Close when:** uploads are stored outside executable public paths or served through
 a controlled download response; content/extension/MIME allowlists are enforced;
@@ -102,6 +105,12 @@ uploaded files, and environment files under snapshot `20260920T125105Z`. SHA-256
 verification passed. Isolated PostgreSQL 16 restore recovered 39 tables and the
 expected record counts; isolated tmpfs restores recovered 14 uploaded files and 5
 environment files. No plaintext artifact was retained.
+
+**Phase 1 release update:** a second encrypted off-host snapshot
+`20260920T152300Z` passed SHA-256 verification and isolated restores before the data
+migrations. It recovered 39 tables, 14 uploaded files, protected runtime
+configuration/TLS files, and the expected count-only database inventory. No
+plaintext artifact remained.
 
 **Residual risk:** this is a verified point-in-time baseline, not an automated
 schedule. Retention, freshness alerting, periodic restore drills, and full-service
@@ -124,7 +133,7 @@ and `resources/js/pages/inbox-tags.js`.
 **Impact:** a stored workspace-controlled value may execute script in another
 authenticated user's browser and act with that user's session.
 
-**Phase 1 candidate:** tag, department, agent, and local attachment-preview markup
+**Phase 1 implementation:** tag, department, agent, and local attachment-preview markup
 is now constructed with DOM element creation plus `textContent`, `dataset`, and
 direct property/style assignment.
 Tag and department colors require an exact six-digit hexadecimal value at every
@@ -133,8 +142,8 @@ values with `#6366f1`. Regression coverage exercises malicious names in settings
 and inbox rendering, unsafe/blank input, legacy database values, and the targeted
 DOM sinks. The full SQLite suite passed with 76 tests and 545 assertions; the five
 focused tests passed on PostgreSQL 16 with 54 assertions; and a fresh Vite 8.0.8
-build completed. Production deployment and browser smoke evidence are still
-required before closing this finding.
+build completed. The exact revision is deployed. Authenticated production browser
+smoke remains required before closing this finding.
 
 **Close when:** untrusted values use safe DOM text/attribute assignment, color/style
 values are allowlisted, server validation is consistent, and regression tests cover
@@ -150,7 +159,7 @@ project policy/gate layer was found for the audited routes.
 users, or mutate workspace data beyond their role. Other route-bound records may be
 susceptible to cross-workspace access if a controller misses a manual check.
 
-**Phase 1 candidate:** a deny-by-default role/capability matrix now backs Laravel
+**Phase 1 implementation:** a deny-by-default role/capability matrix now backs Laravel
 gates for workspace access and owner-only management. All authenticated workspace
 routes require membership with a recognized role. Settings, team, labels, catalog,
 commerce, connection/OAuth, social publish/moderation, and workspace-tag creation
@@ -159,8 +168,8 @@ inbox, settings, catalog, commerce, and social resource groups; a structural tes
 asserts middleware coverage for every protected named route. The full SQLite suite
 passed with 82 tests and 737 assertions, while the six focused tests passed on
 PostgreSQL 16 with 192 assertions. Invitation identity behavior remains part of
-`AUTH-02`; production deployment and role smoke tests remain required before this
-finding closes.
+`AUTH-02`. The exact revision is deployed; approved production role smoke remains
+required before this finding closes.
 
 **Close when:** a documented role/capability matrix exists; Laravel policies/gates
 protect every privileged workspace resource; invitation/member creation does not
@@ -176,7 +185,7 @@ an already verified timestamp in the current settings flow.
 **Impact:** email ownership is not proven, and password-reset/verification messages
 are not delivered to users. Account recovery and identity trust are unreliable.
 
-**Phase 1 candidate:** `User` now implements Laravel's verification contract. New
+**Phase 1 implementation:** `User` now implements Laravel's verification contract. New
 registrations redirect to verification, owner-created members are no longer marked
 verified, registration/member/email-change flows send verification notifications,
 and unverified users cannot enter workspace routes. Verification and password-reset
@@ -185,12 +194,16 @@ tests cover delivery dispatch, expiry, replay, and rate limits. A secret-safe
 The full SQLite suite passed with 93 tests and 781 assertions; the 25 focused tests
 passed on PostgreSQL 16 with 83 assertions.
 
-**Production blocker verified 20 September 2026:** the server still uses
-`MAIL_MAILER=log` and has no SMTP username/password. No matching SMTP credential was
+**Production residual verified 20 September 2026:** the exact Phase 1 implementation
+is deployed, but the server still uses `MAIL_MAILER=log` and has no SMTP
+username/password. No matching SMTP credential was
 found in the Mac mini Keychain. Live DNS has MX, SPF, and DKIM (`x` selector), while
 DMARC is monitoring-only (`p=none`). A real provider credential, secret-safe server
 configuration, end-to-end delivery checks, and an owner-approved DMARC enforcement
 plan are required before closing this finding.
+
+The owner explicitly approved this release with the known temporary non-delivery
+risk. That one-time release decision does not satisfy the close criteria.
 
 **Close when:** product requirements define which identities need verification;
 `User` and registration/invitation flows enforce it; a real production mail provider
@@ -205,7 +218,7 @@ uses a cascading foreign key.
 **Impact:** an owner can unintentionally delete a workspace and related operational
 and customer data through ordinary profile deletion.
 
-**Phase 1 candidate:** profile deletion is blocked while any owned workspace
+**Phase 1 implementation:** profile deletion is blocked while any owned workspace
 remains. The profile UI exposes separate transfer and permanent-delete workflows.
 Both require the current password; transfer accepts only an existing non-self
 member, while deletion additionally requires the exact workspace slug and displays
@@ -218,10 +231,10 @@ workspace or actor deletion so operator evidence remains available.
 The cumulative SQLite suite passed with 99 tests and 822 assertions. Six focused
 ownership, transfer, authorization, multi-workspace, audit, and cascade tests passed
 on PostgreSQL 16 with 41 assertions. A fresh PostgreSQL migration, rollback of the
-new audit table, and forward migration all passed. Production remains unchanged;
-deployment requires a fresh verified backup and explicit approval of the exact
-cumulative Phase 1 revision. The finding remains in progress until that deployment
-and production smoke evidence exist.
+new audit table, and forward migration all passed. The exact cumulative revision was
+deployed after a fresh verified backup, and the audit-table migration applied.
+Destructive smoke was intentionally not run against customer data; the finding
+remains in progress pending an approved synthetic transfer/deletion journey.
 
 **Close when:** an explicit transfer-or-delete workflow exists; destructive impact
 is shown and reconfirmed; sole-owner and multiple-owned-workspace cases are
@@ -236,7 +249,7 @@ encrypted values.
 
 **Impact:** database read access or an exposed backup yields provider credentials.
 
-**Phase 1 candidate:** `OauthToken` now encrypts access and refresh fields at the
+**Phase 1 implementation:** `OauthToken` now encrypts access and refresh fields at the
 model boundary and hides them from serialization. A transactional, idempotent data
 migration encrypts existing plaintext rows and supports an explicit compatibility
 rollback. The secret-safe `oauth-tokens:check-encryption` command reports only row
@@ -256,10 +269,14 @@ no token value was printed. No confirmed credential exposure was found, so provi
 rotation was not performed. Reassess and rotate immediately if exposure evidence
 appears.
 
-**Residual risk:** production remains on the Phase 0 revision, so the row is not yet
-migrated. Closure requires a fresh restore-verified encrypted backup, approval of
-the exact cumulative revision, migration plus count-only verification, provider
-smoke evidence, and confirmation that the existing `APP_KEY` was preserved.
+**Production verification:** after a fresh restore-verified encrypted backup, the
+exact cumulative revision and token migration were deployed with the existing
+`APP_KEY` preserved. Count-only verification reported one row, one checked field,
+and zero unencrypted or unreadable values. No token value was printed.
+
+**Residual risk:** approved provider connectivity smoke was not performed. Closure
+still requires that intended-environment evidence and any rotation required by a
+future exposure assessment.
 
 **Close when:** tokens are encrypted at rest with managed keys; existing rows are
 migrated safely; reads/writes/refresh continue to work; logs and errors cannot leak
@@ -367,6 +384,10 @@ was incomplete.
 **Impact:** the committed lockfile and current source have no reproducible clean-build
 evidence. Production assets may drift from source.
 
+**Phase 1 release update:** clean installs and Vite 8.0.8 builds passed for the
+candidate and on the exact production revision. The finding remains in progress
+because no CI gate retains and deploys an immutable frontend artifact.
+
 **Close when:** a clean, isolated install from `package-lock.json` and `npm run build`
 pass in CI on a supported Node version, with the artifact retained and deployed from
 that exact revision.
@@ -403,7 +424,7 @@ frame-ancestor/frame options, content-type sniff protection, or a referrer polic
 and XSS is weaker. A strict CSP can break inline scripts and must be introduced from
 measured report-only data.
 
-**Phase 1 candidate:** global Laravel middleware adds `nosniff`, same-origin frame
+**Phase 1 implementation:** global Laravel middleware adds `nosniff`, same-origin frame
 control, strict-origin referrer handling, a restrictive browser permissions policy,
 one-day HSTS only on recognized HTTPS requests, and CSP strictly through
 `Content-Security-Policy-Report-Only`. No enforced CSP header is emitted. The
@@ -418,14 +439,16 @@ absence of enforced CSP, both report formats, CSRF independence, sanitization,
 rate-limit declaration, rollback switches, invalid JSON, and oversized bodies. The
 cumulative SQLite suite passed with 114 tests and 911 assertions, and a clean Vite
 8.0.8 build passed.
-A live header recheck on 20 September 2026 still returned none of the tracked
-headers because production remains on the Phase 0 revision.
+The exact Phase 1 revision is now deployed. Public normal and cache-busted responses
+returned all expected application headers, enforced CSP remained absent, and a
+synthetic safe CSP report returned `204`.
 
 **Residual risk:** the report-only policy retains `unsafe-inline` for scripts and
 styles and broad HTTPS media/image plus WebSocket schemes while the existing UI is
 measured. Application middleware cannot protect Nginx-served static/error responses.
-Production deployment, browser journey evidence, telemetry observation, inline-code
-reduction, source narrowing, and separately approved enforcement remain open.
+Authenticated browser journey evidence, telemetry observation, inline-code
+reduction, source narrowing, Nginx static/error coverage, and separately approved
+enforcement remain open.
 
 **Close when:** headers are deployed with compatibility tests; CSP starts in report-
 only mode, observed violations are resolved without unsafe broad allowances, and

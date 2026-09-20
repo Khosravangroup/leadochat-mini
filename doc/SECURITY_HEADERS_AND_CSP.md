@@ -1,15 +1,15 @@
 # Browser security headers and CSP rollout
 
-Status date: 20 September 2026. This document describes the Phase 1 application
-candidate. Production remains on the Phase 0 revision until an exact cumulative
-commit is approved and deployed.
+Status date: 20 September 2026. The Phase 1 application controls described here are
+deployed in production at exact revision
+`b7e948f4325c5fc318f4ab9f7274319d72b3d32a`.
 
 ## Response boundary
 
 `AddBrowserSecurityHeaders` runs as global Laravel middleware and adds these headers
 to application-generated responses:
 
-| Header | Candidate value | Behavior |
+| Header | Application value | Behavior |
 | --- | --- | --- |
 | `X-Content-Type-Options` | `nosniff` | Enforced MIME-sniffing defense |
 | `X-Frame-Options` | `SAMEORIGIN` | Enforced same-origin framing boundary |
@@ -88,6 +88,19 @@ public response. Do not add `includeSubDomains`, preload, or a longer HSTS lifet
 until every affected hostname and rollback constraint is approved.
 
 ## Deployment verification
+
+Production verification on 20 September 2026 confirmed the report-only header,
+`Reporting-Endpoints`, `nosniff`, `SAMEORIGIN`, strict-origin referrer policy, the
+restricted permissions policy, and staged one-day HSTS on normal and cache-busted
+application responses. Enforced `Content-Security-Policy` was absent as designed.
+A synthetic privacy-safe report to `/csp-reports` returned `204`. Public health,
+home, login, anonymous-dashboard redirect, invalid-webhook, queue, Reverb, and error-
+log checks passed for the release.
+
+This is deployment proof, not CSP-enforcement approval. Authenticated dashboard,
+inbox, settings, social, attachment/provider, and Reverb browser journeys still
+need an approved synthetic account and telemetry observation. Nginx static and
+generated-error responses remain outside the Laravel middleware boundary.
 
 Verify the exact release revision first, then inspect headers without printing
 cookies or response bodies:

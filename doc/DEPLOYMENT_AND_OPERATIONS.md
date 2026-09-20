@@ -8,8 +8,8 @@ Snapshot date: 20 September 2026.
 - Application directory: `/opt/leadochat`
 - Runtime: Docker Compose with `app`, `nginx`, `postgres`, `queue`, and `reverb`
 - Verified branch: `develop`
-- Verified revision: `e8878e667e37115b07f86b9ddc634b5fabd72a24`
-- Container state: all five running with zero restarts at the snapshot time
+- Verified revision: `b7e948f4325c5fc318f4ab9f7274319d72b3d32a`
+- Container state: all five running; PostgreSQL healthy at the snapshot time
 - Laravel state: production, debug off, configuration/routes/views cached
 - Database: PostgreSQL 16
 - Queue and sessions: database-backed
@@ -20,6 +20,47 @@ Snapshot date: 20 September 2026.
 Access credentials and SSH keys are intentionally not documented in the repository.
 They remain in protected local credential storage on the Mac mini. Reverify host,
 user, repository, branch, and revision before every operation.
+
+## Phase 1 production release
+
+The repository owner approved the exact cumulative Phase 1 revision
+`b7e948f4325c5fc318f4ab9f7274319d72b3d32a` on 20 September 2026. It was deployed
+from `develop` over the previous known-good revision
+`e8878e667e37115b07f86b9ddc634b5fabd72a24`. The release preserved the active
+`APP_KEY`, `.env`, and TLS files, and left the production checkout with only the two
+documented runtime-managed paths untracked.
+
+Pre-deploy recovery evidence used the encrypted off-host snapshot
+`20260920T152300Z`. Every encrypted artifact passed SHA-256 verification. PostgreSQL
+16, uploaded files, and runtime configuration were restored in isolated temporary
+containers with no published ports, and no plaintext backup artifact remained.
+
+Release execution and verification evidence:
+
+- a clean production `npm ci --no-audit --no-fund` installed 174 packages and the
+  Vite 8.0.8 production build passed;
+- application, queue, and Reverb images built successfully, and Composer install
+  completed;
+- `workspace_audit_events` creation and OAuth-token encryption migrations applied;
+- token verification reported one row, one checked field, and zero unencrypted or
+  unreadable values without printing credentials;
+- the private-attachment migration found zero eligible records and reported zero
+  failures;
+- all five containers ran after release, PostgreSQL was healthy, Reverb accepted a
+  local connection, queue depth remained zero, and the two historical failed jobs
+  did not increase;
+- repeated `/up` probes, the home page, and `/login` returned `200`; anonymous
+  `/dashboard` redirected; an invalid webhook verification request returned `403`;
+- a synthetic safe CSP report returned `204`; all Phase 1 application security
+  headers were present, while enforced CSP remained absent as designed;
+- no new `ERROR`, `CRITICAL`, `ALERT`, or `EMERGENCY` application entry appeared in
+  the release observation window.
+
+Rollback was not triggered because the defined health gates passed. This evidence
+does not close the production mail or authenticated browser/provider smoke gaps.
+The owner explicitly accepted the known one-time release risk that production still
+uses `MAIL_MAILER=log`; `AUTH-02` remains open until real delivery is configured and
+proven.
 
 ## Current deployment flow
 
@@ -80,10 +121,12 @@ checks; their presence on the allowlist is not proof that their contents are val
   gate.
 - Back up PostgreSQL and verify the artifact before migrations.
 - Review migration forward/rollback behavior on PostgreSQL 16.
-- For the `DATA-01` candidate, create and restore-verify a fresh encrypted database
+- For any future `DATA-01`-related change, create and restore-verify a fresh encrypted
+  database
   and upload backup before migrating; do not exercise workspace deletion until the
   exact release revision and destructive test target are explicitly approved.
-- For the `DATA-02` candidate, confirm the current `APP_KEY` is configured and will
+- For any future `DATA-02`-related change, confirm the current `APP_KEY` is configured
+  and will
   be preserved, inventory only token row/null counts, and create a fresh
   restore-verified encrypted database backup. Never print token columns.
 - Confirm `.env` permissions and required configuration without printing values.
@@ -147,10 +190,11 @@ data recovery path. Never blindly roll back an irreversible migration.
 
 ## Backup and recovery
 
-The Phase 0 point-in-time snapshot `20260920T125105Z` is stored encrypted off-host
-on the protected Mac mini. It contains PostgreSQL, `storage/app`, and environment
-files. Its encryption passphrase remains in macOS Keychain and was never printed,
-passed as a command-line argument, or stored beside the artifacts.
+The Phase 0 point-in-time snapshot `20260920T125105Z` and the Phase 1 pre-deploy
+snapshot `20260920T152300Z` are stored encrypted off-host on the protected Mac mini.
+They contain PostgreSQL, `storage/app`, and protected runtime configuration. Their
+encryption passphrase remains in macOS Keychain and was never printed, passed as a
+command-line argument, or stored beside the artifacts.
 
 Verified evidence:
 
@@ -162,6 +206,13 @@ Verified evidence:
 - temporary restore containers were removed and no plaintext backup was retained;
 - isolated data restore completed in under five seconds, but full-service RTO has
   not been tested.
+
+The Phase 1 snapshot independently restored 39 tables, 4 users, 3 workspaces, 31
+messages, 9 attachments, and 1 OAuth-token row into PostgreSQL 16. It also restored
+14 uploaded files totaling 7144 KiB and the protected runtime configuration/TLS
+set. All temporary restore containers were removed, artifact permissions were
+`600`, and zero plaintext backup files remained. This second point-in-time proof is
+still not an automated backup schedule or a full-service RTO test.
 
 This snapshot is not a backup schedule. Before any production data migration:
 
@@ -190,11 +241,18 @@ controls, and environment copies readable as mode `644`.
 
 Phase 0 added and loaded the Nginx PHP-family deny beneath `/storage/`, changed the
 active environment file to mode `600`, and removed four plaintext environment
-backups after encrypted restore-verified capture. The Phase 1 candidate adds
+backups after encrypted restore-verified capture. Phase 1 deployed
 application-generated browser headers and privacy-bounded report-only CSP
-telemetry. Production and Nginx static/error responses remain unchanged. The
+telemetry. The public application response and synthetic CSP receiver smoke passed;
+authenticated browser telemetry and Nginx static/error responses remain open. The
 remaining SSH, firewall, public Reverb, origin-level header, automated
 permission-check, and backup-scheduling items stay open.
+
+The Phase 1 release also exposed an operational weakness in the current script:
+image builds install and compile a large dependency set, and recursive permission
+changes can alter tracked `.gitignore` modes. The observed mode-only drift was
+corrected and content was unchanged. Phase 4 must replace broad recursive changes
+with targeted runtime-directory permissions and a reproducible artifact flow.
 
 Remediation must preserve verified access and Cloudflare/origin traffic. Apply and
 test controls incrementally with a second session available; never lock out the only
