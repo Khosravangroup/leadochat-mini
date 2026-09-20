@@ -45,6 +45,9 @@ jobs:
           coverage: none
           tools: composer:v2
 
+      - name: Prepare isolated test environment
+        run: install -m 600 .env.example .env
+
       - name: Validate Composer metadata
         run: composer validate --strict --no-check-publish
 
@@ -132,6 +135,9 @@ jobs:
           extensions: bcmath, gd, intl, mbstring, pcntl, pdo_pgsql
           coverage: none
           tools: composer:v2
+
+      - name: Prepare isolated test environment
+        run: install -m 600 .env.example .env
 
       - name: Install PHP dependencies
         run: composer install --no-interaction --prefer-dist --no-progress
