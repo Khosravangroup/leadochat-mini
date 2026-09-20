@@ -1,6 +1,6 @@
 # Documentation index
 
-Last reviewed: 20 September 2026.
+Last reviewed: 21 September 2026.
 
 ## Current sources of truth
 
