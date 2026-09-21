@@ -234,6 +234,42 @@ Target RPO is 24 hours and target RTO is 4 hours until the owner defines stricte
 requirements. Phase 3 must automate encrypted capture, retention, freshness alerts,
 and quarterly isolated restores.
 
+## Phase 3 read-only host baseline
+
+Verified on 21 September 2026 against the `leadochatmini` production host and
+running revision `b7e948f4325c5fc318f4ab9f7274319d72b3d32a`. No host setting,
+container configuration, production file, or application data was deliberately
+changed during this inventory; HTTP probes may create ordinary access/session logs.
+
+- Five expected containers were running; PostgreSQL was healthy. Host TCP listeners
+  included `22`, `80`, `443`, and publicly bound `8081`. An external TCP connection
+  to `8081` succeeded.
+- The public Cloudflare/Nginx `/app` WebSocket handshake returned HTTP `101` using
+  the application's public Reverb key. This proves the supported ingress path can
+  upgrade; it does not prove authenticated channel authorization or reconnect UX.
+- `ufw status` was **inactive**, despite the `ufw` systemd unit reporting active.
+  `fail2ban` was inactive. Effective SSH settings still allowed password
+  authentication and root key login, with six authentication attempts. Only the
+  root account had an interactive shell; no non-root administrative path was
+  verified. Unattended upgrades were active/enabled and APT timers were present.
+- The active environment file remained `600` and root-owned; no plaintext
+  `.env.bak*` copy was found under the project checkout.
+- Root had no crontab entry; inspected system cron locations and systemd units
+  had no project backup job; and no project backup artifact was found on the host.
+  The two encrypted off-host snapshots remain point-in-time evidence, not an RPO
+  guarantee.
+- The database contained two historical failed jobs, earliest 20 April 2026, and
+  zero pending jobs. Only counts and timestamps were queried; payloads were not
+  read or retried.
+- Public application and health responses had `nosniff`, same-origin framing,
+  one-day HSTS, and report-only CSP. A direct static `/robots.txt` response had
+  none of those application headers; Nginx-generated error responses still need
+  separate verification.
+
+The Mac mini's `leadochat-dev-codex` connection reaches a different, shared
+LeadoChat host. Its firewall and service state must never be substituted for this
+production host's state.
+
 ## Host hardening backlog
 
 The initial audit found inactive UFW and fail2ban services, SSH password
@@ -259,6 +295,47 @@ with targeted runtime-directory permissions and a reproducible artifact flow.
 Remediation must preserve verified access and Cloudflare/origin traffic. Apply and
 test controls incrementally with a second session available; never lock out the only
 administrative path. Close public `8081` after proving Nginx/WebSocket proxy behavior.
+
+### Reverb private-network rollout
+
+The Phase 3 repository candidate removes only the production `8081:8081` host
+publication; `reverb` remains on the existing Compose network and Nginx continues
+to proxy `/app` to `reverb:8081`. Local development port `8081` is unchanged.
+
+Before an approved production rollout, review the exact Compose diff and running
+revision, establish a second live administrative session, and confirm the public
+WebSocket upgrade plus an approved synthetic authorized-channel/reconnect journey.
+Schedule a short connection-interruption window because recreating `reverb` drops
+active sockets. Do not use the current broad `deploy.sh` merely to apply this
+single Compose change: it resets the checkout, rebuilds images, and runs migrations.
+Use a separately reviewed, exact-revision Compose-only procedure that preserves
+runtime `.env` and TLS files and does not restart unrelated services.
+
+Immediately after the change, verify that `reverb` is running, `/app` still returns
+an upgrade, the synthetic channel authorization/reconnect journey passes, and
+neither IPv4 nor IPv6 exposes host port `8081`. Observe Reverb errors and queue
+state. If the supported path fails, restore the previously approved Compose file
+and recreate only `reverb`; confirm the prior host mapping and WebSocket behavior.
+This rollback temporarily restores the known public-port risk and requires an
+incident decision, not silent acceptance. The finding closes only after the
+private-port state and channel authorization are verified in production.
+
+### Remaining host-change gates
+
+1. Prove a non-root administrative account with its own key, sudo scope, and a
+   successful second SSH session before changing root or password SSH access.
+2. Inventory actual origin/Cloudflare and management traffic, apply firewall rules
+   incrementally, and keep an independent recovery path. Verify both IPv4 and IPv6
+   after each change; do not infer firewall state from `systemctl is-active ufw`.
+3. Define an encrypted off-host backup destination, key custody/recovery owner,
+   retention, daily schedule within the 24-hour RPO, freshness alert recipient,
+   and isolated quarterly restore operator before enabling unattended backup jobs.
+   Prove a complete service restore within the four-hour RTO before closing
+   `OPS-01`.
+4. Name the on-call recipient and test alert delivery before enabling production
+   health, database, queue, webhook, Reverb, disk, TLS, and backup-freshness alerts.
+5. Classify the two failed jobs using redacted metadata, decide whether retry is
+   safe, and record a disposition before deleting or replaying either payload.
 
 ## Routine operations
 
