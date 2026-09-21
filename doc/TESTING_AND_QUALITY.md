@@ -128,10 +128,19 @@ periodic restore checks remain unverified.
 The Phase 3 read-only freshness checker passed Bash syntax validation and seven
 synthetic scenarios on macOS: missing snapshot, healthy snapshot, corrupted
 checksum, unexpected checksum inventory, unsafe file mode, missing completion
-marker, and stale snapshot. A
-separate check against the real encrypted snapshot `20260921T080639Z` passed
+marker, and stale snapshot. A separate check against the real encrypted
+snapshot `20260921T080639Z` passed
 without reading plaintext. These checks do not validate any notification
 transport or background scheduler, which remain disabled.
+
+For the Phase 3 production-Nginx response-header candidate, an isolated
+`nginx:1.27-alpine` instance with a disposable TLS certificate and synthetic
+upstream passed `nginx -t` and five HTTP scenarios: static `200`, generated
+`502`, storage-execution-deny `404`, exactly one copy of each baseline header
+through a proxied response, and an HTTP redirect without HSTS. The test first
+failed against the unmodified configuration because the static response had no
+`X-Content-Type-Options` header. The test runs in the required security CI job.
+No production reload or authenticated browser journey was performed.
 
 ## Local verification
 

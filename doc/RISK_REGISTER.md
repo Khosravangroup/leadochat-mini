@@ -600,6 +600,16 @@ returned `200` without the application security headers, confirming the Nginx
 static-response gap. The application and `/up` responses retained the staged
 headers and report-only CSP. No policy was promoted to enforcement.
 
+**Phase 3 repository candidate:** production Nginx configuration now has
+upstream-aware fallback headers for directly served static files and generated
+errors: `nosniff`, same-origin framing, strict-origin referrer, restricted
+permissions, and one-day HTTPS HSTS. An isolated Nginx 1.27 test passed static
+`200`, Nginx-generated `404`/`502`, non-duplicated proxied headers, and absence
+of HSTS on the HTTP redirect. No enforced CSP or edge report-only CSP was added.
+The candidate is not production remediation until exact-revision rollout and
+public static/error/application smoke pass; authenticated browser telemetry,
+source narrowing, and separate CSP enforcement remain open.
+
 **Close when:** headers are deployed with compatibility tests; CSP starts in report-
 only mode, observed violations are resolved without unsafe broad allowances, and
 the enforced policy covers scripts, frames, connections, and mixed content.
