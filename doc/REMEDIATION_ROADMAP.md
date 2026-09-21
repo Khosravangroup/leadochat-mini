@@ -143,8 +143,9 @@ of `TEST-01`, and governance part of `REL-01`.
 3. Update npm direct and transitive dependencies from a clean lockfile install;
    preserve Vite/Tailwind behavior and browser smoke coverage.
 4. Enable Dependabot/dependency alerts, GitHub secret scanning, and code scanning.
-5. Protect `develop` and `main`; require review and checks, restrict force-push and
-   deletion, and apply least-privilege workflow permissions.
+5. Protect `develop` and `main`; define an attainable approval policy, require
+   checks, restrict force-push and deletion, and apply least-privilege workflow
+   permissions.
 6. Inventory the unique commits on `main` and `develop` and approve a non-destructive
    reconciliation plan.
 
@@ -193,6 +194,13 @@ still lack deeper concurrency/JSONB breadth, and immutable production deployment
 with runtime files outside the checkout remains Phase 4 work. Production was not
 changed during Phase 2.
 
+**Owner governance update, 21 September 2026:** because the only GitHub
+collaborator is the owner and no human reviewer is required, both protected
+branches now require zero approvals. Pull requests, all six checks, strict
+up-to-date status, conversation resolution, and force-push/deletion bans remain.
+The owner/admin exemption remains but was not needed for the check-green merge of
+Phase 3 pull request `#37` into `develop`. No production deployment followed.
+
 **Acceptance gate:** required checks are green on the exact head; a clean frontend
 artifact is reproducible; no unaccepted critical/high dependency advisory remains;
 branch protection is effective; secret/code scanning reports are triaged.
@@ -227,10 +235,11 @@ Phase 1 revision, public `8081`, inactive UFW/fail2ban, password-enabled SSH,
 active unattended upgrades, two historical failed jobs, and no scheduled project
 backup. The public Nginx/Cloudflare WebSocket upgrade returned `101`. A focused
 repository candidate removes the production Reverb host-port publication without
-changing the internal Compose network or local development mapping. No production
-host setting, container configuration, or application data was deliberately changed.
-Administrative account, firewall,
-backup cadence/retention, alert delivery, failed-job disposition, static/error
+changing the internal Compose network or local development mapping. Pull request
+`#37` was merged into `develop` as `7903517422d6b7b6ab63ee1bf92de6bdaf41afb8`.
+No production host setting, container configuration, or application data was
+deliberately changed. Administrative account, firewall, backup cadence/retention,
+alert delivery, failed-job disposition, static/error
 headers, and authenticated WebSocket smoke remain acceptance blockers.
 
 ## Phase 4 — Safe deployment and PostgreSQL release proof

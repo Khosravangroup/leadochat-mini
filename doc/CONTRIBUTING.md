@@ -22,9 +22,11 @@
 - Promote releases from `develop` to `main` by pull request. Never reconcile the
   branches with reset, rebase, squash, or force-push; merge promotion preserves the
   audited history.
-- Both branches require current CI/code-scanning checks and review. The sole
-  administrator exemption prevents repository deadlock and is not permission to
-  bypass evidence or review casually.
+- Both branches require pull requests, current CI/code-scanning checks, and
+  resolved conversations. The owner confirmed there is no separate human GitHub
+  reviewer and none is required, so the approval count is zero. The sole
+  administrator exemption is not permission to bypass the evidence gates; disclose
+  any actual bypass in the pull request record.
 
 ## Scope and design
 

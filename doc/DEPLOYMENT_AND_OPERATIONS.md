@@ -84,11 +84,13 @@ Composer dependencies because `--no-dev` is absent.
 
 ## Branch promotion and remaining deployment risk
 
-Feature/fix branches start from `develop`; reviewed release promotion goes from
+Feature/fix branches start from `develop`; pull-request release promotion goes from
 `develop` to `main`. Pull request `#29` reconciled the earlier histories with a merge
 commit, without reset, rebase, squash, or force-push. At that promotion point the
 branch trees were identical and every `develop` commit was contained by `main`.
-Both branches are protected by review and required checks.
+Both branches require a pull request, six current checks, and resolved conversations.
+No human GitHub approval is required by the owner; this does not waive the separate
+exact-revision production-release decision below.
 
 Production still runs the older verified Phase 1 revision from `develop`, while
 `deploy.sh` defaults to `main`. Phase 2 did not deploy. Until Phase 4 makes deployment
@@ -298,9 +300,11 @@ administrative path. Close public `8081` after proving Nginx/WebSocket proxy beh
 
 ### Reverb private-network rollout
 
-The Phase 3 repository candidate removes only the production `8081:8081` host
-publication; `reverb` remains on the existing Compose network and Nginx continues
-to proxy `/app` to `reverb:8081`. Local development port `8081` is unchanged.
+Phase 3 pull request `#37` was merged into `develop` as
+`7903517422d6b7b6ab63ee1bf92de6bdaf41afb8`. It removes only the production
+`8081:8081` host publication; `reverb` remains on the existing Compose network and
+Nginx continues to proxy `/app` to `reverb:8081`. Local development port `8081`
+is unchanged. The production host still runs the earlier Phase 1 revision.
 
 Before an approved production rollout, review the exact Compose diff and running
 revision, establish a second live administrative session, and confirm the public
