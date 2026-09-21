@@ -247,8 +247,12 @@ capture script. On 21 September 2026 it produced encrypted snapshot
 `20260921T080639Z`; encrypted-artifact checksums, PostgreSQL 16 isolated restore,
 and tmpfs storage/runtime restores passed. This improves repeatability but does
 not close `OPS-01`: no unattended schedule, retention policy, freshness/failed-run
-alert, named recovery/key owner, or full-service RTO proof exists. These decisions
-must precede automatic scheduling and any deletion of older snapshots.
+alert, or full-service RTO proof exists. The owner named the connected GitHub
+account `Khosravangroup` as recovery/key owner and alert recipient; a read-only
+freshness/checksum checker passed seven synthetic scenarios and the current
+snapshot. Alert delivery through an approved channel and non-interactive Keychain
+access must be proven before scheduling. A retention decision must precede any
+automatic deletion of older snapshots.
 
 ## Phase 4 — Safe deployment and PostgreSQL release proof
 

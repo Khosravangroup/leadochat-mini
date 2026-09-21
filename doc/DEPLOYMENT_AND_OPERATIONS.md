@@ -280,6 +280,43 @@ the failure path is tested. Do not delete older snapshots as an implicit
 retention policy. Until then, this snapshot is fresh point-in-time evidence
 only; the 24-hour RPO is not guaranteed.
 
+### Phase 3 freshness check and alert ownership
+
+The owner identified the same connected GitHub account, `Khosravangroup`, as
+the key/recovery owner and alert recipient on 21 September 2026. This names a
+responsible person; it does not establish an alert transport or prove that a
+notification reaches them. The account exposes no public email, and the current
+GitHub authorization does not permit reading its private email. Do not infer
+or store an address. The retention duration remains undecided, so no snapshot
+is deleted automatically.
+
+`scripts/ops/check-backup-freshness.sh` is a read-only monitoring primitive for
+the Mac mini. It requires `LEADOCHAT_BACKUP_ROOT` to name the protected off-host
+directory and optionally accepts `LEADOCHAT_BACKUP_MAX_AGE_SECONDS` (default
+`86400`, matching the target 24-hour RPO). It checks the newest timestamped
+snapshot directory, its completion marker, expected artifact inventory,
+permissions, manifest identity, and all four SHA-256 checksums. It exits
+nonzero for a missing, stale, incomplete, corrupt, or unsafe snapshot and does
+not reveal backup contents. A checksum detects accidental damage but is not an
+authenticated-encryption guarantee against an attacker able to rewrite both
+artifacts and checksums.
+
+Run it from a protected operator session after setting the backup root:
+
+```bash
+bash scripts/ops/check-backup-freshness.sh
+```
+
+The Mac mini check passed against `20260921T080639Z`. Seven synthetic fixture
+scenarios passed: no snapshot, healthy snapshot, checksum corruption, unexpected
+checksum inventory, unsafe artifact permissions, missing completion marker, and
+stale snapshot. The
+checker is not a scheduled alert, and it cannot guarantee a new capture if the
+Mac mini is powered off or asleep. Before scheduling, prove background Keychain
+access, a tested notification transport to the named owner, backup-failure and
+freshness alert delivery, and an explicit retention decision. Keep old versions
+until that decision; do not silently infer a deletion period from the RPO.
+
 This snapshot is not a backup schedule. Before any production data migration:
 
 - create an encrypted PostgreSQL backup outside the application host;

@@ -125,6 +125,14 @@ temporary restore container was removed. This is not a full-service RTO test or
 proof of a recurring 24-hour RPO; scheduling, alert delivery, retention, and
 periodic restore checks remain unverified.
 
+The Phase 3 read-only freshness checker passed Bash syntax validation and seven
+synthetic scenarios on macOS: missing snapshot, healthy snapshot, corrupted
+checksum, unexpected checksum inventory, unsafe file mode, missing completion
+marker, and stale snapshot. A
+separate check against the real encrypted snapshot `20260921T080639Z` passed
+without reading plaintext. These checks do not validate any notification
+transport or background scheduler, which remain disabled.
+
 ## Local verification
 
 Start with the smallest affected check:

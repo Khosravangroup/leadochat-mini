@@ -122,9 +122,18 @@ backup or restore file was retained. The temporary restore container was removed
 See `doc/DEPLOYMENT_AND_OPERATIONS.md` for the operator workflow and limits.
 
 **Residual risk:** these are verified point-in-time snapshots, not an automated
-schedule or a proven 24-hour RPO. A named key/recovery owner, retention policy,
-daily cadence, failure/freshness alert recipient and delivery test, periodic
-restore drills, and full-service four-hour RTO evidence remain open in Phase 3.
+schedule or a proven 24-hour RPO. Retention policy, daily cadence, alert
+transport/delivery tests, periodic restore drills, and full-service four-hour
+RTO evidence remain open in Phase 3.
+
+**Ownership/freshness update, 21 September 2026:** the owner identified the
+connected GitHub account `Khosravangroup` as both key/recovery owner and alert
+recipient. A read-only Mac mini checker now rejects absent, stale, incomplete,
+corrupt, or unsafe snapshots; seven synthetic scenarios and the current real
+snapshot passed. No alert transport or unattended schedule is enabled. The
+account has no public email and the current authorization cannot read a private
+one; delivery remains unproven. Retention duration and automatic deletion remain
+unconfigured. Named ownership does not prove monitoring, cadence, or RPO/RTO.
 
 **Impact:** security/data migrations, operator error, disk loss, or compromise can
 cause unrecoverable application data loss.
