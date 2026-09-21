@@ -261,6 +261,13 @@ the owner. A retention decision must precede any automatic deletion of older
 snapshots. The public deployment and current 24-hour RPO/four-hour RTO target
 remain separately documented; the opt-out does not close the finding.
 
+The `OPS-05` origin-header package now has a repository-only Nginx candidate
+for static and generated-error responses. A focused isolated Nginx 1.27 test
+passed static, `404`, `502`, proxied non-duplication, and HTTP-redirect cases;
+the same test is included in required CI. No production reload occurred, and
+report-only CSP was not promoted. Exact-revision rollout and browser/static/
+error/WebSocket smoke remain required before the origin-header gap can close.
+
 ## Phase 4 — Safe deployment and PostgreSQL release proof
 
 **Goal:** make releases deterministic, observable, and recoverable.

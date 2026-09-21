@@ -392,6 +392,23 @@ authenticated browser telemetry and Nginx static/error responses remain open. Th
 remaining SSH, firewall, public Reverb, origin-level header, automated
 permission-check, and backup-scheduling items stay open.
 
+The Phase 3 Nginx response-header candidate adds five fallback headers to the
+production HTTPS server block for static and generated-error responses without
+duplicating headers already emitted by Laravel or the Reverb upstream. The
+isolated Nginx 1.27 test passed static `200`, generated `404`/`502`, proxied
+responses, and an HTTP redirect with no HSTS. The required security CI job runs
+this fixture. This is not deployed production evidence. No enforced CSP is added.
+Before an approved rollout, validate the exact configuration diff, the existing
+certificate/runtime paths, and `nginx -t` with the target image; do not use the
+current broad `deploy.sh` merely for this configuration change. Reload only
+Nginx after an exact-revision deployment procedure is approved. Immediately
+check the public application, `/robots.txt`, an intended safe `404`, and the
+WebSocket upgrade for correct response headers and no duplicates. Retain the
+prior configuration as rollback; validate it with `nginx -t` before reloading.
+The Laravel `SECURITY_HEADERS_ENABLED` switch does not disable Nginx fallbacks;
+an emergency rollback of all five headers requires restoring the prior Nginx
+configuration as well. The browser may retain already received one-day HSTS.
+
 The Phase 1 release also exposed an operational weakness in the current script:
 image builds install and compile a large dependency set, and recursive permission
 changes can alter tracked `.gitignore` modes. The observed mode-only drift was

@@ -23,6 +23,35 @@ This middleware does not cover a response served directly by Nginx, including a
 static file or an Nginx-generated error. Phase 3 must add matching, tested edge/origin
 headers after the application policy has produced usable compatibility evidence.
 
+## Phase 3 Nginx response-header candidate
+
+Candidate date: 21 September 2026.
+
+The repository candidate in `docker/nginx/default.prod.conf` adds the same
+`nosniff`, `SAMEORIGIN`, referrer, permissions, and one-day HSTS baseline at the
+HTTPS Nginx response boundary. It uses upstream-header-aware maps so an
+application or proxied response that already supplies a header does not receive
+a duplicate. Nginx supplies the fallback to static files and generated errors,
+including `404` and `502`; `always` covers non-success status codes. The plain
+HTTP redirect does not send HSTS. This behavior follows the [Nginx `add_header`
+inheritance and `always` rules](https://nginx.org/en/docs/http/ngx_http_headers_module.html).
+
+An isolated Nginx 1.27 test with a disposable certificate and synthetic upstream
+passed `nginx -t` and five probes: static `200`, FastCGI-generated `502`, upload
+execution-deny `404`, non-duplicated proxied headers, and HTTP redirect without
+HSTS. The test is included in the required security CI job. This is repository
+evidence only; this task does not deploy the candidate to production.
+
+No enforced CSP or edge-level report-only CSP is introduced. The existing
+Laravel report-only policy and receiver remain the source of truth for
+application documents, and authenticated browser telemetry is still required
+before enforcement. The edge fallback is independent of
+`SECURITY_HEADERS_ENABLED`; switching that application flag off will not remove
+the five Nginx headers. An emergency rollback of the entire header layer must
+restore the previously approved Nginx configuration, pass `nginx -t`, reload only
+Nginx, and then verify public static, error, and application responses. Previously
+cached one-day HSTS cannot be undone immediately.
+
 ## Initial report-only policy
 
 The initial policy protects or measures `default-src`, `base-uri`, `object-src`,
