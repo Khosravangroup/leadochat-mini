@@ -9,12 +9,14 @@ the running revision.
 
 ## Repository controls
 
-Both long-lived branches require review, current CI checks, dependency audits,
-full-history secret scanning, and focused code scanning. GitHub secret scanning and
-push protection plus Dependabot alerts/security updates are enabled. The sole
-repository administrator is exempt from branch protection to avoid deadlock in this
-single-collaborator personal repository; using that exemption still requires the
-same evidence and must be disclosed in the pull request record.
+Both long-lived branches require pull requests, current CI checks, dependency
+audits, full-history secret scanning, and focused code scanning. GitHub secret
+scanning and push protection plus Dependabot alerts/security updates are enabled.
+The owner confirmed on 21 September 2026 that this single-collaborator repository
+has no separate human reviewer and does not require one, so the required approval
+count is zero. The sole administrator remains exempt from branch protection, but
+must verify the same checks and disclose any actual bypass in the pull request
+record. This code-review decision does not waive production-release approval.
 
 ## Reporting a vulnerability
 

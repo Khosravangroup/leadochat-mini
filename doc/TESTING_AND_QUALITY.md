@@ -114,6 +114,34 @@ same head passed 114 tests with 911 assertions on both SQLite and PostgreSQL 16 
 passed the secret/SAST job. This is merge-candidate evidence; required enforcement
 still depends on the final governance change.
 
+For the Phase 3 off-host backup workflow on 21 September 2026, Bash syntax and
+the invalid-destination rejection passed. A live preflight verified the pinned
+production host and source availability. Snapshot `20260921T080639Z` passed all
+four SHA-256 checks and the script's encrypted-stream readability checks. A
+separate, network-isolated PostgreSQL 16 restore passed with 40 public tables,
+4 users, 3 workspaces, and 31 messages; tmpfs archive restores passed with
+14 storage files, 2 certificate files, and a mode-`600` environment file. The
+temporary restore container was removed. This is not a full-service RTO test or
+proof of a recurring 24-hour RPO; scheduling, alert delivery, retention, and
+periodic restore checks remain unverified.
+
+The Phase 3 read-only freshness checker passed Bash syntax validation and seven
+synthetic scenarios on macOS: missing snapshot, healthy snapshot, corrupted
+checksum, unexpected checksum inventory, unsafe file mode, missing completion
+marker, and stale snapshot. A separate check against the real encrypted
+snapshot `20260921T080639Z` passed
+without reading plaintext. These checks do not validate any notification
+transport or background scheduler, which remain disabled.
+
+For the Phase 3 production-Nginx response-header candidate, an isolated
+`nginx:1.27-alpine` instance with a disposable TLS certificate and synthetic
+upstream passed `nginx -t` and five HTTP scenarios: static `200`, generated
+`502`, storage-execution-deny `404`, exactly one copy of each baseline header
+through a proxied response, and an HTTP redirect without HSTS. The test first
+failed against the unmodified configuration because the static response had no
+`X-Content-Type-Options` header. The test runs in the required security CI job.
+No production reload or authenticated browser journey was performed.
+
 ## Local verification
 
 Start with the smallest affected check:
@@ -212,6 +240,10 @@ A production release is `NO-GO` unless all applicable evidence is present:
 - a rollback procedure has been rehearsed for the release class;
 - the under-five-minute smoke suite passes before and immediately after deploy;
 - queue, Reverb, database, error logs, and container health remain normal.
+
+The owner's experimental-project alert opt-out does not itself waive these
+release gates for the publicly deployed instance. Do not report unattended
+monitoring or a guaranteed backup RPO when neither is operating.
 
 ## Production smoke suite
 

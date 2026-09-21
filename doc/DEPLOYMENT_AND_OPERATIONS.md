@@ -84,11 +84,13 @@ Composer dependencies because `--no-dev` is absent.
 
 ## Branch promotion and remaining deployment risk
 
-Feature/fix branches start from `develop`; reviewed release promotion goes from
+Feature/fix branches start from `develop`; pull-request release promotion goes from
 `develop` to `main`. Pull request `#29` reconciled the earlier histories with a merge
 commit, without reset, rebase, squash, or force-push. At that promotion point the
 branch trees were identical and every `develop` commit was contained by `main`.
-Both branches are protected by review and required checks.
+Both branches require a pull request, six current checks, and resolved conversations.
+No human GitHub approval is required by the owner; this does not waive the separate
+exact-revision production-release decision below.
 
 Production still runs the older verified Phase 1 revision from `develop`, while
 `deploy.sh` defaults to `main`. Phase 2 did not deploy. Until Phase 4 makes deployment
@@ -216,6 +218,108 @@ set. All temporary restore containers were removed, artifact permissions were
 `600`, and zero plaintext backup files remained. This second point-in-time proof is
 still not an automated backup schedule or a full-service RTO test.
 
+### Phase 3 repeatable off-host capture
+
+On 21 September 2026, `scripts/ops/backup-offhost.sh` added a guarded macOS
+operator workflow for repeatable encrypted capture. `check` verifies the pinned
+SSH host identity, project revision, protected environment-file mode, required
+sources, PostgreSQL availability, and the existence of the Keychain item.
+`capture` streams PostgreSQL custom-format data, `storage/app`, and protected
+runtime configuration/TLS files into encrypted files under an existing,
+operator-owned mode-`700` off-host directory. It uses the existing macOS Keychain
+passphrase without placing it in a command argument, shell history, or repository
+file. The three encrypted artifacts are read back for format verification, then
+checksummed and atomically marked complete. A failed run can leave an
+`.incomplete.*` directory containing only partial encrypted artifacts; investigate
+it before any cleanup. Never treat an incomplete directory as a recoverable
+snapshot.
+
+Required environment variables are `LEADOCHAT_BACKUP_ROOT`,
+`LEADOCHAT_BACKUP_SSH_TARGET`, `LEADOCHAT_BACKUP_SSH_KEY`,
+`LEADOCHAT_BACKUP_EXPECTED_HOST`, and `LEADOCHAT_BACKUP_REMOTE_ROOT`. Optional
+variables are `LEADOCHAT_BACKUP_SSH_PORT`, `LEADOCHAT_BACKUP_KEYCHAIN_SERVICE`,
+and `LEADOCHAT_BACKUP_KEYCHAIN_ACCOUNT`. Supply their values through the
+operator's protected local environment; do not add values or credential material
+to the repository, a script, a ticket, or a log. The SSH identity must be an
+absolute, non-symlink mode-`600` file, and the off-host destination must be an
+absolute, non-symlink mode-`700` directory owned by the operator. Pinned host
+keys and non-interactive SSH authentication are required. The script runs on
+macOS and requires `ssh`, `security`, `openssl`, `shasum`, `tar`, and a compatible
+`pg_restore` on the Mac mini, plus `docker`, `pg_dump`, and `tar` on the source
+host. It does not install dependencies or schedule itself.
+
+Run preflight and capture separately from the repository checkout, after
+setting the required variables in a protected operator session:
+
+```bash
+bash scripts/ops/backup-offhost.sh check
+```
+
+```bash
+bash scripts/ops/backup-offhost.sh capture
+```
+
+The first capture through this workflow produced snapshot `20260921T080639Z`
+from production revision `b7e948f4325c5fc318f4ab9f7274319d72b3d32a`.
+SHA-256 validation passed for all three encrypted artifacts and the manifest;
+the snapshot directory was mode `700` and its files mode `600`. Its database
+restored into an isolated PostgreSQL 16 container with no network or published
+port: 40 public tables, 4 users, 3 workspaces, and 31 messages. Storage and
+runtime archives restored into tmpfs: 14 storage files, 2 certificate files,
+and a mode-`600` environment file. Archive member paths were checked for
+absolute/traversal components. The temporary restore container was removed;
+no plaintext restore artifact remains on the Mac mini. This is an isolated
+data-integrity drill, not proof of full-service recovery within the four-hour
+RTO.
+
+The workflow does **not** provide a daily schedule, automatic retention,
+freshness/failed-run alerts, key recovery, or quarterly restore automation.
+Do not enable an unattended job until the recovery/key owner and retention
+policy are known, non-interactive Keychain access is proven, and the failure
+path is tested. The owner has opted out of notifications for this experimental
+project; do not silently substitute a GitHub issue, email, or Codex alert.
+Do not delete older snapshots as an implicit retention policy. Until a tested
+cadence exists, this snapshot is point-in-time evidence only; the 24-hour RPO
+is not guaranteed.
+
+### Phase 3 freshness check and notification decision
+
+The owner identified the same connected GitHub account, `Khosravangroup`, as
+the key/recovery owner on 21 September 2026. The owner subsequently stated that
+this is an experimental project and does not need registered alerts. No GitHub
+issue, email, Codex notification, or other alert transport is to be created for
+this phase without a new request. This is an owner-directed monitoring opt-out,
+not evidence of backup freshness or a production-release exception. The public
+deployment remains identified as production in the runbook. The retention
+duration remains undecided, so no snapshot is deleted automatically.
+
+`scripts/ops/check-backup-freshness.sh` is a read-only monitoring primitive for
+the Mac mini. It requires `LEADOCHAT_BACKUP_ROOT` to name the protected off-host
+directory and optionally accepts `LEADOCHAT_BACKUP_MAX_AGE_SECONDS` (default
+`86400`, matching the target 24-hour RPO). It checks the newest timestamped
+snapshot directory, its completion marker, expected artifact inventory,
+permissions, manifest identity, and all four SHA-256 checksums. It exits
+nonzero for a missing, stale, incomplete, corrupt, or unsafe snapshot and does
+not reveal backup contents. A checksum detects accidental damage but is not an
+authenticated-encryption guarantee against an attacker able to rewrite both
+artifacts and checksums.
+
+Run it from a protected operator session after setting the backup root:
+
+```bash
+bash scripts/ops/check-backup-freshness.sh
+```
+
+The Mac mini check passed against `20260921T080639Z`. Seven synthetic fixture
+scenarios passed: no snapshot, healthy snapshot, checksum corruption, unexpected
+checksum inventory, unsafe artifact permissions, missing completion marker, and
+stale snapshot. The checker is not scheduled and cannot guarantee a new capture
+if the Mac mini is powered off or asleep. Before scheduling, prove background
+Keychain access, failure handling, and an explicit retention decision. With no
+alerts, the owner must manually inspect capture results and run the freshness
+check; an unattended failure may otherwise go unnoticed. Keep old versions
+until the retention decision; do not infer a deletion period from the RPO.
+
 This snapshot is not a backup schedule. Before any production data migration:
 
 - create an encrypted PostgreSQL backup outside the application host;
@@ -230,9 +334,47 @@ selective/full recovery plan. Never test the deletion workflow against a real
 customer workspace; use an approved synthetic workspace and record its exact ID and
 slug before the operation.
 
-Target RPO is 24 hours and target RTO is 4 hours until the owner defines stricter
-requirements. Phase 3 must automate encrypted capture, retention, freshness alerts,
-and quarterly isolated restores.
+Target RPO is 24 hours and target RTO is 4 hours until the owner defines different
+requirements. Phase 3 still needs a tested encrypted capture cadence, retention
+decision, and quarterly isolated restores. Automated alerts are explicitly
+out of scope for this experimental project at the owner's request; their absence
+prevents a claim that failures will be detected within the RPO.
+
+## Phase 3 read-only host baseline
+
+Verified on 21 September 2026 against the `leadochatmini` production host and
+running revision `b7e948f4325c5fc318f4ab9f7274319d72b3d32a`. No host setting,
+container configuration, production file, or application data was deliberately
+changed during this inventory; HTTP probes may create ordinary access/session logs.
+
+- Five expected containers were running; PostgreSQL was healthy. Host TCP listeners
+  included `22`, `80`, `443`, and publicly bound `8081`. An external TCP connection
+  to `8081` succeeded.
+- The public Cloudflare/Nginx `/app` WebSocket handshake returned HTTP `101` using
+  the application's public Reverb key. This proves the supported ingress path can
+  upgrade; it does not prove authenticated channel authorization or reconnect UX.
+- `ufw status` was **inactive**, despite the `ufw` systemd unit reporting active.
+  `fail2ban` was inactive. Effective SSH settings still allowed password
+  authentication and root key login, with six authentication attempts. Only the
+  root account had an interactive shell; no non-root administrative path was
+  verified. Unattended upgrades were active/enabled and APT timers were present.
+- The active environment file remained `600` and root-owned; no plaintext
+  `.env.bak*` copy was found under the project checkout.
+- Root had no crontab entry; inspected system cron locations and systemd units
+  had no project backup job; and no project backup artifact was found on the host.
+  The two encrypted off-host snapshots remain point-in-time evidence, not an RPO
+  guarantee.
+- The database contained two historical failed jobs, earliest 20 April 2026, and
+  zero pending jobs. Only counts and timestamps were queried; payloads were not
+  read or retried.
+- Public application and health responses had `nosniff`, same-origin framing,
+  one-day HSTS, and report-only CSP. A direct static `/robots.txt` response had
+  none of those application headers; Nginx-generated error responses still need
+  separate verification.
+
+The Mac mini's `leadochat-dev-codex` connection reaches a different, shared
+LeadoChat host. Its firewall and service state must never be substituted for this
+production host's state.
 
 ## Host hardening backlog
 
@@ -250,6 +392,23 @@ authenticated browser telemetry and Nginx static/error responses remain open. Th
 remaining SSH, firewall, public Reverb, origin-level header, automated
 permission-check, and backup-scheduling items stay open.
 
+The Phase 3 Nginx response-header candidate adds five fallback headers to the
+production HTTPS server block for static and generated-error responses without
+duplicating headers already emitted by Laravel or the Reverb upstream. The
+isolated Nginx 1.27 test passed static `200`, generated `404`/`502`, proxied
+responses, and an HTTP redirect with no HSTS. The required security CI job runs
+this fixture. This is not deployed production evidence. No enforced CSP is added.
+Before an approved rollout, validate the exact configuration diff, the existing
+certificate/runtime paths, and `nginx -t` with the target image; do not use the
+current broad `deploy.sh` merely for this configuration change. Reload only
+Nginx after an exact-revision deployment procedure is approved. Immediately
+check the public application, `/robots.txt`, an intended safe `404`, and the
+WebSocket upgrade for correct response headers and no duplicates. Retain the
+prior configuration as rollback; validate it with `nginx -t` before reloading.
+The Laravel `SECURITY_HEADERS_ENABLED` switch does not disable Nginx fallbacks;
+an emergency rollback of all five headers requires restoring the prior Nginx
+configuration as well. The browser may retain already received one-day HSTS.
+
 The Phase 1 release also exposed an operational weakness in the current script:
 image builds install and compile a large dependency set, and recursive permission
 changes can alter tracked `.gitignore` modes. The observed mode-only drift was
@@ -259,6 +418,52 @@ with targeted runtime-directory permissions and a reproducible artifact flow.
 Remediation must preserve verified access and Cloudflare/origin traffic. Apply and
 test controls incrementally with a second session available; never lock out the only
 administrative path. Close public `8081` after proving Nginx/WebSocket proxy behavior.
+
+### Reverb private-network rollout
+
+Phase 3 pull request `#37` was merged into `develop` as
+`7903517422d6b7b6ab63ee1bf92de6bdaf41afb8`. It removes only the production
+`8081:8081` host publication; `reverb` remains on the existing Compose network and
+Nginx continues to proxy `/app` to `reverb:8081`. Local development port `8081`
+is unchanged. The production host still runs the earlier Phase 1 revision.
+
+Before an approved production rollout, review the exact Compose diff and running
+revision, establish a second live administrative session, and confirm the public
+WebSocket upgrade plus an approved synthetic authorized-channel/reconnect journey.
+Schedule a short connection-interruption window because recreating `reverb` drops
+active sockets. Do not use the current broad `deploy.sh` merely to apply this
+single Compose change: it resets the checkout, rebuilds images, and runs migrations.
+Use a separately reviewed, exact-revision Compose-only procedure that preserves
+runtime `.env` and TLS files and does not restart unrelated services.
+
+Immediately after the change, verify that `reverb` is running, `/app` still returns
+an upgrade, the synthetic channel authorization/reconnect journey passes, and
+neither IPv4 nor IPv6 exposes host port `8081`. Observe Reverb errors and queue
+state. If the supported path fails, restore the previously approved Compose file
+and recreate only `reverb`; confirm the prior host mapping and WebSocket behavior.
+This rollback temporarily restores the known public-port risk and requires an
+incident decision, not silent acceptance. The finding closes only after the
+private-port state and channel authorization are verified in production.
+
+### Remaining host-change gates
+
+1. Prove a non-root administrative account with its own key, sudo scope, and a
+   successful second SSH session before changing root or password SSH access.
+2. Inventory actual origin/Cloudflare and management traffic, apply firewall rules
+   incrementally, and keep an independent recovery path. Verify both IPv4 and IPv6
+   after each change; do not infer firewall state from `systemctl is-active ufw`.
+3. Define an encrypted off-host backup destination, key custody/recovery owner,
+   retention, daily schedule within the 24-hour RPO, and isolated quarterly
+   restore operator before enabling unattended backup jobs. The owner opted out
+   of alerts for this experimental scope; document a manual freshness review or
+   accept that an unattended failure can go unnoticed.
+   Prove a complete service restore within the four-hour RTO before closing
+   `OPS-01`.
+4. Keep production health, database, queue, webhook, Reverb, disk, TLS, and backup
+   alert delivery disabled under the owner's experimental-project opt-out. Revisit
+   monitoring before treating the public deployment as an operational service.
+5. Classify the two failed jobs using redacted metadata, decide whether retry is
+   safe, and record a disposition before deleting or replaying either payload.
 
 ## Routine operations
 
@@ -272,4 +477,6 @@ At least daily or through monitoring:
 - webhook received/processed/failed rates and age;
 - Reverb connection and error rates.
 
-Document alert destinations and on-call ownership before enabling unattended alerts.
+The owner opted out of unattended alerts for this experimental project. These
+routine checks therefore need a deliberate manual operator cadence; their
+absence cannot be represented as monitored health.

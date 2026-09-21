@@ -143,8 +143,9 @@ of `TEST-01`, and governance part of `REL-01`.
 3. Update npm direct and transitive dependencies from a clean lockfile install;
    preserve Vite/Tailwind behavior and browser smoke coverage.
 4. Enable Dependabot/dependency alerts, GitHub secret scanning, and code scanning.
-5. Protect `develop` and `main`; require review and checks, restrict force-push and
-   deletion, and apply least-privilege workflow permissions.
+5. Protect `develop` and `main`; define an attainable approval policy, require
+   checks, restrict force-push and deletion, and apply least-privilege workflow
+   permissions.
 6. Inventory the unique commits on `main` and `develop` and approve a non-destructive
    reconciliation plan.
 
@@ -193,6 +194,13 @@ still lack deeper concurrency/JSONB breadth, and immutable production deployment
 with runtime files outside the checkout remains Phase 4 work. Production was not
 changed during Phase 2.
 
+**Owner governance update, 21 September 2026:** because the only GitHub
+collaborator is the owner and no human reviewer is required, both protected
+branches now require zero approvals. Pull requests, all six checks, strict
+up-to-date status, conversation resolution, and force-push/deletion bans remain.
+The owner/admin exemption remains but was not needed for the check-green merge of
+Phase 3 pull request `#37` into `develop`. No production deployment followed.
+
 **Acceptance gate:** required checks are green on the exact head; a clean frontend
 artifact is reproducible; no unaccepted critical/high dependency advisory remains;
 branch protection is effective; secret/code scanning reports are triaged.
@@ -212,15 +220,53 @@ branch protection is effective; secret/code scanning reports are triaged.
 3. Remove the public Reverb port mapping after Nginx/Cloudflare WebSocket validation.
 4. Add tested Nginx upload-execution denial and security headers; promote CSP from
    report-only only after violations are resolved.
-5. Automate encrypted backups, retention, freshness alerts, and quarterly restores.
-6. Add dashboards/alerts for health, 5xx/error fingerprints, latency, resources,
-   disk, PostgreSQL, queue depth/age/failures, webhook lifecycle, Reverb, TLS, and
-   backup freshness.
+5. Establish tested encrypted backup cadence, a retention decision, manual
+   freshness checks, and quarterly restores. The owner opted out of alerts for
+   this experimental project.
+6. Inventory health, 5xx/error fingerprints, latency, resources, disk,
+   PostgreSQL, queue depth/age/failures, webhook lifecycle, Reverb, TLS, and
+   backup freshness for manual review. Do not register alerts without a new
+   owner request.
 7. Classify and dispose of historical failed jobs without exposing payloads.
 
 **Acceptance gate:** only approved ports listen; a second session confirms SSH
-access; WebSockets work through the supported path; headers pass compatibility tests;
-alert delivery is tested; restore meets RPO/RTO.
+access; WebSockets work through the supported path; headers pass compatibility
+tests; restore meets RPO/RTO. The owner's alert opt-out is documented, but
+unattended failure detection is not proven and must not be claimed.
+
+**Progress on 21 September 2026:** a read-only production recheck confirmed the
+Phase 1 revision, public `8081`, inactive UFW/fail2ban, password-enabled SSH,
+active unattended upgrades, two historical failed jobs, and no scheduled project
+backup. The public Nginx/Cloudflare WebSocket upgrade returned `101`. A focused
+repository candidate removes the production Reverb host-port publication without
+changing the internal Compose network or local development mapping. Pull request
+`#37` was merged into `develop` as `7903517422d6b7b6ab63ee1bf92de6bdaf41afb8`.
+No production host setting, container configuration, or application data was
+deliberately changed. Administrative account, firewall, backup cadence/retention,
+manual failure detection, failed-job disposition, static/error
+headers, and authenticated WebSocket smoke remain acceptance blockers.
+
+The `OPS-01` backup package now includes a repeatable, guarded macOS off-host
+capture script. On 21 September 2026 it produced encrypted snapshot
+`20260921T080639Z`; encrypted-artifact checksums, PostgreSQL 16 isolated restore,
+and tmpfs storage/runtime restores passed. This improves repeatability but does
+not close `OPS-01`: no unattended schedule, retention policy, manual
+failure-review cadence, or full-service RTO proof exists. The owner named the
+connected GitHub account `Khosravangroup` as recovery/key owner; a read-only
+freshness/checksum checker passed seven synthetic scenarios and the current
+snapshot. The owner then declined all registered alerts for this experimental
+project. Background Keychain access and failure handling must be proven before
+scheduling, with a manual result-review cadence because failures will not notify
+the owner. A retention decision must precede any automatic deletion of older
+snapshots. The public deployment and current 24-hour RPO/four-hour RTO target
+remain separately documented; the opt-out does not close the finding.
+
+The `OPS-05` origin-header package now has a repository-only Nginx candidate
+for static and generated-error responses. A focused isolated Nginx 1.27 test
+passed static, `404`, `502`, proxied non-duplication, and HTTP-redirect cases;
+the same test is included in required CI. No production reload occurred, and
+report-only CSP was not promoted. Exact-revision rollout and browser/static/
+error/WebSocket smoke remain required before the origin-header gap can close.
 
 ## Phase 4 — Safe deployment and PostgreSQL release proof
 

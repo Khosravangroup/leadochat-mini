@@ -42,7 +42,7 @@ and infrastructure may change.
 | `OPS-03` | High | Open | SSH and host firewall hardening gaps | 3 |
 | `FE-01` | Medium | In progress | Clean frontend build not proven | 2 |
 | `CI-02` | Medium | Closed | Security scanning disabled/missing | 2 |
-| `OPS-04` | Medium | Open | Reverb port publicly bound | 3 |
+| `OPS-04` | Medium | In progress | Reverb port publicly bound | 3 |
 | `OPS-05` | Medium | In progress | Missing browser security headers | 1, 3 |
 | `TEST-01` | Medium | In progress | SQLite-only automated database coverage | 2, 4 |
 | `ARC-01` | Medium | Open | Oversized controllers/job and inline scripts | 5 |
@@ -112,9 +112,37 @@ migrations. It recovered 39 tables, 14 uploaded files, protected runtime
 configuration/TLS files, and the expected count-only database inventory. No
 plaintext artifact remained.
 
-**Residual risk:** this is a verified point-in-time baseline, not an automated
-schedule. Retention, freshness alerting, periodic restore drills, and full-service
-RTO evidence remain open in Phase 3.
+**Phase 3 update, 21 September 2026:** a guarded macOS capture script now streams
+PostgreSQL, uploads, and runtime configuration/TLS directly into encrypted
+off-host artifacts. Its first snapshot, `20260921T080639Z`, passed checksums and
+readability checks. Isolated PostgreSQL 16 restore recovered 40 public tables,
+4 users, 3 workspaces, and 31 messages; tmpfs restores recovered 14 storage
+files, 2 certificate files, and a mode-`600` environment file. No plaintext
+backup or restore file was retained. The temporary restore container was removed.
+See `doc/DEPLOYMENT_AND_OPERATIONS.md` for the operator workflow and limits.
+
+**Residual risk:** these are verified point-in-time snapshots, not an automated
+schedule or a proven 24-hour RPO. Retention policy, daily cadence, manual
+failure detection, periodic restore drills, and full-service four-hour RTO
+evidence remain open in Phase 3. Automated alerts are owner-declined for this
+experimental scope, not silently assumed to exist.
+
+**Ownership/freshness update, 21 September 2026:** the owner identified the
+connected GitHub account `Khosravangroup` as both key/recovery owner and alert
+recipient. A read-only Mac mini checker now rejects absent, stale, incomplete,
+corrupt, or unsafe snapshots; seven synthetic scenarios and the current real
+snapshot passed. No alert transport or unattended schedule is enabled. The
+account has no public email and the current authorization cannot read a private
+one; delivery remains unproven. Retention duration and automatic deletion remain
+unconfigured. Named ownership does not prove monitoring, cadence, or RPO/RTO.
+
+**Owner decision, 21 September 2026:** the owner classified this as an
+experimental project and explicitly declined registered alerts. Do not create
+GitHub issues, email notifications, or Codex alerts for this finding without a
+new request. This supersedes the earlier alert-recipient intention but does not
+close `OPS-01`: capture is still manual, retention is undecided, full-service
+restore is unproven, and a failure may remain unnoticed. The public deployment
+and its data are not converted into an isolated test environment by this label.
 
 **Impact:** security/data migrations, operator error, disk loss, or compromise can
 cause unrecoverable application data loss.
@@ -367,7 +395,16 @@ branch deletion are disabled. The sole repository administrator remains exempt s
 the single-collaborator repository cannot deadlock; that exception is explicit and
 must be reassessed when another reviewer is added.
 
-**Close when:** protected branches require reviewed pull requests and current CI
+**Owner governance update, 21 September 2026:** the repository has only the owner
+as a collaborator, and the owner confirmed that no separate human code reviewer
+exists or is required. Required approvals were set to zero on both protected
+branches, and last-pusher approval was disabled. Pull requests, six required
+checks, strict up-to-date status, conversation resolution, and force-push/deletion
+bans were reverified unchanged. The administrator exemption remains; pull request
+`#37` was merged without using it after all six checks passed on the exact head.
+Production-release approval remains a separate gate.
+
+**Close when:** protected branches require pull requests and current CI
 checks; force-push/deletion are restricted; least-privilege CI runs PHP, PostgreSQL,
 frontend build, lint, dependency, secret, and security checks.
 
@@ -426,6 +463,13 @@ are checked automatically, and exposed credentials are rotated when warranted.
 
 **Evidence:** UFW and fail2ban were inactive; SSH allowed password authentication,
 root login by key, and six authentication attempts.
+
+**Phase 3 recheck, 21 September 2026:** on the verified production host,
+`ufw status` remained inactive even though its systemd unit reported active;
+`fail2ban` was inactive. Effective SSH configuration still allowed passwords and
+root key login with six attempts. Only root had an interactive shell, so no
+non-root administrative route is proven. Unattended upgrades were active/enabled.
+No SSH, firewall, or account setting was changed during this check.
 
 **Impact:** internet-facing management has a broader attack surface and limited
 brute-force controls. Saved access is not authorization to change these settings.
@@ -499,6 +543,16 @@ are reviewed and time-bounded.
 **Evidence:** production Compose publishes `8081:8081`, while Nginx already proxies
 the `/app` WebSocket path. The host was listening publicly on port `8081`.
 
+**Phase 3 candidate, 21 September 2026:** an external TCP probe confirmed the
+public port still accepts connections. The public Cloudflare/Nginx `/app`
+WebSocket handshake returned HTTP `101`, proving the supported upgrade path.
+Pull request `#37` merged the repository-only Compose change into `develop` as
+`7903517422d6b7b6ab63ee1bf92de6bdaf41afb8`, removing the production host
+publication while retaining the internal Compose network and Nginx proxy.
+Production has not been changed; authorized-channel/reconnect smoke and post-change
+IPv4/IPv6 port checks are still required. See the rollout and rollback gates in
+`doc/DEPLOYMENT_AND_OPERATIONS.md`.
+
 **Impact:** clients can bypass intended edge/origin controls and reach Reverb
 directly.
 
@@ -541,6 +595,21 @@ Authenticated browser journey evidence, telemetry observation, inline-code
 reduction, source narrowing, Nginx static/error coverage, and separately approved
 enforcement remain open.
 
+**Phase 3 recheck, 21 September 2026:** a public static `/robots.txt` response
+returned `200` without the application security headers, confirming the Nginx
+static-response gap. The application and `/up` responses retained the staged
+headers and report-only CSP. No policy was promoted to enforcement.
+
+**Phase 3 repository candidate:** production Nginx configuration now has
+upstream-aware fallback headers for directly served static files and generated
+errors: `nosniff`, same-origin framing, strict-origin referrer, restricted
+permissions, and one-day HTTPS HSTS. An isolated Nginx 1.27 test passed static
+`200`, Nginx-generated `404`/`502`, non-duplicated proxied headers, and absence
+of HSTS on the HTTP redirect. No enforced CSP or edge report-only CSP was added.
+The candidate is not production remediation until exact-revision rollout and
+public static/error/application smoke pass; authenticated browser telemetry,
+source narrowing, and separate CSP enforcement remain open.
+
 **Close when:** headers are deployed with compatibility tests; CSP starts in report-
 only mode, observed violations are resolved without unsafe broad allowances, and
 the enforced policy covers scripts, frames, connections, and mixed content.
@@ -582,6 +651,15 @@ modules; every slice reduces complexity without unrelated rewrites.
 application error tracker, queue/webhook alerting, SLO dashboard, or named on-call
 process was documented.
 
+**Phase 3 recheck, 21 September 2026:** the host had no project backup timer or
+root cron job. Alert delivery, recipient ownership, and RPO/RTO monitoring remain
+unproven; read-only inventory does not close this finding.
+
+**Owner decision, 21 September 2026:** no alerts are requested for the
+experimental-project scope. No alert was registered. Manual checks remain the
+only detection path; this opt-out does not verify SLO monitoring or eliminate
+the risk to the publicly reachable deployment.
+
 **Impact:** failures, growing queue lag, provider rejection, disk pressure, or
 degraded delivery may remain undetected until user reports.
 
@@ -593,6 +671,10 @@ thresholds, owners, test notifications, and an incident runbook.
 
 **Evidence:** two failed jobs dated 20 April 2026 remained in production while no
 pending jobs existed.
+
+**Phase 3 recheck, 21 September 2026:** two failed jobs remained, with the oldest
+timestamp on 20 April 2026; pending-job count was zero. Payloads were not read,
+replayed, or deleted. Classification and retention decisions remain open.
 
 **Impact:** low current availability risk, but unresolved failure payloads can hide a
 product defect or retain sensitive data.

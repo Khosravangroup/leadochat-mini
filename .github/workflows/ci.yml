@@ -194,6 +194,9 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Verify Nginx static and error response headers
+        run: bash scripts/ops/tests/test-nginx-response-headers.sh
+
       - name: Scan Git history for secrets
         run: >-
           docker run --rm
