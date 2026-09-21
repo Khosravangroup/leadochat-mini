@@ -242,6 +242,14 @@ deliberately changed. Administrative account, firewall, backup cadence/retention
 alert delivery, failed-job disposition, static/error
 headers, and authenticated WebSocket smoke remain acceptance blockers.
 
+The `OPS-01` backup package now includes a repeatable, guarded macOS off-host
+capture script. On 21 September 2026 it produced encrypted snapshot
+`20260921T080639Z`; encrypted-artifact checksums, PostgreSQL 16 isolated restore,
+and tmpfs storage/runtime restores passed. This improves repeatability but does
+not close `OPS-01`: no unattended schedule, retention policy, freshness/failed-run
+alert, named recovery/key owner, or full-service RTO proof exists. These decisions
+must precede automatic scheduling and any deletion of older snapshots.
+
 ## Phase 4 — Safe deployment and PostgreSQL release proof
 
 **Goal:** make releases deterministic, observable, and recoverable.

@@ -114,6 +114,17 @@ same head passed 114 tests with 911 assertions on both SQLite and PostgreSQL 16 
 passed the secret/SAST job. This is merge-candidate evidence; required enforcement
 still depends on the final governance change.
 
+For the Phase 3 off-host backup workflow on 21 September 2026, Bash syntax and
+the invalid-destination rejection passed. A live preflight verified the pinned
+production host and source availability. Snapshot `20260921T080639Z` passed all
+four SHA-256 checks and the script's encrypted-stream readability checks. A
+separate, network-isolated PostgreSQL 16 restore passed with 40 public tables,
+4 users, 3 workspaces, and 31 messages; tmpfs archive restores passed with
+14 storage files, 2 certificate files, and a mode-`600` environment file. The
+temporary restore container was removed. This is not a full-service RTO test or
+proof of a recurring 24-hour RPO; scheduling, alert delivery, retention, and
+periodic restore checks remain unverified.
+
 ## Local verification
 
 Start with the smallest affected check:
