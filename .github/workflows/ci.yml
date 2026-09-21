@@ -56,6 +56,20 @@ jobs:
       - name: Install PHP dependencies
         run: composer install --no-interaction --prefer-dist --no-progress
 
+      - name: Verify committed Filament assets match Composer lock
+        working-directory: .
+        shell: bash
+        run: |
+          asset_paths=(src/public/css/filament src/public/fonts/filament src/public/js/filament)
+          if ! git -c core.filemode=false diff --quiet -- "${asset_paths[@]}"; then
+            echo "Filament assets differ after Composer installation." >&2
+            exit 1
+          fi
+          if [[ -n "$(git ls-files --others --exclude-standard -- "${asset_paths[@]}")" ]]; then
+            echo "Filament installation generated untracked assets." >&2
+            exit 1
+          fi
+
       - name: Validate PHP syntax
         run: >-
           find app bootstrap config database routes tests
