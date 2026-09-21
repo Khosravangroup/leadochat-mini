@@ -117,6 +117,11 @@ records, public smoke checks and the CSP receiver passed, and the expected
 application security headers are live. Production still uses `MAIL_MAILER=log`, and
 authenticated browser/provider smoke remains pending an approved synthetic target.
 
+On 21 September 2026 the owner described the project as experimental and opted out
+of registered operational alerts. That preference does not change the verified
+public deployment topology or prove that its data is synthetic. Manual checks are
+the only planned notification substitute until the owner changes this decision.
+
 ## 6. Quality Goals
 
 - 100% of committed PHP tests must pass before review and before deployment.

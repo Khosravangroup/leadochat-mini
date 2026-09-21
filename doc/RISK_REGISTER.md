@@ -122,9 +122,10 @@ backup or restore file was retained. The temporary restore container was removed
 See `doc/DEPLOYMENT_AND_OPERATIONS.md` for the operator workflow and limits.
 
 **Residual risk:** these are verified point-in-time snapshots, not an automated
-schedule or a proven 24-hour RPO. Retention policy, daily cadence, alert
-transport/delivery tests, periodic restore drills, and full-service four-hour
-RTO evidence remain open in Phase 3.
+schedule or a proven 24-hour RPO. Retention policy, daily cadence, manual
+failure detection, periodic restore drills, and full-service four-hour RTO
+evidence remain open in Phase 3. Automated alerts are owner-declined for this
+experimental scope, not silently assumed to exist.
 
 **Ownership/freshness update, 21 September 2026:** the owner identified the
 connected GitHub account `Khosravangroup` as both key/recovery owner and alert
@@ -134,6 +135,14 @@ snapshot passed. No alert transport or unattended schedule is enabled. The
 account has no public email and the current authorization cannot read a private
 one; delivery remains unproven. Retention duration and automatic deletion remain
 unconfigured. Named ownership does not prove monitoring, cadence, or RPO/RTO.
+
+**Owner decision, 21 September 2026:** the owner classified this as an
+experimental project and explicitly declined registered alerts. Do not create
+GitHub issues, email notifications, or Codex alerts for this finding without a
+new request. This supersedes the earlier alert-recipient intention but does not
+close `OPS-01`: capture is still manual, retention is undecided, full-service
+restore is unproven, and a failure may remain unnoticed. The public deployment
+and its data are not converted into an isolated test environment by this label.
 
 **Impact:** security/data migrations, operator error, disk loss, or compromise can
 cause unrecoverable application data loss.
@@ -635,6 +644,11 @@ process was documented.
 **Phase 3 recheck, 21 September 2026:** the host had no project backup timer or
 root cron job. Alert delivery, recipient ownership, and RPO/RTO monitoring remain
 unproven; read-only inventory does not close this finding.
+
+**Owner decision, 21 September 2026:** no alerts are requested for the
+experimental-project scope. No alert was registered. Manual checks remain the
+only detection path; this opt-out does not verify SLO monitoring or eliminate
+the risk to the publicly reachable deployment.
 
 **Impact:** failures, growing queue lag, provider rejection, disk pressure, or
 degraded delivery may remain undetected until user reports.
