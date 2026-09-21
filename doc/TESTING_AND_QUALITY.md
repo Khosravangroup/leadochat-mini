@@ -140,7 +140,8 @@ upstream passed `nginx -t` and five HTTP scenarios: static `200`, generated
 through a proxied response, and an HTTP redirect without HSTS. The test first
 failed against the unmodified configuration because the static response had no
 `X-Content-Type-Options` header. The test runs in the required security CI job.
-No production reload or authenticated browser journey was performed.
+At that candidate stage no production reload or authenticated browser journey
+was performed; the later production smoke is recorded below.
 
 The Phase 2 Composer upgrade exposed a release-only asset mismatch during the
 21 September 2026 production preflight: installing the locked Filament version
@@ -149,6 +150,21 @@ files. The corrected assets are committed, and the SQLite CI job now checks
 for content differences or new files after `composer install`. File-mode drift
 from the vendor publisher is ignored by this check; production releases must
 still preserve the expected Git checkout state.
+
+The owner-requested production release on 21 September 2026 ran exact revision
+`4f7f8a61c6cb1c41f93c46e733d12fcf0dc714b1`. The `main` push CI passed the
+five workflow jobs, and the promotion pull request also passed Semgrep. On the
+server, the clean candidate `npm ci` and Vite build, Composer install, Filament
+asset-content check, Compose configuration, and Nginx syntax passed before
+cutover. After cutover, repeated public `/up`, home, login, static
+`/robots.txt`, storage-deny `404`, anonymous dashboard redirect, invalid webhook
+`403`, and public WebSocket `101` checks passed. Static/error/application
+responses had the intended header counts and no enforced CSP. In the initial
+observation window, all five containers ran, PostgreSQL stayed healthy, queue
+depth remained zero, failed jobs remained two, and no new error-level application
+entry or container error fingerprint was counted. This is not an authenticated
+inbox/authorized-channel/reconnect, provider, mail-delivery, full-service restore,
+or independent external IPv4/IPv6 port proof.
 
 ## Local verification
 

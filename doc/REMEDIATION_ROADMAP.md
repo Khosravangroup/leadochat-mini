@@ -234,17 +234,19 @@ access; WebSockets work through the supported path; headers pass compatibility
 tests; restore meets RPO/RTO. The owner's alert opt-out is documented, but
 unattended failure detection is not proven and must not be claimed.
 
-**Progress on 21 September 2026:** a read-only production recheck confirmed the
-Phase 1 revision, public `8081`, inactive UFW/fail2ban, password-enabled SSH,
-active unattended upgrades, two historical failed jobs, and no scheduled project
-backup. The public Nginx/Cloudflare WebSocket upgrade returned `101`. A focused
+**Pre-release progress on 21 September 2026:** a read-only production recheck
+confirmed the Phase 1 revision, public `8081`, inactive UFW/fail2ban,
+password-enabled SSH, active unattended upgrades, two historical failed jobs,
+and no scheduled project backup. The public Nginx/Cloudflare WebSocket upgrade
+returned `101`. A focused
 repository candidate removes the production Reverb host-port publication without
 changing the internal Compose network or local development mapping. Pull request
 `#37` was merged into `develop` as `7903517422d6b7b6ab63ee1bf92de6bdaf41afb8`.
-No production host setting, container configuration, or application data was
-deliberately changed. Administrative account, firewall, backup cadence/retention,
-manual failure detection, failed-job disposition, static/error
-headers, and authenticated WebSocket smoke remain acceptance blockers.
+At that pre-release stage no production host setting, container configuration,
+or application data was deliberately changed. Administrative account, firewall,
+backup cadence/retention, manual failure detection, failed-job disposition,
+static/error headers, and authenticated WebSocket smoke remained acceptance
+blockers.
 
 The `OPS-01` backup package now includes a repeatable, guarded macOS off-host
 capture script. On 21 September 2026 it produced encrypted snapshot
@@ -261,12 +263,16 @@ the owner. A retention decision must precede any automatic deletion of older
 snapshots. The public deployment and current 24-hour RPO/four-hour RTO target
 remain separately documented; the opt-out does not close the finding.
 
-The `OPS-05` origin-header package now has a repository-only Nginx candidate
-for static and generated-error responses. A focused isolated Nginx 1.27 test
-passed static, `404`, `502`, proxied non-duplication, and HTTP-redirect cases;
-the same test is included in required CI. No production reload occurred, and
-report-only CSP was not promoted. Exact-revision rollout and browser/static/
-error/WebSocket smoke remain required before the origin-header gap can close.
+The `OPS-05` origin-header package is deployed on 21 September 2026 at exact
+`main` revision `4f7f8a61c6cb1c41f93c46e733d12fcf0dc714b1`. The isolated
+Nginx 1.27 regression, production `nginx -t`, public static/error/application
+header probes, and public WebSocket upgrade passed. The same release removed
+Reverb's Compose host-port publication; no host listener remained, but one
+external TCP handshake result conflicted with the host reset trace. Authenticated
+browser/CSP telemetry, synthetic WebSocket authorization/reconnect, independent
+external IPv4/IPv6 port verification, host hardening, backup cadence/retention,
+full-service restore, and failed-job disposition remain open. No alert was
+registered under the owner's experimental-project opt-out.
 
 ## Phase 4 — Safe deployment and PostgreSQL release proof
 
