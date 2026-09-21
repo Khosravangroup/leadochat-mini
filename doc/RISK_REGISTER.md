@@ -112,9 +112,19 @@ migrations. It recovered 39 tables, 14 uploaded files, protected runtime
 configuration/TLS files, and the expected count-only database inventory. No
 plaintext artifact remained.
 
-**Residual risk:** this is a verified point-in-time baseline, not an automated
-schedule. Retention, freshness alerting, periodic restore drills, and full-service
-RTO evidence remain open in Phase 3.
+**Phase 3 update, 21 September 2026:** a guarded macOS capture script now streams
+PostgreSQL, uploads, and runtime configuration/TLS directly into encrypted
+off-host artifacts. Its first snapshot, `20260921T080639Z`, passed checksums and
+readability checks. Isolated PostgreSQL 16 restore recovered 40 public tables,
+4 users, 3 workspaces, and 31 messages; tmpfs restores recovered 14 storage
+files, 2 certificate files, and a mode-`600` environment file. No plaintext
+backup or restore file was retained. The temporary restore container was removed.
+See `doc/DEPLOYMENT_AND_OPERATIONS.md` for the operator workflow and limits.
+
+**Residual risk:** these are verified point-in-time snapshots, not an automated
+schedule or a proven 24-hour RPO. A named key/recovery owner, retention policy,
+daily cadence, failure/freshness alert recipient and delivery test, periodic
+restore drills, and full-service four-hour RTO evidence remain open in Phase 3.
 
 **Impact:** security/data migrations, operator error, disk loss, or compromise can
 cause unrecoverable application data loss.

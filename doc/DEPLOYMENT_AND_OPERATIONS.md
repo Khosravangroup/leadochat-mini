@@ -218,6 +218,68 @@ set. All temporary restore containers were removed, artifact permissions were
 `600`, and zero plaintext backup files remained. This second point-in-time proof is
 still not an automated backup schedule or a full-service RTO test.
 
+### Phase 3 repeatable off-host capture
+
+On 21 September 2026, `scripts/ops/backup-offhost.sh` added a guarded macOS
+operator workflow for repeatable encrypted capture. `check` verifies the pinned
+SSH host identity, project revision, protected environment-file mode, required
+sources, PostgreSQL availability, and the existence of the Keychain item.
+`capture` streams PostgreSQL custom-format data, `storage/app`, and protected
+runtime configuration/TLS files into encrypted files under an existing,
+operator-owned mode-`700` off-host directory. It uses the existing macOS Keychain
+passphrase without placing it in a command argument, shell history, or repository
+file. The three encrypted artifacts are read back for format verification, then
+checksummed and atomically marked complete. A failed run can leave an
+`.incomplete.*` directory containing only partial encrypted artifacts; investigate
+it before any cleanup. Never treat an incomplete directory as a recoverable
+snapshot.
+
+Required environment variables are `LEADOCHAT_BACKUP_ROOT`,
+`LEADOCHAT_BACKUP_SSH_TARGET`, `LEADOCHAT_BACKUP_SSH_KEY`,
+`LEADOCHAT_BACKUP_EXPECTED_HOST`, and `LEADOCHAT_BACKUP_REMOTE_ROOT`. Optional
+variables are `LEADOCHAT_BACKUP_SSH_PORT`, `LEADOCHAT_BACKUP_KEYCHAIN_SERVICE`,
+and `LEADOCHAT_BACKUP_KEYCHAIN_ACCOUNT`. Supply their values through the
+operator's protected local environment; do not add values or credential material
+to the repository, a script, a ticket, or a log. The SSH identity must be an
+absolute, non-symlink mode-`600` file, and the off-host destination must be an
+absolute, non-symlink mode-`700` directory owned by the operator. Pinned host
+keys and non-interactive SSH authentication are required. The script runs on
+macOS and requires `ssh`, `security`, `openssl`, `shasum`, `tar`, and a compatible
+`pg_restore` on the Mac mini, plus `docker`, `pg_dump`, and `tar` on the source
+host. It does not install dependencies or schedule itself.
+
+Run preflight and capture separately from the repository checkout, after
+setting the required variables in a protected operator session:
+
+```bash
+bash scripts/ops/backup-offhost.sh check
+```
+
+```bash
+bash scripts/ops/backup-offhost.sh capture
+```
+
+The first capture through this workflow produced snapshot `20260921T080639Z`
+from production revision `b7e948f4325c5fc318f4ab9f7274319d72b3d32a`.
+SHA-256 validation passed for all three encrypted artifacts and the manifest;
+the snapshot directory was mode `700` and its files mode `600`. Its database
+restored into an isolated PostgreSQL 16 container with no network or published
+port: 40 public tables, 4 users, 3 workspaces, and 31 messages. Storage and
+runtime archives restored into tmpfs: 14 storage files, 2 certificate files,
+and a mode-`600` environment file. Archive member paths were checked for
+absolute/traversal components. The temporary restore container was removed;
+no plaintext restore artifact remains on the Mac mini. This is an isolated
+data-integrity drill, not proof of full-service recovery within the four-hour
+RTO.
+
+The workflow does **not** provide a daily schedule, automatic retention,
+freshness/failed-run alerts, key recovery, or quarterly restore automation.
+Do not enable an unattended job until a recovery/key owner, retention policy,
+and alert recipient are named, non-interactive Keychain access is proven, and
+the failure path is tested. Do not delete older snapshots as an implicit
+retention policy. Until then, this snapshot is fresh point-in-time evidence
+only; the 24-hour RPO is not guaranteed.
+
 This snapshot is not a backup schedule. Before any production data migration:
 
 - create an encrypted PostgreSQL backup outside the application host;
