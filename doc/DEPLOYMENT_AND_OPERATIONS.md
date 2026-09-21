@@ -274,21 +274,24 @@ RTO.
 
 The workflow does **not** provide a daily schedule, automatic retention,
 freshness/failed-run alerts, key recovery, or quarterly restore automation.
-Do not enable an unattended job until a recovery/key owner, retention policy,
-and alert recipient are named, non-interactive Keychain access is proven, and
-the failure path is tested. Do not delete older snapshots as an implicit
-retention policy. Until then, this snapshot is fresh point-in-time evidence
-only; the 24-hour RPO is not guaranteed.
+Do not enable an unattended job until the recovery/key owner and retention
+policy are known, non-interactive Keychain access is proven, and the failure
+path is tested. The owner has opted out of notifications for this experimental
+project; do not silently substitute a GitHub issue, email, or Codex alert.
+Do not delete older snapshots as an implicit retention policy. Until a tested
+cadence exists, this snapshot is point-in-time evidence only; the 24-hour RPO
+is not guaranteed.
 
-### Phase 3 freshness check and alert ownership
+### Phase 3 freshness check and notification decision
 
 The owner identified the same connected GitHub account, `Khosravangroup`, as
-the key/recovery owner and alert recipient on 21 September 2026. This names a
-responsible person; it does not establish an alert transport or prove that a
-notification reaches them. The account exposes no public email, and the current
-GitHub authorization does not permit reading its private email. Do not infer
-or store an address. The retention duration remains undecided, so no snapshot
-is deleted automatically.
+the key/recovery owner on 21 September 2026. The owner subsequently stated that
+this is an experimental project and does not need registered alerts. No GitHub
+issue, email, Codex notification, or other alert transport is to be created for
+this phase without a new request. This is an owner-directed monitoring opt-out,
+not evidence of backup freshness or a production-release exception. The public
+deployment remains identified as production in the runbook. The retention
+duration remains undecided, so no snapshot is deleted automatically.
 
 `scripts/ops/check-backup-freshness.sh` is a read-only monitoring primitive for
 the Mac mini. It requires `LEADOCHAT_BACKUP_ROOT` to name the protected off-host
@@ -310,12 +313,12 @@ bash scripts/ops/check-backup-freshness.sh
 The Mac mini check passed against `20260921T080639Z`. Seven synthetic fixture
 scenarios passed: no snapshot, healthy snapshot, checksum corruption, unexpected
 checksum inventory, unsafe artifact permissions, missing completion marker, and
-stale snapshot. The
-checker is not a scheduled alert, and it cannot guarantee a new capture if the
-Mac mini is powered off or asleep. Before scheduling, prove background Keychain
-access, a tested notification transport to the named owner, backup-failure and
-freshness alert delivery, and an explicit retention decision. Keep old versions
-until that decision; do not silently infer a deletion period from the RPO.
+stale snapshot. The checker is not scheduled and cannot guarantee a new capture
+if the Mac mini is powered off or asleep. Before scheduling, prove background
+Keychain access, failure handling, and an explicit retention decision. With no
+alerts, the owner must manually inspect capture results and run the freshness
+check; an unattended failure may otherwise go unnoticed. Keep old versions
+until the retention decision; do not infer a deletion period from the RPO.
 
 This snapshot is not a backup schedule. Before any production data migration:
 
@@ -331,9 +334,11 @@ selective/full recovery plan. Never test the deletion workflow against a real
 customer workspace; use an approved synthetic workspace and record its exact ID and
 slug before the operation.
 
-Target RPO is 24 hours and target RTO is 4 hours until the owner defines stricter
-requirements. Phase 3 must automate encrypted capture, retention, freshness alerts,
-and quarterly isolated restores.
+Target RPO is 24 hours and target RTO is 4 hours until the owner defines different
+requirements. Phase 3 still needs a tested encrypted capture cadence, retention
+decision, and quarterly isolated restores. Automated alerts are explicitly
+out of scope for this experimental project at the owner's request; their absence
+prevents a claim that failures will be detected within the RPO.
 
 ## Phase 3 read-only host baseline
 
@@ -431,12 +436,15 @@ private-port state and channel authorization are verified in production.
    incrementally, and keep an independent recovery path. Verify both IPv4 and IPv6
    after each change; do not infer firewall state from `systemctl is-active ufw`.
 3. Define an encrypted off-host backup destination, key custody/recovery owner,
-   retention, daily schedule within the 24-hour RPO, freshness alert recipient,
-   and isolated quarterly restore operator before enabling unattended backup jobs.
+   retention, daily schedule within the 24-hour RPO, and isolated quarterly
+   restore operator before enabling unattended backup jobs. The owner opted out
+   of alerts for this experimental scope; document a manual freshness review or
+   accept that an unattended failure can go unnoticed.
    Prove a complete service restore within the four-hour RTO before closing
    `OPS-01`.
-4. Name the on-call recipient and test alert delivery before enabling production
-   health, database, queue, webhook, Reverb, disk, TLS, and backup-freshness alerts.
+4. Keep production health, database, queue, webhook, Reverb, disk, TLS, and backup
+   alert delivery disabled under the owner's experimental-project opt-out. Revisit
+   monitoring before treating the public deployment as an operational service.
 5. Classify the two failed jobs using redacted metadata, decide whether retry is
    safe, and record a disposition before deleting or replaying either payload.
 
@@ -452,4 +460,6 @@ At least daily or through monitoring:
 - webhook received/processed/failed rates and age;
 - Reverb connection and error rates.
 
-Document alert destinations and on-call ownership before enabling unattended alerts.
+The owner opted out of unattended alerts for this experimental project. These
+routine checks therefore need a deliberate manual operator cadence; their
+absence cannot be represented as monitored health.

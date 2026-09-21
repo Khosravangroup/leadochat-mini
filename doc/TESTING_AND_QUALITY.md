@@ -232,6 +232,10 @@ A production release is `NO-GO` unless all applicable evidence is present:
 - the under-five-minute smoke suite passes before and immediately after deploy;
 - queue, Reverb, database, error logs, and container health remain normal.
 
+The owner's experimental-project alert opt-out does not itself waive these
+release gates for the publicly deployed instance. Do not report unattended
+monitoring or a guaranteed backup RPO when neither is operating.
+
 ## Production smoke suite
 
 Keep production checks read-only or use explicitly designated synthetic data:
