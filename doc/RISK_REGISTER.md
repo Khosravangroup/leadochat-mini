@@ -42,7 +42,7 @@ and infrastructure may change.
 | `OPS-03` | High | Open | SSH and host firewall hardening gaps | 3 |
 | `FE-01` | Medium | In progress | Clean frontend build not proven | 2 |
 | `CI-02` | Medium | Closed | Security scanning disabled/missing | 2 |
-| `OPS-04` | Medium | Open | Reverb port publicly bound | 3 |
+| `OPS-04` | Medium | In progress | Reverb port publicly bound | 3 |
 | `OPS-05` | Medium | In progress | Missing browser security headers | 1, 3 |
 | `TEST-01` | Medium | In progress | SQLite-only automated database coverage | 2, 4 |
 | `ARC-01` | Medium | Open | Oversized controllers/job and inline scripts | 5 |
@@ -427,6 +427,13 @@ are checked automatically, and exposed credentials are rotated when warranted.
 **Evidence:** UFW and fail2ban were inactive; SSH allowed password authentication,
 root login by key, and six authentication attempts.
 
+**Phase 3 recheck, 21 September 2026:** on the verified production host,
+`ufw status` remained inactive even though its systemd unit reported active;
+`fail2ban` was inactive. Effective SSH configuration still allowed passwords and
+root key login with six attempts. Only root had an interactive shell, so no
+non-root administrative route is proven. Unattended upgrades were active/enabled.
+No SSH, firewall, or account setting was changed during this check.
+
 **Impact:** internet-facing management has a broader attack surface and limited
 brute-force controls. Saved access is not authorization to change these settings.
 
@@ -498,6 +505,15 @@ are reviewed and time-bounded.
 
 **Evidence:** production Compose publishes `8081:8081`, while Nginx already proxies
 the `/app` WebSocket path. The host was listening publicly on port `8081`.
+
+**Phase 3 candidate, 21 September 2026:** an external TCP probe confirmed the
+public port still accepts connections. The public Cloudflare/Nginx `/app`
+WebSocket handshake returned HTTP `101`, proving the supported upgrade path.
+The repository candidate removes only the production host publication while
+retaining the internal Compose network and Nginx proxy. Production has not been
+changed; authorized-channel/reconnect smoke and post-change IPv4/IPv6 port checks
+are still required. See the rollout and rollback gates in
+`doc/DEPLOYMENT_AND_OPERATIONS.md`.
 
 **Impact:** clients can bypass intended edge/origin controls and reach Reverb
 directly.
@@ -582,6 +598,10 @@ modules; every slice reduces complexity without unrelated rewrites.
 application error tracker, queue/webhook alerting, SLO dashboard, or named on-call
 process was documented.
 
+**Phase 3 recheck, 21 September 2026:** the host had no project backup timer or
+root cron job. Alert delivery, recipient ownership, and RPO/RTO monitoring remain
+unproven; read-only inventory does not close this finding.
+
 **Impact:** failures, growing queue lag, provider rejection, disk pressure, or
 degraded delivery may remain undetected until user reports.
 
@@ -593,6 +613,10 @@ thresholds, owners, test notifications, and an incident runbook.
 
 **Evidence:** two failed jobs dated 20 April 2026 remained in production while no
 pending jobs existed.
+
+**Phase 3 recheck, 21 September 2026:** two failed jobs remained, with the oldest
+timestamp on 20 April 2026; pending-job count was zero. Payloads were not read,
+replayed, or deleted. Classification and retention decisions remain open.
 
 **Impact:** low current availability risk, but unresolved failure payloads can hide a
 product defect or retain sensitive data.

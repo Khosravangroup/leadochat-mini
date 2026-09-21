@@ -222,6 +222,17 @@ branch protection is effective; secret/code scanning reports are triaged.
 access; WebSockets work through the supported path; headers pass compatibility tests;
 alert delivery is tested; restore meets RPO/RTO.
 
+**Progress on 21 September 2026:** a read-only production recheck confirmed the
+Phase 1 revision, public `8081`, inactive UFW/fail2ban, password-enabled SSH,
+active unattended upgrades, two historical failed jobs, and no scheduled project
+backup. The public Nginx/Cloudflare WebSocket upgrade returned `101`. A focused
+repository candidate removes the production Reverb host-port publication without
+changing the internal Compose network or local development mapping. No production
+host setting, container configuration, or application data was deliberately changed.
+Administrative account, firewall,
+backup cadence/retention, alert delivery, failed-job disposition, static/error
+headers, and authenticated WebSocket smoke remain acceptance blockers.
+
 ## Phase 4 — Safe deployment and PostgreSQL release proof
 
 **Goal:** make releases deterministic, observable, and recoverable.
