@@ -367,7 +367,16 @@ branch deletion are disabled. The sole repository administrator remains exempt s
 the single-collaborator repository cannot deadlock; that exception is explicit and
 must be reassessed when another reviewer is added.
 
-**Close when:** protected branches require reviewed pull requests and current CI
+**Owner governance update, 21 September 2026:** the repository has only the owner
+as a collaborator, and the owner confirmed that no separate human code reviewer
+exists or is required. Required approvals were set to zero on both protected
+branches, and last-pusher approval was disabled. Pull requests, six required
+checks, strict up-to-date status, conversation resolution, and force-push/deletion
+bans were reverified unchanged. The administrator exemption remains; pull request
+`#37` was merged without using it after all six checks passed on the exact head.
+Production-release approval remains a separate gate.
+
+**Close when:** protected branches require pull requests and current CI
 checks; force-push/deletion are restricted; least-privilege CI runs PHP, PostgreSQL,
 frontend build, lint, dependency, secret, and security checks.
 
@@ -509,10 +518,11 @@ the `/app` WebSocket path. The host was listening publicly on port `8081`.
 **Phase 3 candidate, 21 September 2026:** an external TCP probe confirmed the
 public port still accepts connections. The public Cloudflare/Nginx `/app`
 WebSocket handshake returned HTTP `101`, proving the supported upgrade path.
-The repository candidate removes only the production host publication while
-retaining the internal Compose network and Nginx proxy. Production has not been
-changed; authorized-channel/reconnect smoke and post-change IPv4/IPv6 port checks
-are still required. See the rollout and rollback gates in
+Pull request `#37` merged the repository-only Compose change into `develop` as
+`7903517422d6b7b6ab63ee1bf92de6bdaf41afb8`, removing the production host
+publication while retaining the internal Compose network and Nginx proxy.
+Production has not been changed; authorized-channel/reconnect smoke and post-change
+IPv4/IPv6 port checks are still required. See the rollout and rollback gates in
 `doc/DEPLOYMENT_AND_OPERATIONS.md`.
 
 **Impact:** clients can bypass intended edge/origin controls and reach Reverb

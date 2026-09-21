@@ -65,10 +65,12 @@ Critical user journeys are:
 - Composer and npm remediation are merged with zero locked audit findings. Pull
   request `#22` made the audits blocking, schedules weekly runs, pins Ubuntu 24.04,
   and uploads Semgrep SARIF to GitHub code scanning.
-- `develop` and `main` are protected. They require one approval, last-pusher
-  separation, stale-review dismissal, resolved conversations, current branch state,
-  and the six CI/code-scanning checks. Force-push and deletion are disabled. The
-  sole administrator is exempt to prevent a single-collaborator deadlock.
+- `develop` and `main` are protected. On 21 September 2026 the owner confirmed
+  there is no separate human GitHub reviewer and none is required. The approval
+  count is therefore zero. Pull requests, resolved conversations, up-to-date
+  branch state, and the six CI/code-scanning checks remain required; force-push
+  and deletion are disabled. The sole administrator exemption remains, but the
+  required checks must be verified before any owner merge.
 - Dependabot alerts/security updates, secret scanning/push protection, weekly
   Gitleaks/dependency scans, and Semgrep code scanning are enabled. Each GitHub
   security alert surface reported zero open alerts at Phase 2 closure.
@@ -167,10 +169,10 @@ The current evidence and remediation mapping are in `doc/RISK_REGISTER.md`.
 
 ## 8. Team
 
-The repository does not document team size, release approver, on-call owner,
-security contact, data owner, or QA owner. These roles must be assigned before the
-first production remediation release. Do not infer a reviewer from the Git author,
-issue assignee, or repository owner.
+The repository has one GitHub collaborator, the owner, and the owner does not
+require a separate human code reviewer. Release approver, on-call owner, security
+contact, data owner, and QA owner remain undocumented. Code-review policy does not
+substitute for naming these production decision and response roles.
 
 ## 9. Conventions
 
