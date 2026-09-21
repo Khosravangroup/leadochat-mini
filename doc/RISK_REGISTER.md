@@ -6,6 +6,8 @@ Phase 0 containment revision:
 `e8878e667e37115b07f86b9ddc634b5fabd72a24`.
 Phase 1 production revision:
 `b7e948f4325c5fc318f4ab9f7274319d72b3d32a`.
+Phase 2/3 production revision, verified 21 September 2026:
+`4f7f8a61c6cb1c41f93c46e733d12fcf0dc714b1`.
 
 This is an evidence-backed engineering risk register, not proof that every
 potential vulnerability has been exploited. No exploit payload was executed
@@ -120,6 +122,8 @@ readability checks. Isolated PostgreSQL 16 restore recovered 40 public tables,
 files, 2 certificate files, and a mode-`600` environment file. No plaintext
 backup or restore file was retained. The temporary restore container was removed.
 See `doc/DEPLOYMENT_AND_OPERATIONS.md` for the operator workflow and limits.
+The second pre-release snapshot `20260921T144559Z` passed encrypted-stream
+readability and checksums but was not separately restored in isolation.
 
 **Residual risk:** these are verified point-in-time snapshots, not an automated
 schedule or a proven 24-hour RPO. Retention policy, daily cadence, manual
@@ -430,6 +434,15 @@ release branch. Production remains on the older verified Phase 1 revision and it
 runtime-managed files remain inside the checkout, so the deployment portion stays
 in progress for Phase 4.
 
+**Phase 2/3 release update:** pull requests `#43` and `#45` promoted the
+`develop` tree to `main` without rewriting history. The final `main` and
+`develop` trees were identical, and the production checkout now runs pinned
+revision `4f7f8a61c6cb1c41f93c46e733d12fcf0dc714b1` on `main`. The release
+preserved the protected runtime paths and retained the previous code/dependency
+assets for manual rollback. The current deployment script still resets to a
+moving branch and has no immutable artifact or automatic rollback; this
+one-off controlled release does not close `REL-01`.
+
 **Close when:** unique commits are reconciled without history loss; the canonical
 promotion path is documented and enforced; deployment requires an immutable,
 approved revision; the running SHA is verified post-deploy; rollback targets the
@@ -549,8 +562,15 @@ WebSocket handshake returned HTTP `101`, proving the supported upgrade path.
 Pull request `#37` merged the repository-only Compose change into `develop` as
 `7903517422d6b7b6ab63ee1bf92de6bdaf41afb8`, removing the production host
 publication while retaining the internal Compose network and Nginx proxy.
-Production has not been changed; authorized-channel/reconnect smoke and post-change
-IPv4/IPv6 port checks are still required. See the rollout and rollback gates in
+
+**Production rollout:** the exact 21 September `main` revision removed `8081`
+from Compose and Docker publishers. The host had no listener or NAT rule for
+`8081`; a host-local connection was refused and a packet capture observed an
+external SYN answered with a reset. Public `/app` still returned `101`, and
+Reverb and queue remained up. One external TCP connect probe nonetheless
+reported handshake success, but a direct HTTP probe received no response.
+Independent external IPv4/IPv6 verification and approved authenticated-channel/
+reconnect smoke remain required. See the rollout and rollback gates in
 `doc/DEPLOYMENT_AND_OPERATIONS.md`.
 
 **Impact:** clients can bypass intended edge/origin controls and reach Reverb
@@ -590,25 +610,28 @@ synthetic safe CSP report returned `204`.
 
 **Residual risk:** the report-only policy retains `unsafe-inline` for scripts and
 styles and broad HTTPS media/image plus WebSocket schemes while the existing UI is
-measured. Application middleware cannot protect Nginx-served static/error responses.
-Authenticated browser journey evidence, telemetry observation, inline-code
-reduction, source narrowing, Nginx static/error coverage, and separately approved
-enforcement remain open.
+measured. Authenticated browser journey evidence, telemetry observation,
+inline-code reduction, source narrowing, and separately approved enforcement
+remain open.
 
 **Phase 3 recheck, 21 September 2026:** a public static `/robots.txt` response
 returned `200` without the application security headers, confirming the Nginx
 static-response gap. The application and `/up` responses retained the staged
 headers and report-only CSP. No policy was promoted to enforcement.
 
-**Phase 3 repository candidate:** production Nginx configuration now has
+**Phase 3 rollout:** production Nginx configuration now has
 upstream-aware fallback headers for directly served static files and generated
 errors: `nosniff`, same-origin framing, strict-origin referrer, restricted
 permissions, and one-day HTTPS HSTS. An isolated Nginx 1.27 test passed static
 `200`, Nginx-generated `404`/`502`, non-duplicated proxied headers, and absence
 of HSTS on the HTTP redirect. No enforced CSP or edge report-only CSP was added.
-The candidate is not production remediation until exact-revision rollout and
-public static/error/application smoke pass; authenticated browser telemetry,
-source narrowing, and separate CSP enforcement remain open.
+At revision `4f7f8a61c6cb1c41f93c46e733d12fcf0dc714b1`, live `nginx -t`,
+public `/robots.txt` and storage-deny `404`, application `/`, `/up`, and `/login`
+smoke passed with exactly one of each baseline header. An initial headerless
+static response was followed by a Cloudflare cache miss and repeated complete
+responses; older edge caches may retain earlier headers until expiry. The
+authenticated browser/CSP telemetry and separate enforcement criteria remain
+open, so `OPS-05` stays in progress.
 
 **Close when:** headers are deployed with compatibility tests; CSP starts in report-
 only mode, observed violations are resolved without unsafe broad allowances, and
