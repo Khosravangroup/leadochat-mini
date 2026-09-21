@@ -142,6 +142,14 @@ failed against the unmodified configuration because the static response had no
 `X-Content-Type-Options` header. The test runs in the required security CI job.
 No production reload or authenticated browser journey was performed.
 
+The Phase 2 Composer upgrade exposed a release-only asset mismatch during the
+21 September 2026 production preflight: installing the locked Filament version
+in an isolated checkout rewrote tracked public assets and generated seven font
+files. The corrected assets are committed, and the SQLite CI job now checks
+for content differences or new files after `composer install`. File-mode drift
+from the vendor publisher is ignored by this check; production releases must
+still preserve the expected Git checkout state.
+
 ## Local verification
 
 Start with the smallest affected check:

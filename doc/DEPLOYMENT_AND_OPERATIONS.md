@@ -82,6 +82,15 @@ database backup gate, immutable artifact, maintenance/zero-downtime strategy,
 post-deploy smoke gate, or automated rollback. It also installs development
 Composer dependencies because `--no-dev` is absent.
 
+Before a release that changes `composer.lock`, install the exact candidate in an
+isolated checkout and compare the Filament assets under `src/public/css/filament`,
+`src/public/fonts/filament`, and `src/public/js/filament` with Git. The Composer
+`post-autoload-dump` hook runs `filament:upgrade`, which may rewrite tracked
+assets and add fonts. The required SQLite CI job now fails if generated content
+differs from the committed package output (ignoring only executable-bit drift).
+Do not run that upgrade against the live checkout to make an otherwise incomplete
+release appear clean. Stage its generated assets in the repository first.
+
 ## Branch promotion and remaining deployment risk
 
 Feature/fix branches start from `develop`; pull-request release promotion goes from
