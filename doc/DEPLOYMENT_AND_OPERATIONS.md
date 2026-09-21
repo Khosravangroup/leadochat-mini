@@ -262,8 +262,9 @@ changed during this inventory; HTTP probes may create ordinary access/session lo
   zero pending jobs. Only counts and timestamps were queried; payloads were not
   read or retried.
 - Public application and health responses had `nosniff`, same-origin framing,
-  one-day HSTS, and report-only CSP. Static and Nginx-generated responses still
-  need separate header verification.
+  one-day HSTS, and report-only CSP. A direct static `/robots.txt` response had
+  none of those application headers; Nginx-generated error responses still need
+  separate verification.
 
 The Mac mini's `leadochat-dev-codex` connection reaches a different, shared
 LeadoChat host. Its firewall and service state must never be substituted for this

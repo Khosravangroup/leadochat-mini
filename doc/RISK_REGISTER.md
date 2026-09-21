@@ -557,6 +557,11 @@ Authenticated browser journey evidence, telemetry observation, inline-code
 reduction, source narrowing, Nginx static/error coverage, and separately approved
 enforcement remain open.
 
+**Phase 3 recheck, 21 September 2026:** a public static `/robots.txt` response
+returned `200` without the application security headers, confirming the Nginx
+static-response gap. The application and `/up` responses retained the staged
+headers and report-only CSP. No policy was promoted to enforcement.
+
 **Close when:** headers are deployed with compatibility tests; CSP starts in report-
 only mode, observed violations are resolved without unsafe broad allowances, and
 the enforced policy covers scripts, frames, connections, and mixed content.
