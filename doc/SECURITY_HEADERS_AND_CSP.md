@@ -1,8 +1,8 @@
 # Browser security headers and CSP rollout
 
-Status date: 20 September 2026. The Phase 1 application controls described here are
-deployed in production at exact revision
-`b7e948f4325c5fc318f4ab9f7274319d72b3d32a`.
+Status date: 21 September 2026. The Phase 1 application controls and Phase 3
+Nginx fallbacks described here are deployed in production at exact revision
+`4f7f8a61c6cb1c41f93c46e733d12fcf0dc714b1`.
 
 ## Response boundary
 
@@ -20,14 +20,15 @@ to application-generated responses:
 | `Reporting-Endpoints` | configured application URL plus `/csp-reports` | Modern Reporting API destination |
 
 This middleware does not cover a response served directly by Nginx, including a
-static file or an Nginx-generated error. Phase 3 must add matching, tested edge/origin
-headers after the application policy has produced usable compatibility evidence.
+static file or an Nginx-generated error. The deployed Phase 3 Nginx configuration
+adds the five baseline fallbacks at that boundary; CSP remains application-side
+report-only rather than being promoted at the edge.
 
-## Phase 3 Nginx response-header candidate
+## Phase 3 Nginx response-header rollout
 
-Candidate date: 21 September 2026.
+Rollout date: 21 September 2026.
 
-The repository candidate in `docker/nginx/default.prod.conf` adds the same
+The production configuration in `docker/nginx/default.prod.conf` adds the same
 `nosniff`, `SAMEORIGIN`, referrer, permissions, and one-day HSTS baseline at the
 HTTPS Nginx response boundary. It uses upstream-header-aware maps so an
 application or proxied response that already supplies a header does not receive
@@ -39,8 +40,14 @@ inheritance and `always` rules](https://nginx.org/en/docs/http/ngx_http_headers_
 An isolated Nginx 1.27 test with a disposable certificate and synthetic upstream
 passed `nginx -t` and five probes: static `200`, FastCGI-generated `502`, upload
 execution-deny `404`, non-duplicated proxied headers, and HTTP redirect without
-HSTS. The test is included in the required security CI job. This is repository
-evidence only; this task does not deploy the candidate to production.
+HSTS. The test is included in the required security CI job. The exact production
+release also passed `nginx -t` with the live certificate mount and public probes
+of application, static `/robots.txt`, and upload-denial `404` responses. Each
+verified response had one copy of each baseline header; application responses
+retained report-only CSP without an enforced CSP header. An initial public static
+probe lacked the headers, while the subsequent Cloudflare cache miss and repeated
+probes contained them; cached responses at other edge locations may lag until
+expiry or a separately approved cache invalidation.
 
 No enforced CSP or edge-level report-only CSP is introduced. The existing
 Laravel report-only policy and receiver remain the source of truth for

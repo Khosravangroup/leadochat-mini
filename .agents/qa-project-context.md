@@ -74,9 +74,10 @@ Critical user journeys are:
 - Dependabot alerts/security updates, secret scanning/push protection, weekly
   Gitleaks/dependency scans, and Semgrep code scanning are enabled. Each GitHub
   security alert surface reported zero open alerts at Phase 2 closure.
-- Production was verified on `develop` at revision
-  `b7e948f4325c5fc318f4ab9f7274319d72b3d32a`, while `deploy.sh` defaults to
-  `main`. Branch and deployment policy therefore conflict.
+- Production was verified on `main` at revision
+  `4f7f8a61c6cb1c41f93c46e733d12fcf0dc714b1` after exact-tree promotion
+  from `develop`. The default `deploy.sh` still targets a moving `main` branch
+  and is not a safe exact-revision deployment path.
 - Pull request `#29` reconciled the audited branch histories without rewriting them.
   At promotion, the trees were identical and `develop` had no commit absent from
   `main`; the four commits unique to `main` were historical/promotion merge commits.
@@ -116,6 +117,17 @@ token encryption verification passed, the attachment migration had no eligible
 records, public smoke checks and the CSP receiver passed, and the expected
 application security headers are live. Production still uses `MAIL_MAILER=log`, and
 authenticated browser/provider smoke remains pending an approved synthetic target.
+
+The owner-requested Phase 2/3 release was deployed on 21 September 2026 at the
+exact `main` revision above. A fresh encrypted off-host snapshot completed before
+cutover, the exact revision passed required CI, and dependencies/assets were
+installed and compared in an isolated server checkout. All five containers and
+PostgreSQL remained healthy; public health, home, login, static/error-header,
+invalid-webhook, and WebSocket-upgrade checks passed. Queue depth remained zero
+and the two historical failed jobs did not increase. Authenticated browser and
+provider smoke, mail delivery, backup cadence/full-service RTO, and independent
+external `8081` exposure verification remain unproven. See the operational runbook
+for the external TCP handshake/host-reset discrepancy.
 
 On 21 September 2026 the owner described the project as experimental and opted out
 of registered operational alerts. That preference does not change the verified

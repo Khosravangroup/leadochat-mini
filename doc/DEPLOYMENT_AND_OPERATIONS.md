@@ -2,13 +2,13 @@
 
 ## Verified production snapshot
 
-Snapshot date: 20 September 2026.
+Snapshot date: 21 September 2026, after the Phase 2/3 release.
 
 - Public URL: `https://mini.leadochat.com`
 - Application directory: `/opt/leadochat`
 - Runtime: Docker Compose with `app`, `nginx`, `postgres`, `queue`, and `reverb`
-- Verified branch: `develop`
-- Verified revision: `b7e948f4325c5fc318f4ab9f7274319d72b3d32a`
+- Verified branch: `main`
+- Verified revision: `4f7f8a61c6cb1c41f93c46e733d12fcf0dc714b1`
 - Container state: all five running; PostgreSQL healthy at the snapshot time
 - Laravel state: production, debug off, configuration/routes/views cached
 - Database: PostgreSQL 16
@@ -62,6 +62,59 @@ The owner explicitly accepted the known one-time release risk that production st
 uses `MAIL_MAILER=log`; `AUTH-02` remains open until real delivery is configured and
 proven.
 
+## Phase 2/3 production release
+
+On 21 September 2026 the owner requested publication of all merged work through
+the Phase 3 Nginx-header package. Pull requests `#43` and `#45` promoted the
+`develop` tree to `main`; the final production revision is
+`4f7f8a61c6cb1c41f93c46e733d12fcf0dc714b1`, replacing
+`b7e948f4325c5fc318f4ab9f7274319d72b3d32a`. The exact `main` push CI run
+passed PHP/SQLite, PHP/PostgreSQL 16, frontend build, blocking dependency audit,
+and the secret/focused SAST job. The matching pull request passed the required
+Semgrep check. No migration file changed from the prior production revision.
+
+An isolated preflight found that the locked Filament upgrade regenerated tracked
+public assets. Pull request `#44` committed the generated content and added a CI
+drift gate before the production checkout was changed. A fresh encrypted off-host
+snapshot `20260921T144559Z` completed before cutover; the previous snapshot had
+passed an isolated PostgreSQL 16 and storage/runtime restore. The fresh snapshot
+passed encrypted-stream readability and checksum checks, but was not itself a
+full-service restore drill. Old PHP images and the previous `vendor`,
+`node_modules`, and Vite build were retained under a root-only rollback directory
+outside the checkout. The exact candidate's npm and Composer installs, Vite build,
+Filament asset comparison, Compose configuration, and Nginx syntax passed in a
+temporary checkout. Both temporary checkouts were removed after release without
+touching the live environment file; the rollback copy remains.
+
+The operator used a second live SSH session, put Laravel in maintenance mode,
+stopped queue and Reverb, fast-forwarded the clean checkout to the pinned `main`
+commit, swapped the prebuilt runtime dependencies/assets, recreated only `app`,
+`queue`, `reverb`, and `nginx`, rebuilt Laravel caches, confirmed all migrations
+already ran, and returned the application to service. PostgreSQL was not
+recreated. The active environment file remained mode `600`; Git status still
+showed only `.env` and `docker/nginx/certs/` as untracked runtime paths.
+
+Post-release public checks returned `200` for `/up`, `/`, `/login`, and
+`/robots.txt`; anonymous `/dashboard` redirected, an invalid webhook verification
+returned `403`, and the storage script-deny route returned `404`. Static and
+denied responses carried one copy each of the five Nginx baseline headers;
+application responses retained one copy plus report-only CSP and no enforced CSP.
+The public `/app` WebSocket handshake returned `101`. All five containers remained
+up, PostgreSQL healthy, queue depth zero, failed jobs unchanged at two, and no
+new application error-level entry or container error fingerprint appeared during
+the initial observation window. Rollback was not triggered.
+
+The Reverb host-port mapping disappeared from Compose, Docker publishers, and host
+listeners. A direct host-local TCP connection to `8081` was refused; a packet
+capture saw the host reject an external SYN with a reset. One external TCP probe
+nonetheless reported a successful handshake through the network path, while an
+HTTP probe received no application response. Do not claim the public-port finding
+closed until an independent external IPv4/IPv6 scan resolves this discrepancy and
+an approved authenticated channel/reconnect journey passes. Authenticated
+application, provider, email-delivery, and CSP-telemetry journeys were not run;
+the existing mail-driver, backup cadence/RTO, host-hardening, and deployment-flow
+risks remain open. No alert was registered.
+
 ## Current deployment flow
 
 The manual GitHub Actions workflow connects to the server over SSH and runs
@@ -101,11 +154,13 @@ Both branches require a pull request, six current checks, and resolved conversat
 No human GitHub approval is required by the owner; this does not waive the separate
 exact-revision production-release decision below.
 
-Production still runs the older verified Phase 1 revision from `develop`, while
-`deploy.sh` defaults to `main`. Phase 2 did not deploy. Until Phase 4 makes deployment
-immutable and approved by exact revision, every deploy remains `NO-GO` unless a
-human approver names the exact `main` commit, proves it is the intended release, and
-satisfies the backup, runtime-file, migration, smoke, and rollback gates below.
+Production now runs the exact `main` revision recorded above; the older Phase 1
+`develop` checkout is the known-good code rollback target. The broad `deploy.sh`
+still defaults to a moving `main` branch and lacks immutable artifacts, a backup
+gate, and automatic rollback. This release used a separately reviewed,
+exact-revision manual procedure; it did not make the script safe. Future releases
+still require an approved exact commit and the gates below until Phase 4 replaces
+the flow.
 
 ## Runtime-managed files in the production checkout
 
@@ -281,6 +336,13 @@ no plaintext restore artifact remains on the Mac mini. This is an isolated
 data-integrity drill, not proof of full-service recovery within the four-hour
 RTO.
 
+A second capture, `20260921T144559Z`, completed before the Phase 2/3 production
+cutover from the previous production revision. Its encrypted streams passed
+format/readability and checksum validation. This newer snapshot was not separately
+restored into an isolated environment; the earlier `20260921T080639Z` snapshot
+supplies the latest full isolated data-restore evidence. Neither snapshot proves
+a scheduled cadence or full-service recovery time.
+
 The workflow does **not** provide a daily schedule, automatic retention,
 freshness/failed-run alerts, key recovery, or quarterly restore automation.
 Do not enable an unattended job until the recovery/key owner and retention
@@ -397,23 +459,24 @@ active environment file to mode `600`, and removed four plaintext environment
 backups after encrypted restore-verified capture. Phase 1 deployed
 application-generated browser headers and privacy-bounded report-only CSP
 telemetry. The public application response and synthetic CSP receiver smoke passed;
-authenticated browser telemetry and Nginx static/error responses remain open. The
-remaining SSH, firewall, public Reverb, origin-level header, automated
+authenticated browser telemetry remained open. The Phase 2/3 release above added
+the Nginx static/error headers and removed the Reverb host-port mapping. Remaining
+SSH, firewall, independent external port, authenticated WebSocket, automated
 permission-check, and backup-scheduling items stay open.
 
-The Phase 3 Nginx response-header candidate adds five fallback headers to the
+The Phase 3 Nginx response-header change adds five fallback headers to the
 production HTTPS server block for static and generated-error responses without
 duplicating headers already emitted by Laravel or the Reverb upstream. The
 isolated Nginx 1.27 test passed static `200`, generated `404`/`502`, proxied
 responses, and an HTTP redirect with no HSTS. The required security CI job runs
-this fixture. This is not deployed production evidence. No enforced CSP is added.
-Before an approved rollout, validate the exact configuration diff, the existing
-certificate/runtime paths, and `nginx -t` with the target image; do not use the
-current broad `deploy.sh` merely for this configuration change. Reload only
-Nginx after an exact-revision deployment procedure is approved. Immediately
-check the public application, `/robots.txt`, an intended safe `404`, and the
-WebSocket upgrade for correct response headers and no duplicates. Retain the
-prior configuration as rollback; validate it with `nginx -t` before reloading.
+this fixture. The 21 September release validated the exact file with the live
+certificate mount and `nginx -t`, then verified public application,
+`/robots.txt`, storage-deny `404`, and WebSocket-upgrade responses. A briefly
+headerless public static response immediately after cutover was followed by a
+Cloudflare cache miss and repeated header-complete responses; preserve that edge
+cache caveat when investigating another point of presence. No enforced CSP was
+added. Retain the prior configuration as rollback; validate it with `nginx -t`
+before reloading.
 The Laravel `SECURITY_HEADERS_ENABLED` switch does not disable Nginx fallbacks;
 an emergency rollback of all five headers requires restoring the prior Nginx
 configuration as well. The browser may retain already received one-day HSTS.
@@ -434,21 +497,19 @@ Phase 3 pull request `#37` was merged into `develop` as
 `7903517422d6b7b6ab63ee1bf92de6bdaf41afb8`. It removes only the production
 `8081:8081` host publication; `reverb` remains on the existing Compose network and
 Nginx continues to proxy `/app` to `reverb:8081`. Local development port `8081`
-is unchanged. The production host still runs the earlier Phase 1 revision.
+is unchanged. The change reached production in the exact `main` release above.
 
-Before an approved production rollout, review the exact Compose diff and running
-revision, establish a second live administrative session, and confirm the public
-WebSocket upgrade plus an approved synthetic authorized-channel/reconnect journey.
-Schedule a short connection-interruption window because recreating `reverb` drops
-active sockets. Do not use the current broad `deploy.sh` merely to apply this
-single Compose change: it resets the checkout, rebuilds images, and runs migrations.
-Use a separately reviewed, exact-revision Compose-only procedure that preserves
-runtime `.env` and TLS files and does not restart unrelated services.
+The rollout used a second live administrative session and a short
+connection-interruption window; recreating `reverb` necessarily dropped active
+sockets. The current broad `deploy.sh` was not used. The public WebSocket upgrade
+passed, but no approved synthetic authorized-channel/reconnect target was
+available. Keep that acceptance item open.
 
-Immediately after the change, verify that `reverb` is running, `/app` still returns
-an upgrade, the synthetic channel authorization/reconnect journey passes, and
-neither IPv4 nor IPv6 exposes host port `8081`. Observe Reverb errors and queue
-state. If the supported path fails, restore the previously approved Compose file
+After the change, `reverb` ran and `/app` returned `101`; queue state was stable.
+Compose, Docker publishers, host listeners, and host-local connection checks show
+no `8081` publication. An external TCP handshake result conflicts with the host
+RST capture, so independent IPv4/IPv6 exposure verification remains required.
+If the supported path fails, restore the previously approved Compose file
 and recreate only `reverb`; confirm the prior host mapping and WebSocket behavior.
 This rollback temporarily restores the known public-port risk and requires an
 incident decision, not silent acceptance. The finding closes only after the
