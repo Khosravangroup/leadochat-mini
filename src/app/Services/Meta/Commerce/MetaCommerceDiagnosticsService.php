@@ -422,7 +422,9 @@ class MetaCommerceDiagnosticsService
             'provider_connection_id' => $connection->id,
             'provider_account_id' => $accountId,
             'account' => [
-                'id' => $accountBody['id'] ?? $accountBody['user_id'] ?? null,
+                'id' => $usesInstagramLogin
+                    ? ($accountBody['user_id'] ?? $accountBody['id'] ?? null)
+                    : ($accountBody['id'] ?? $accountBody['user_id'] ?? null),
                 'username' => $accountBody['username'] ?? null,
                 'name' => $accountBody['name'] ?? null,
                 'ig_id' => $accountBody['ig_id'] ?? null,

@@ -31,6 +31,7 @@ class MetaCommerceDiagnosticsTest extends TestCase
 
         Http::fake([
             'https://graph.instagram.com/me*' => Http::response([
+                'id' => 'instagram-scoped-account-id',
                 'user_id' => 'instagram-login-account',
                 'username' => 'instagram_login_account',
             ], 200),
