@@ -8,7 +8,7 @@ Snapshot date: 23 September 2026, after the Instagram App Review software releas
 - Application directory: `/opt/leadochat`
 - Runtime: Docker Compose with `app`, `nginx`, `postgres`, `queue`, and `reverb`
 - Verified branch: `main`
-- Verified revision: `00a5c678fb526d3e8948dd646841fc205960ba5f`
+- Verified revision: `df7a0d266d0b97510071587adf8c69d31915a51a`
 - Container state: all five running; PostgreSQL healthy at the snapshot time
 - Laravel state: production, debug off, configuration/routes/views cached
 - Database: PostgreSQL 16
@@ -20,6 +20,28 @@ Snapshot date: 23 September 2026, after the Instagram App Review software releas
 Access credentials and SSH keys are intentionally not documented in the repository.
 They remain in protected local credential storage on the Mac mini. Reverify host,
 user, repository, branch, and revision before every operation.
+
+## Instagram diagnostics production correction
+
+On 23 September 2026 pull requests `#52` and `#54` merged the reviewed diagnostics
+corrections into `develop`; pull requests `#53` and `#55` promoted those exact
+trees to `main`. All SQLite, PostgreSQL 16, frontend, dependency-audit,
+secret/focused-SAST, and Semgrep checks passed. Production was updated to
+`df7a0d266d0b97510071587adf8c69d31915a51a`. There was nothing to migrate.
+
+Post-deploy verification confirmed all five Compose services running, PostgreSQL
+healthy, `GET /up` and `GET /login` returning `200`, and no matching error,
+critical, fatal, or exception line in the container logs during the verification
+window. The live direct-Instagram diagnostic returned `200` for identity and
+subscribed-app checks, used the Instagram Graph API family, matched the canonical
+`user_id` to the saved provider account, and reported channel and webhook health
+as `ok`. Live webhook fields included `messages` and `comments` and matched the
+saved verified set. No provider mutation or channel-send test was performed.
+
+The live commerce summary remains blocked because the direct Instagram connection
+has no discovered Meta catalog. This is retained as an honest App Review evidence
+gap: Facebook commerce requires separate authorization. Local permission rows are
+still audit-only `requested` records and were not reported as live grants.
 
 ## Instagram App Review software release
 

@@ -1,8 +1,9 @@
 # Meta App Review software permission matrix
 
 Code inventory date: 23 September 2026. The Instagram diagnostics correction is
-being prepared from `develop` after the owner reconnected an authorized test
-account. This is an application-code inventory, not proof of a Meta grant or App
+deployed from `main` revision `df7a0d266d0b97510071587adf8c69d31915a51a`
+after the owner reconnected an authorized test account. This is an
+application-code and live-boundary inventory, not proof of a Meta grant or App
 Review approval. Meta dashboard inspection remains outside this task.
 
 The public marketing site, free-start links, and public registration remain
@@ -28,7 +29,7 @@ to remove those public product paths.
 | `instagram_business_manage_messages` | Inbox send through `InstagramMessagingService`; signed inbound webhooks through `ProcessInstagramWebhookEvent` | `InstagramMessagingServiceTest`, `InboxCatalogProductTest`, webhook unit tests | No live DM send/receive proof; narrow send/receive edge cases lack direct tests |
 | `instagram_business_manage_comments` | Social comment read, reply, hide/unhide, and delete through `InstagramCommentService` and `SocialController` | `InstagramReviewApiJourneyTest` covers reply/hide requests and provider-error redaction | Add read/delete and route-authorization edge tests; live proof deferred |
 | `instagram_business_content_publish` | Post and story publish through `InstagramContentService` and `InstagramStoryService` | `InstagramContentServiceTest` covers post product tags; `InstagramReviewApiJourneyTest` covers story create/status/publish | Add video/failure and route-authorization edge tests; live proof deferred |
-| `instagram_business_manage_insights` | Owner-only `GET /social/instagram/insights` reads account reach, views, and interactions through `graph.instagram.com` using the connected Instagram token | `InstagramInsightsTest` covers request, workspace isolation, unavailable metrics, and safe errors | No live provider call or grant proof; media-level insights are not implemented |
+| `instagram_business_manage_insights` | Owner-only `GET /social/instagram/insights` reads account reach, views, and interactions through `graph.instagram.com` using the connected Instagram token | `InstagramInsightsTest` covers request, workspace isolation, unavailable metrics, and safe errors | The live account-level request succeeded; Meta review approval is still pending and media-level insights are not implemented |
 | `business_management` | Deferred from this submission; commerce discovery contains a mocked `/me/businesses` path | `MetaCommerceDiscoveryTest` with mocked provider responses | Requires a separate compatible login/token contract before a future review |
 | `catalog_management` | Deferred from this submission; catalog services remain local groundwork | `MetaCommerceDiscoveryTest`, `MetaCatalogProductSyncTest`, `MetaCommerceStructureSyncTest` | Requires a separate compatible login/token contract before a future review |
 | `ads_read` | Deferred from this submission; no ads/ad-account read API call exists | `MetaCommercePromotionsTest` covers local preparation, not ads read | Not requested in the current Instagram-only review |
@@ -42,9 +43,8 @@ The account Insights request follows Meta's [Instagram User Insights reference](
 2. Extend the new mocked comment/story API tests to read/delete, video/failure,
    and route-authorization edges. Prepare owner-visible proof for those already
    implemented paths. Preserve workspace/role boundaries and secret redaction.
-3. Verify the new account Insights journey against the authorized live Instagram
-   account after the exact candidate is deployed. The local mock is not evidence
-   of a provider grant.
+3. Capture the already verified account Insights journey in the reviewer
+   screencast without exposing tokens or unrelated account data.
 4. Decide the intended ads product workflow and obtain the exact API contract
    before implementing ads read/write calls. Local campaign previews must not be
    presented as completed ads API operations.
@@ -86,7 +86,21 @@ exports only aggregate workspace counts.
 
 The owner completed an interactive reconnect with a test page. Direct read-only
 identity, media, subscribed-app, comments, and account-Insights journeys returned
-successful provider responses. The existing production commerce diagnostics still
-sent the direct Instagram token to Facebook Graph and produced a false `401`;
-the candidate documented above corrects that API-family mismatch. No outbound
-message, moderation action, publication, or other provider mutation was attempted.
+successful provider responses. Pull requests `#52` and `#53` corrected the
+API-family mismatch, and pull requests `#54` and `#55` corrected canonical
+identity selection when Meta returns both `id` and `user_id`.
+
+The exact production revision shown above was then verified against provider
+connection `28`. Identity and subscribed-app checks both returned HTTP `200` with
+`outcome=ok`, the diagnostic account identifier matched the connected provider
+identifier, and the live subscribed fields included `messages` and `comments`.
+Channel health and webhook-subscription readiness were both `ok`. Saved webhook
+fields matched the live response. Provider-granted permissions remained empty,
+while local permission rows remained explicitly `requested`; the application did
+not convert local evidence into provider grants.
+
+The overall commerce review summary remains `blocked` because no Meta catalog is
+discovered for this direct Instagram connection. Catalog access is a warning that
+requires separate Facebook commerce authorization, not a failed Instagram API
+probe. No outbound message, moderation action, publication, catalog mutation, or
+other provider mutation was attempted.
