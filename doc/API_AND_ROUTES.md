@@ -122,6 +122,11 @@ never treated as live provider grants. Catalog probes are marked
 is required. Facebook Graph diagnostics remain available only for the legacy or
 separately authorized commerce path.
 
+When the direct identity response contains both `id` and `user_id`, diagnostics
+use `user_id` as the canonical Instagram account identifier because it is the
+value stored on the provider connection and used by account-scoped Instagram
+endpoints.
+
 The diagnostics response exposes `graph_api_family`, the effective
 `graph_version`, both configured values under `graph_versions`, and a three-state
 `outcome` on provider checks. Live webhook fields are derived only from a
