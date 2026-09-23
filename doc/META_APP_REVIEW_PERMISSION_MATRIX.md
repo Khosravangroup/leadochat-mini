@@ -1,8 +1,8 @@
 # Meta App Review software permission matrix
 
-Code inventory date: 23 September 2026. Candidate branch:
-`fix/meta-review-software-readiness`, based on `develop` at
-`b97d20ce1b45e19339646a3a0b4eecc28b7426f5`. This is an application-code
+Code inventory date: 23 September 2026. The candidate was promoted through pull
+requests `#48` and `#49` and deployed as production revision
+`00a5c678fb526d3e8948dd646841fc205960ba5f`. This is an application-code
 inventory, not proof of a Meta grant, a successful live API call, or App Review
 approval. The owner has authorized a final live-channel check after the reviewed
 candidate is deployed; Meta dashboard inspection remains outside this task.
@@ -66,3 +66,15 @@ Instagram-only default leaves the commerce review list empty. The Insights journ
 is code-backed but still unverified against Meta. In this default state, building
 the Instagram App Review evidence packet does not call deferred commerce APIs and
 exports only aggregate workspace counts.
+
+## Production verification on 23 September 2026
+
+The pre-verified reviewer account can open the production dashboard, settings,
+and owner-only Insights route. The production evidence generator completed without
+a commerce-provider request, produced a five-scope aggregate packet, and omitted
+recent content and commerce data. The single existing Instagram token was expired:
+the read-only identity request returned `401` and the Insights service failed closed.
+The next required action is an interactive Instagram reconnect by the owner. After
+that, repeat the five live journeys and record the reviewer screencasts. No outbound
+message, moderation action, publication, or other provider mutation was attempted
+with the expired token.

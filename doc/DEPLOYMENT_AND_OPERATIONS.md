@@ -2,13 +2,13 @@
 
 ## Verified production snapshot
 
-Snapshot date: 21 September 2026, after the Phase 2/3 release.
+Snapshot date: 23 September 2026, after the Instagram App Review software release.
 
 - Public URL: `https://mini.leadochat.com`
 - Application directory: `/opt/leadochat`
 - Runtime: Docker Compose with `app`, `nginx`, `postgres`, `queue`, and `reverb`
 - Verified branch: `main`
-- Verified revision: `4f7f8a61c6cb1c41f93c46e733d12fcf0dc714b1`
+- Verified revision: `00a5c678fb526d3e8948dd646841fc205960ba5f`
 - Container state: all five running; PostgreSQL healthy at the snapshot time
 - Laravel state: production, debug off, configuration/routes/views cached
 - Database: PostgreSQL 16
@@ -20,6 +20,45 @@ Snapshot date: 21 September 2026, after the Phase 2/3 release.
 Access credentials and SSH keys are intentionally not documented in the repository.
 They remain in protected local credential storage on the Mac mini. Reverify host,
 user, repository, branch, and revision before every operation.
+
+## Instagram App Review software release
+
+On 23 September 2026 pull request `#48` merged the reviewed candidate into
+`develop`, and pull request `#49` promoted that exact tree to `main`. Both pull
+requests passed SQLite, PostgreSQL 16, frontend, dependency, secret, and focused
+SAST checks. The resulting production revision
+`00a5c678fb526d3e8948dd646841fc205960ba5f` replaced
+`4f7f8a61c6cb1c41f93c46e733d12fcf0dc714b1` by fast-forward.
+
+The owner explicitly declined a fresh backup for this personal test deployment.
+No migration, dependency lockfile, Docker, or deployment-flow file changed. The
+operator preserved the mode-`600` environment file and TLS material, recreated
+only `app`, `queue`, `reverb`, and `nginx`, left PostgreSQL running, confirmed that
+there was nothing to migrate, rebuilt Laravel caches, and returned the app from
+maintenance mode. Git status contained only the two documented runtime paths.
+
+Post-release evidence:
+
+- `/up`, `/`, `/login`, `/robots.txt`, and all public legal/contact pages returned
+  `200`; anonymous `/dashboard` redirected and an invalid webhook verification
+  returned `403`;
+- the public response retained HSTS, frame, MIME, referrer, permissions-policy,
+  and report-only CSP headers;
+- the pre-verified reviewer login reached dashboard, settings, and the owner-only
+  Insights route; it was attached with owner-role access to the test workspace;
+- the live Instagram-only evidence packet requested five scopes, contained only
+  aggregate inbox/social/webhook coverage, made no deferred commerce call, and
+  excluded recent-content and commerce packet fields;
+- all five containers remained up, PostgreSQL remained healthy, Reverb accepted
+  an internal TCP connection, pending jobs stayed at zero, historical failed jobs
+  stayed at two, and no new severe Laravel or container log line appeared.
+
+The one connected Instagram token was already expired. A read-only identity probe
+returned `401`, and the Insights journey failed closed with the generic UI error.
+Stored test evidence remains present (conversations, messages, posts, comments,
+stories, and webhook events), but live permission proof and screencast capture are
+blocked until the owner reconnects the Instagram test account. No message, comment,
+post, or story was sent or modified during release verification.
 
 ## Phase 1 production release
 

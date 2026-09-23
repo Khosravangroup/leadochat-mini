@@ -68,7 +68,11 @@ Critical user journeys are:
   makes the evidence export aggregate-only, and proves the Instagram-only packet
   does not call deferred commerce APIs. Syntax, changed-file Pint, views, dependency
   audits, clean frontend build, Nginx checks, Gitleaks, and Semgrep pass.
-  Live Meta behavior remains the final provider-specific gate.
+  Pull requests `#48` and `#49` promoted the candidate to production revision
+  `00a5c678fb526d3e8948dd646841fc205960ba5f`. Authenticated reviewer and evidence
+  export smoke tests passed. The existing Instagram token was expired: the live
+  identity probe returned `401` and Insights failed closed, so reconnect plus live
+  permission walkthroughs and screencasts remain the provider-specific gate.
 - PHP syntax validation passed for all PHP files in the audited revision.
 - No committed browser E2E, accessibility, visual-regression, or load suite is
   present. The Phase 2 CI workflow runs the complete existing suite against both
