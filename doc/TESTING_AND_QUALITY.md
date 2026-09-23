@@ -168,6 +168,58 @@ or independent external IPv4/IPv6 port proof.
 
 ## Local verification
 
+For the local `fix/meta-review-software-readiness` candidate on 21 September
+2026, the new Instagram OAuth callback regression first failed because
+`callback_state` was retained in connection metadata; a second red regression
+proved provider exchange errors returned HTTP `500`; failed attempts were also
+left pending with a premature connection time. After the focused fix, four
+callback tests passed with 40 assertions on SQLite, including cross-workspace
+state rejection. The full suite passed with 118 tests and 951 assertions on both
+SQLite and PostgreSQL 16. Changed
+PHP files passed syntax and Pint checks; a clean `npm ci` and Vite 8.3.0 build
+passed. The locked Composer and npm audits reported zero advisories. Token
+exchange was mocked; no live Instagram account, webhook, or channel was tested.
+Production remains unchanged
+by this candidate, so these results are not release or provider acceptance proof.
+
+For the local permission-to-feature audit on 21 September 2026, a new diagnostic
+test first failed because a granted ads scope had no separate code-journey gap
+field; an added regression then failed because the default Instagram Insights
+scope was not included in that gap report. The candidate now blocks a commerce
+review `ready` summary for either kind of unsupported configured scope and
+carries both gap lists into the exported packet. The focused commerce diagnostics
+and final evidence tests passed (5 tests, 98 assertions) on
+SQLite and isolated PostgreSQL 16. The complete suite passed on both databases
+with 119 tests and 964 assertions. All provider responses in these tests were
+mocked. The disposable PostgreSQL test container was removed; no live channel,
+Meta dashboard, or production account was exercised.
+
+Three additional mocked API-journey tests then passed with 14 assertions on
+SQLite and isolated PostgreSQL 16: image-story container/status/publish request
+shape, comment reply/hide request shape, and provider-error token redaction. The
+final cumulative suite passed on both SQLite and PostgreSQL 16 with 122 tests
+and 978 assertions. These are not live permission or route-authorization tests.
+
+The next local account Insights candidate adds six mocked feature tests for the
+official Instagram Login host/metric request, workspace and role boundaries,
+expired-token rejection, missing-value display, and provider-error secrecy.
+Its focused Insights, diagnostics, and app-review packet set passed 11 tests
+with 118 assertions. The complete SQLite suite passed 128 tests and 998
+assertions; changed PHP files passed Pint in check mode. PostgreSQL was not
+rerun for this addition. No live Meta request, dashboard change, or deployment
+was made.
+
+The 23 September App Review hardening adds focused feature tests for the
+five-scope default, truthful `requested` permission persistence, non-misleading
+readiness labels, consistent public legal/deletion copy, aggregate-only evidence
+exports, and an Instagram-only evidence path that performs no deferred commerce
+API request. The complete suite passed 133 tests with 1062 assertions on both
+SQLite and isolated PostgreSQL 16. All 429 PHP files passed syntax validation; changed
+PHP files passed Pint; Blade view caching, `git diff --check`, Composer validation
+and audit, clean Node 24 install/npm audit/Vite 8.3.0 build, the Nginx response-header
+suite, a 113-commit Gitleaks scan, and the four-rule focused Semgrep scan passed.
+These results still do not prove a live Meta grant or provider journey.
+
 Start with the smallest affected check:
 
 ```bash

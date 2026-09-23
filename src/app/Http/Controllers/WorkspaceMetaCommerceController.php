@@ -74,7 +74,7 @@ class WorkspaceMetaCommerceController extends Controller
 
         return redirect()
             ->route('settings.index', ['section' => 'commerce'])
-            ->with('status', 'Meta Commerce discovery finished. Found ' . count($discovery['catalogs'] ?? []) . ' catalog(s).');
+            ->with('status', 'Meta Commerce discovery finished. Found '.count($discovery['catalogs'] ?? []).' catalog(s).');
     }
 
     public function syncProducts(
@@ -247,28 +247,28 @@ class WorkspaceMetaCommerceController extends Controller
             404
         );
 
-        $diagnostics = $diagnosticsService->diagnoseForConnection($connection);
-        $reviewPacket = $reviewPacketService->generateForConnection($connection, $diagnostics);
-        $appReviewEvidence = $appReviewEvidenceService->generateForConnection($connection, $diagnostics, $reviewPacket);
+        $commerceScopes = array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) config('services.meta.commerce_review_scopes', ''))
+        )));
+        $isCommerceReviewEnabled = $commerceScopes !== [];
+
+        if ($isCommerceReviewEnabled) {
+            $diagnostics = $diagnosticsService->diagnoseForConnection($connection);
+            $reviewPacket = $reviewPacketService->generateForConnection($connection, $diagnostics);
+        } else {
+            $diagnostics = [
+                'account' => [
+                    'username' => $connection->provider_account_name,
+                    'name' => $connection->provider_account_name,
+                ],
+                'permissions' => $diagnosticsService->instagramReviewConfiguration(),
+            ];
+            $reviewPacket = [];
+        }
+        $appReviewEvidence = $appReviewEvidenceService->generateForConnection($connection, $diagnostics);
 
         $meta = is_array($connection->meta) ? $connection->meta : [];
-        $reviewPacketHistory = collect((array) ($meta['meta_commerce_review_packet_history'] ?? []))
-            ->filter(fn ($entry) => is_array($entry))
-            ->prepend([
-                'generated_at' => $reviewPacket['generated_at'] ?? now()->toIso8601String(),
-                'status' => data_get($reviewPacket, 'summary.status'),
-                'headline' => data_get($reviewPacket, 'summary.headline'),
-                'discovered_catalog_count' => data_get($reviewPacket, 'catalogs.discovered_count', 0),
-                'order_count' => data_get($reviewPacket, 'orders.order_count', 0),
-                'snapshot_count' => data_get($reviewPacket, 'orders.snapshot_count', 0),
-                'campaign_count' => data_get($reviewPacket, 'promotions.campaign_count', 0),
-                'prepared_campaign_count' => data_get($reviewPacket, 'promotions.prepared_campaign_count', 0),
-                'blocker_count' => count((array) data_get($reviewPacket, 'review_evidence.blockers', [])),
-                'warning_count' => count((array) data_get($reviewPacket, 'review_evidence.warnings', [])),
-            ])
-            ->take(5)
-            ->values()
-            ->all();
 
         $appReviewHistory = collect((array) ($meta['meta_app_review_evidence_history'] ?? []))
             ->filter(fn ($entry) => is_array($entry))
@@ -288,16 +288,41 @@ class WorkspaceMetaCommerceController extends Controller
             ->values()
             ->all();
 
-        $meta['meta_commerce_diagnostics'] = $diagnostics;
-        $meta['meta_commerce_review_packet'] = $reviewPacket;
-        $meta['meta_commerce_review_packet_history'] = $reviewPacketHistory;
+        if ($isCommerceReviewEnabled) {
+            $reviewPacketHistory = collect((array) ($meta['meta_commerce_review_packet_history'] ?? []))
+                ->filter(fn ($entry) => is_array($entry))
+                ->prepend([
+                    'generated_at' => $reviewPacket['generated_at'] ?? now()->toIso8601String(),
+                    'status' => data_get($reviewPacket, 'summary.status'),
+                    'headline' => data_get($reviewPacket, 'summary.headline'),
+                    'discovered_catalog_count' => data_get($reviewPacket, 'catalogs.discovered_count', 0),
+                    'order_count' => data_get($reviewPacket, 'orders.order_count', 0),
+                    'snapshot_count' => data_get($reviewPacket, 'orders.snapshot_count', 0),
+                    'campaign_count' => data_get($reviewPacket, 'promotions.campaign_count', 0),
+                    'prepared_campaign_count' => data_get($reviewPacket, 'promotions.prepared_campaign_count', 0),
+                    'blocker_count' => count((array) data_get($reviewPacket, 'review_evidence.blockers', [])),
+                    'warning_count' => count((array) data_get($reviewPacket, 'review_evidence.warnings', [])),
+                ])
+                ->take(5)
+                ->values()
+                ->all();
+
+            $meta['meta_commerce_diagnostics'] = $diagnostics;
+            $meta['meta_commerce_review_packet'] = $reviewPacket;
+            $meta['meta_commerce_review_packet_history'] = $reviewPacketHistory;
+        }
         $meta['meta_app_review_evidence'] = $appReviewEvidence;
         $meta['meta_app_review_evidence_history'] = $appReviewHistory;
         $meta['meta_commerce'] = array_merge($meta['meta_commerce'] ?? [], [
-            'last_diagnostics_at' => now()->toIso8601String(),
-            'last_review_packet_at' => $reviewPacket['generated_at'] ?? now()->toIso8601String(),
             'last_app_review_evidence_at' => $appReviewEvidence['generated_at'] ?? now()->toIso8601String(),
         ]);
+
+        if ($isCommerceReviewEnabled) {
+            $meta['meta_commerce'] = array_merge($meta['meta_commerce'], [
+                'last_diagnostics_at' => now()->toIso8601String(),
+                'last_review_packet_at' => $reviewPacket['generated_at'] ?? now()->toIso8601String(),
+            ]);
+        }
 
         $connection->update([
             'last_synced_at' => now(),

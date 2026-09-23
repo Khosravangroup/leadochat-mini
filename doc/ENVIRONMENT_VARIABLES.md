@@ -97,13 +97,22 @@ test through the actual provider.
 | `INSTAGRAM_WEBHOOK_VERIFY_TOKEN` | yes | Webhook verification token |
 | `INSTAGRAM_REDIRECT_URI` | no | Exact OAuth callback URI |
 | `INSTAGRAM_GRAPH_VERSION`, `META_GRAPH_VERSION` | no | Pinned Graph API versions |
-| `INSTAGRAM_SCOPES`, `META_COMMERCE_REVIEW_SCOPES` | no | Requested provider permissions |
+| `INSTAGRAM_SCOPES` | no | Five requested Instagram Login permissions |
+| `META_COMMERCE_REVIEW_SCOPES` | no | Optional Facebook Login/Marketing API permissions; empty for the current Instagram-only review |
 | `INSTAGRAM_WEBHOOK_SUBSCRIBED_FIELDS` | no | Requested webhook fields |
 | `INSTAGRAM_WEBHOOK_LOG_LEVEL` | no | Webhook-specific logging level |
 
 Use the least permissions required. Redirect URIs and webhook URLs must exactly
 match provider configuration. Never log authorization codes, access tokens,
 refresh tokens, app secrets, verify tokens, or full signed payloads.
+
+The current App Review submission is limited to the five permissions in
+`INSTAGRAM_SCOPES`. `META_COMMERCE_REVIEW_SCOPES` defaults to an empty value and
+must remain empty for this Instagram Login review. It is reserved for a future,
+separately authenticated Facebook Login/Marketing API integration and is never
+appended to the Instagram OAuth request. Do not infer that a commerce scope is
+granted from its presence in configuration or in local connection metadata. See
+`META_APP_REVIEW_PERMISSION_MATRIX.md` for the code-backed journey inventory.
 
 ## Files, logs, and optional providers
 

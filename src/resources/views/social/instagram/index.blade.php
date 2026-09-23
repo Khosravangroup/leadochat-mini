@@ -1415,6 +1415,10 @@
                     >
                         Stories
                     </a>
+
+                    <a href="{{ route('social.instagram.insights', $accountQuery) }}" class="social-tab-link">
+                        Insights
+                    </a>
                 </div>
             </div>
 

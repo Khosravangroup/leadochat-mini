@@ -3243,44 +3243,43 @@
                             <div class="ws-commerce-card">
                                 <h3 class="ws-section-title">App Review readiness</h3>
                                 <div class="ws-section-subtitle">
-                                    Use this panel to prove that Leadochat reads real Meta business and commerce assets.
+                                    The current submission is limited to the five implemented Instagram Login permissions.
                                 </div>
                                 <div class="ws-commerce-list">
-                                    @foreach ((array) config('services.meta.commerce_review_scopes', '') ? array_filter(array_map('trim', explode(',', config('services.meta.commerce_review_scopes')))) : [] as $scope)
+                                    @foreach (array_filter(array_map('trim', explode(',', (string) config('services.instagram.scopes', '')))) as $scope)
                                         <span class="ws-commerce-pill">{{ $scope }}</span>
                                     @endforeach
                                 </div>
                                 <div class="ws-commerce-meta" style="margin-top:10px;">
-                                    Discovery uses Meta Graph API and stores successful catalogs as Leadochat catalogs with source Meta.
+                                    Commerce, catalog, tagging, and ads permissions are not part of the current Instagram App Review submission.
                                 </div>
                             </div>
 
                             <div class="ws-commerce-card">
-                                <h3 class="ws-section-title">Phase 8 scope</h3>
+                                <h3 class="ws-section-title">Commerce groundwork</h3>
                                 <div class="ws-section-subtitle">
-                                    Add ad and promotion groundwork on top of the commerce stack with collection ads, promoted posts, shops-ad prep, and review-facing campaign evidence.
+                                    Local previews and records are product groundwork only. They do not prove a Meta ads, catalog, or product-tagging permission.
                                 </div>
                                 <div class="ws-commerce-list">
-                                    <span class="ws-commerce-pill ok">Collection ads</span>
-                                    <span class="ws-commerce-pill ok">Promoted posts</span>
-                                    <span class="ws-commerce-pill ok">Shops ad prep</span>
-                                    <span class="ws-commerce-pill ok">Payload previews</span>
-                                    <span class="ws-commerce-pill ok">Review campaign proof</span>
+                                    <span class="ws-commerce-pill">Local collection-ad preview</span>
+                                    <span class="ws-commerce-pill">Local promoted-post preview</span>
+                                    <span class="ws-commerce-pill">Local campaign records</span>
                                 </div>
+                                <div class="ws-commerce-meta" style="margin-top:10px;">Not part of the current Instagram App Review submission.</div>
                             </div>
 
                             <div class="ws-commerce-card">
-                                <h3 class="ws-section-title">Phase 9 scope</h3>
+                                <h3 class="ws-section-title">Evidence packet tools</h3>
                                 <div class="ws-section-subtitle">
-                                    Build one final App Review evidence packet that combines inbox, social, publishing, webhook, commerce, orders, and promotion proof for the connected Instagram account.
+                                    Generate a redacted summary of available test evidence. Live provider calls and grants must still be verified separately.
                                 </div>
                                 <div class="ws-commerce-list">
-                                    <span class="ws-commerce-pill ok">Inbox proof</span>
-                                    <span class="ws-commerce-pill ok">Social proof</span>
-                                    <span class="ws-commerce-pill ok">Webhook proof</span>
-                                    <span class="ws-commerce-pill ok">Commerce proof</span>
-                                    <span class="ws-commerce-pill ok">Downloadable JSON</span>
+                                    <span class="ws-commerce-pill">Inbox summary</span>
+                                    <span class="ws-commerce-pill">Social summary</span>
+                                    <span class="ws-commerce-pill">Webhook summary</span>
+                                    <span class="ws-commerce-pill">Downloadable JSON</span>
                                 </div>
+                                <div class="ws-commerce-meta" style="margin-top:10px;">Evidence tools available; provider proof still required.</div>
                             </div>
                         </div>
 
@@ -3322,9 +3321,7 @@
                                         $appReviewCoverageInbox = is_array($appReviewCoverage['inbox'] ?? null) ? $appReviewCoverage['inbox'] : [];
                                         $appReviewCoverageSocial = is_array($appReviewCoverage['social'] ?? null) ? $appReviewCoverage['social'] : [];
                                         $appReviewCoverageWebhooks = is_array($appReviewCoverage['webhooks'] ?? null) ? $appReviewCoverage['webhooks'] : [];
-                                        $appReviewCoverageCommerce = is_array($appReviewCoverage['commerce'] ?? null) ? $appReviewCoverage['commerce'] : [];
                                         $appReviewEvidence = is_array($appReviewEvidencePacket['evidence'] ?? null) ? $appReviewEvidencePacket['evidence'] : [];
-                                        $appReviewRecentActivity = is_array($appReviewEvidencePacket['recent_activity'] ?? null) ? $appReviewEvidencePacket['recent_activity'] : [];
                                         $appReviewSteps = is_array($appReviewEvidencePacket['demo_script'] ?? null) ? $appReviewEvidencePacket['demo_script'] : [];
                                         $appReviewHistory = is_array($connectionMeta['meta_app_review_evidence_history'] ?? null) ? $connectionMeta['meta_app_review_evidence_history'] : [];
                                     @endphp
@@ -3344,27 +3341,29 @@
                                             </div>
 
                                             <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                                                <form method="POST" action="{{ route('settings.commerce.sync', $connection) }}">
-                                                    @csrf
-                                                    <button type="submit" class="ws-commerce-button">Run discovery</button>
-                                                </form>
+                                                @if (filled(config('services.meta.commerce_review_scopes')))
+                                                    <form method="POST" action="{{ route('settings.commerce.sync', $connection) }}">
+                                                        @csrf
+                                                        <button type="submit" class="ws-commerce-button">Run discovery</button>
+                                                    </form>
 
-                                                <form method="POST" action="{{ route('settings.commerce.diagnostics', $connection) }}">
-                                                    @csrf
-                                                    <button type="submit" class="ws-commerce-button" style="background:#1d4ed8;">Run diagnostics</button>
-                                                </form>
+                                                    <form method="POST" action="{{ route('settings.commerce.diagnostics', $connection) }}">
+                                                        @csrf
+                                                        <button type="submit" class="ws-commerce-button" style="background:#1d4ed8;">Run diagnostics</button>
+                                                    </form>
 
-                                                <form method="POST" action="{{ route('settings.commerce.review-packet.generate', $connection) }}">
-                                                    @csrf
-                                                    <button type="submit" class="ws-commerce-button" style="background:#7c3aed;">Build review packet</button>
-                                                </form>
+                                                    <form method="POST" action="{{ route('settings.commerce.review-packet.generate', $connection) }}">
+                                                        @csrf
+                                                        <button type="submit" class="ws-commerce-button" style="background:#7c3aed;">Build commerce groundwork packet</button>
+                                                    </form>
+                                                @endif
 
                                                 <form method="POST" action="{{ route('settings.commerce.app-review-evidence.generate', $connection) }}">
                                                     @csrf
-                                                    <button type="submit" class="ws-commerce-button" style="background:#059669;">Build app review evidence</button>
+                                                    <button type="submit" class="ws-commerce-button" style="background:#059669;">Build Instagram review evidence</button>
                                                 </form>
 
-                                                @if ($reviewPacket !== [])
+                                                @if ($reviewPacket !== [] && filled(config('services.meta.commerce_review_scopes')))
                                                     <a href="{{ route('settings.commerce.review-packet.download', $connection) }}" class="ws-commerce-button" style="background:#334155; text-decoration:none;">
                                                         Download packet
                                                     </a>
@@ -3497,7 +3496,7 @@
                                                 </div>
                                             @endif
 
-                                            @if ($reviewPacket !== [])
+                                            @if ($reviewPacket !== [] && filled(config('services.meta.commerce_review_scopes')))
                                                 @php
                                                     $packetStatusClass = match ($reviewPacketSummary['status'] ?? 'needs_attention') {
                                                         'ready' => 'ok',
@@ -3642,10 +3641,10 @@
                                                 <div class="ws-commerce-summary">
                                                     <div class="ws-commerce-summary-head">
                                                         <div class="ws-commerce-summary-copy">
-                                                            <div class="ws-commerce-summary-title">Final App Review evidence</div>
+                                                            <div class="ws-commerce-summary-title">Instagram App Review evidence</div>
                                                             <div class="ws-commerce-summary-text">
                                                                 Generated {{ $appReviewEvidencePacket['generated_at'] ?? 'just now' }}.
-                                                                This packet combines inbox, social, publishing, webhook, and commerce proof in one saved snapshot.
+                                                                This redacted packet combines Instagram inbox, comments, publishing, insights, and webhook evidence in one saved snapshot.
                                                             </div>
                                                         </div>
 
@@ -3678,10 +3677,6 @@
                                                         <div class="ws-commerce-metric">
                                                             <div class="ws-commerce-metric-label">Webhook events</div>
                                                             <div class="ws-commerce-metric-value">{{ $appReviewCoverageWebhooks['event_count'] ?? 0 }}</div>
-                                                        </div>
-                                                        <div class="ws-commerce-metric">
-                                                            <div class="ws-commerce-metric-label">Orders</div>
-                                                            <div class="ws-commerce-metric-value">{{ $appReviewCoverageCommerce['order_count'] ?? 0 }}</div>
                                                         </div>
                                                     </div>
 
@@ -3734,7 +3729,7 @@
                                                     @endif
 
                                                     <details class="ws-commerce-details">
-                                                        <summary>Cross-product evidence detail</summary>
+                                                        <summary>Instagram evidence detail</summary>
                                                         <div class="ws-commerce-list">
                                                             <div class="ws-commerce-meta">
                                                                 Inbox coverage:
@@ -3742,8 +3737,7 @@
                                                                     Conversations {{ $appReviewCoverageInbox['conversation_count'] ?? 0 }},
                                                                     assigned {{ $appReviewCoverageInbox['assigned_conversation_count'] ?? 0 }},
                                                                     unread {{ $appReviewCoverageInbox['unread_conversation_count'] ?? 0 }},
-                                                                    attachments {{ $appReviewCoverageInbox['attachment_count'] ?? 0 }},
-                                                                    product shares {{ $appReviewCoverageInbox['product_share_count'] ?? 0 }}
+                                                                    attachments {{ $appReviewCoverageInbox['attachment_count'] ?? 0 }}
                                                                 </span>
                                                             </div>
 
@@ -3751,7 +3745,6 @@
                                                                 Social coverage:
                                                                 <span class="ws-commerce-code">
                                                                     Posts {{ $appReviewCoverageSocial['post_count'] ?? 0 }},
-                                                                    product tagged posts {{ $appReviewCoverageSocial['product_tagged_post_count'] ?? 0 }},
                                                                     comments {{ $appReviewCoverageSocial['comment_count'] ?? 0 }},
                                                                     DM replies {{ $appReviewCoverageSocial['dm_reply_count'] ?? 0 }},
                                                                     stories {{ $appReviewCoverageSocial['story_count'] ?? 0 }}
@@ -3768,41 +3761,6 @@
                                                                 </span>
                                                             </div>
 
-                                                            <div class="ws-commerce-meta">
-                                                                Commerce coverage:
-                                                                <span class="ws-commerce-code">
-                                                                    Catalogs {{ $appReviewCoverageCommerce['catalog_count'] ?? 0 }},
-                                                                    active products {{ $appReviewCoverageCommerce['active_product_count'] ?? 0 }},
-                                                                    sets {{ $appReviewCoverageCommerce['product_set_count'] ?? 0 }},
-                                                                    collections {{ $appReviewCoverageCommerce['collection_count'] ?? 0 }},
-                                                                    orders {{ $appReviewCoverageCommerce['order_count'] ?? 0 }},
-                                                                    campaigns {{ $appReviewCoverageCommerce['promotion_campaign_count'] ?? 0 }}
-                                                                </span>
-                                                            </div>
-
-                                                            @foreach ((array) ($appReviewRecentActivity['messages'] ?? []) as $messageItem)
-                                                                <div class="ws-commerce-meta">
-                                                                    Recent message:
-                                                                    <span class="ws-commerce-code">
-                                                                        {{ strtoupper($messageItem['direction'] ?? 'message') }}
-                                                                        · {{ $messageItem['message_type'] ?? 'text' }}
-                                                                        · {{ $messageItem['customer_name'] ?? ($messageItem['conversation_title'] ?? 'Conversation') }}
-                                                                        · {{ $messageItem['text_preview'] ?? '' }}
-                                                                    </span>
-                                                                </div>
-                                                            @endforeach
-
-                                                            @foreach ((array) ($appReviewRecentActivity['comments'] ?? []) as $commentItem)
-                                                                <div class="ws-commerce-meta">
-                                                                    Recent comment:
-                                                                    <span class="ws-commerce-code">
-                                                                        {{ $commentItem['username'] ?? 'user' }}
-                                                                        · {{ $commentItem['text'] ?? '' }}
-                                                                        · DM {{ !empty($commentItem['replied_via_dm_at']) ? 'yes' : 'no' }}
-                                                                        · Public {{ !empty($commentItem['replied_publicly_at']) ? 'yes' : 'no' }}
-                                                                    </span>
-                                                                </div>
-                                                            @endforeach
                                                         </div>
                                                     </details>
 

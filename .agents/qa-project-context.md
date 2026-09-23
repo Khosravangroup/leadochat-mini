@@ -1,6 +1,6 @@
 # QA Project Context
 
-Last verified: 21 September 2026. This file is the source of truth for project
+Last verified: 23 September 2026. This file is the source of truth for project
 stack, environments, quality goals, and test policy. Reverify volatile production
 facts before relying on them.
 
@@ -47,6 +47,28 @@ Critical user journeys are:
 - Current automated tests use in-memory SQLite, synchronous queues, array sessions,
   and array mail.
 - Latest cumulative Phase 1 baseline: 114 tests and 911 assertions, all passing.
+- The 21 September local Meta-review OAuth candidate adds four callback tests;
+  its complete suite passed 118 tests and 951 assertions on both SQLite and
+  PostgreSQL 16. This candidate has not been deployed or exercised with a live
+  Instagram account.
+- The subsequent local permission-to-feature diagnostic adds one test. The
+  cumulative suite passed 119 tests and 964 assertions on SQLite and isolated
+  PostgreSQL 16. Provider responses were mocked and production was not changed.
+- Three additional mocked comment/story API-journey tests passed with 14
+  assertions on both databases. The final complete suite passed 122 tests and
+  978 assertions on both SQLite and PostgreSQL 16. No live channel was exercised.
+- The following local account Insights change adds six mocked feature tests.
+  The complete SQLite suite passed 128 tests and 998 assertions; focused
+  Insights/diagnostics/evidence tests passed 11 tests with 118 assertions.
+  PostgreSQL and live Meta behavior were not rerun for this addition.
+- The 23 September App Review hardening brings the complete suite to 133 tests and
+  1062 assertions on both SQLite and isolated PostgreSQL 16. It verifies the
+  five-scope default, stores configured scopes as requested rather than granted,
+  removes fixed green provider-proof claims, aligns public legal/deletion copy,
+  makes the evidence export aggregate-only, and proves the Instagram-only packet
+  does not call deferred commerce APIs. Syntax, changed-file Pint, views, dependency
+  audits, clean frontend build, Nginx checks, Gitleaks, and Semgrep pass.
+  Live Meta behavior remains the final provider-specific gate.
 - PHP syntax validation passed for all PHP files in the audited revision.
 - No committed browser E2E, accessibility, visual-regression, or load suite is
   present. The Phase 2 CI workflow runs the complete existing suite against both

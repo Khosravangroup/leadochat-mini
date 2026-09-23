@@ -18,11 +18,80 @@ class MetaCommerceDiagnosticsTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_granted_ads_scopes_do_not_claim_a_demonstrable_review_journey(): void
+    {
+        config([
+            'services.meta.graph_version' => 'v25.0',
+            'services.meta.commerce_review_scopes' => 'ads_read,ads_management',
+        ]);
+
+        Http::fake([
+            'https://graph.facebook.com/v25.0/me/permissions*' => Http::response([
+                'data' => [
+                    ['permission' => 'ads_read', 'status' => 'granted'],
+                    ['permission' => 'ads_management', 'status' => 'granted'],
+                ],
+            ], 200),
+            'https://graph.facebook.com/*' => Http::response([], 200),
+        ]);
+
+        $owner = User::factory()->create();
+        $workspace = Workspace::create([
+            'owner_id' => $owner->id,
+            'name' => 'Review Scope Workspace',
+            'slug' => 'review-scope-workspace',
+        ]);
+        $workspace->members()->attach($owner->id, ['role' => 'owner']);
+
+        $connection = ProviderConnection::create([
+            'workspace_id' => $workspace->id,
+            'provider' => 'instagram',
+            'provider_account_type' => 'instagram_account',
+            'provider_account_id' => 'review-scope-account',
+            'provider_account_name' => 'review_scope_account',
+            'status' => 'connected',
+        ]);
+
+        OauthToken::create([
+            'provider_connection_id' => $connection->id,
+            'token_type' => 'access_token',
+            'access_token' => 'review-scope-test-token',
+            'expires_at' => now()->addDay(),
+            'is_primary' => true,
+        ]);
+
+        $this->actingAs($owner)
+            ->post(route('settings.commerce.diagnostics', $connection))
+            ->assertRedirect(route('settings.index', ['section' => 'commerce']));
+
+        $diagnostics = $connection->fresh()->meta['meta_commerce_diagnostics'];
+
+        $this->assertSame([], $diagnostics['permissions']['missing']);
+        $this->assertSame(
+            ['ads_read', 'ads_management'],
+            $diagnostics['permissions']['without_demonstrated_api_journey']
+        );
+        $this->assertSame([], $diagnostics['permissions']['instagram_without_demonstrated_api_journey']);
+        $this->assertSame('fail', collect($diagnostics['readiness'])->firstWhere('key', 'scope_feature_coverage')['status']);
+        $this->assertSame('ok', collect($diagnostics['readiness'])->firstWhere('key', 'instagram_scope_feature_coverage')['status']);
+        $this->assertSame('blocked', $diagnostics['review']['status']);
+
+        $this->actingAs($owner)
+            ->post(route('settings.commerce.review-packet.generate', $connection))
+            ->assertRedirect(route('settings.index', ['section' => 'commerce']));
+
+        $packet = $connection->fresh()->meta['meta_commerce_review_packet'];
+        $this->assertSame('blocked', $packet['summary']['status']);
+        $this->assertSame(['ads_read', 'ads_management'], $packet['permissions']['without_demonstrated_api_journey']);
+        $this->assertSame([], $packet['permissions']['instagram_without_demonstrated_api_journey']);
+    }
+
     public function test_it_builds_meta_commerce_diagnostics_for_connected_instagram_account(): void
     {
         config([
             'services.meta.graph_version' => 'v25.0',
             'services.meta.commerce_review_scopes' => 'business_management,catalog_management,instagram_business_basic',
+            'services.instagram.scopes' => 'instagram_business_basic,instagram_business_manage_messages,instagram_business_manage_comments,instagram_business_content_publish',
         ]);
 
         Http::fake([
@@ -263,10 +332,10 @@ class MetaCommerceDiagnosticsTest extends TestCase
         $this->assertSame(3, $diagnostics['checkout_urls']['checked_count']);
         $this->assertSame(0, $diagnostics['checkout_urls']['invalid_count']);
         $this->assertSame('ready', $diagnostics['review']['status']);
-        $this->assertSame(10, $diagnostics['review']['counts']['ok']);
+        $this->assertSame(12, $diagnostics['review']['counts']['ok']);
         $this->assertSame(0, $diagnostics['review']['counts']['warn']);
         $this->assertSame(0, $diagnostics['review']['counts']['fail']);
-        $this->assertCount(11, $diagnostics['review']['evidence']);
+        $this->assertCount(13, $diagnostics['review']['evidence']);
         $this->assertSame('Instagram business account', $diagnostics['review']['evidence'][0]['label']);
         $this->assertSame('channel_health', $diagnostics['readiness'][0]['key']);
         $this->assertSame('ok', $diagnostics['readiness'][0]['status']);
@@ -277,6 +346,7 @@ class MetaCommerceDiagnosticsTest extends TestCase
         config([
             'services.meta.graph_version' => 'v25.0',
             'services.meta.commerce_review_scopes' => 'business_management,catalog_management,instagram_business_basic',
+            'services.instagram.scopes' => 'instagram_business_basic,instagram_business_manage_messages,instagram_business_manage_comments,instagram_business_content_publish',
         ]);
 
         Http::fake([
@@ -373,6 +443,7 @@ class MetaCommerceDiagnosticsTest extends TestCase
         config([
             'services.meta.graph_version' => 'v25.0',
             'services.meta.commerce_review_scopes' => 'business_management,catalog_management,instagram_business_basic',
+            'services.instagram.scopes' => 'instagram_business_basic,instagram_business_manage_messages,instagram_business_manage_comments,instagram_business_content_publish',
         ]);
 
         Http::fake([

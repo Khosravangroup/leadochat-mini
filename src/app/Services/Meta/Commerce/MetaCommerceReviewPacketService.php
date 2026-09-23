@@ -58,6 +58,9 @@ class MetaCommerceReviewPacketService
                 'required' => array_values((array) ($permissions['required'] ?? [])),
                 'granted' => array_values((array) ($permissions['granted'] ?? [])),
                 'missing' => array_values((array) ($permissions['missing'] ?? [])),
+                'without_demonstrated_api_journey' => array_values((array) ($permissions['without_demonstrated_api_journey'] ?? [])),
+                'instagram_requested' => array_values((array) ($permissions['instagram_requested'] ?? [])),
+                'instagram_without_demonstrated_api_journey' => array_values((array) ($permissions['instagram_without_demonstrated_api_journey'] ?? [])),
             ],
             'channel' => [
                 'status' => $channel['status'] ?? null,
@@ -187,7 +190,7 @@ class MetaCommerceReviewPacketService
             [
                 'step' => 3,
                 'title' => 'Show discovered Meta assets',
-                'summary' => 'Present the discovered Meta catalogs and live catalog access for account ' . ($connection->provider_account_id ?: 'unknown') . '.',
+                'summary' => 'Present the discovered Meta catalogs and live catalog access for account '.($connection->provider_account_id ?: 'unknown').'.',
             ],
             [
                 'step' => 4,
@@ -218,7 +221,7 @@ class MetaCommerceReviewPacketService
                 'step' => 9,
                 'title' => 'Reference the Meta discovery snapshot',
                 'summary' => count((array) ($discovery['catalogs'] ?? [])) > 0
-                    ? 'The saved discovery snapshot includes ' . count((array) ($discovery['catalogs'] ?? [])) . ' discovered Meta catalog(s).'
+                    ? 'The saved discovery snapshot includes '.count((array) ($discovery['catalogs'] ?? [])).' discovered Meta catalog(s).'
                     : 'Run discovery once more if you need to refresh the saved asset snapshot before submission.',
             ],
         ];

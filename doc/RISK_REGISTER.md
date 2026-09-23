@@ -36,6 +36,8 @@ and infrastructure may change.
 | `AUTH-02` | High | In progress | Ineffective email verification and mail delivery | 1 |
 | `DATA-01` | High | In progress | Owner deletion can cascade workspace data | 1 |
 | `DATA-02` | High | In progress | OAuth tokens stored plaintext | 1 |
+| `META-01` | Medium | In progress | Reusable Instagram OAuth callback state and retained debug data | App Review |
+| `META-02` | Medium | In progress | Configured review scopes without demonstrated API journeys | App Review |
 | `DEP-01` | High | Closed | Composer security advisories | 2 |
 | `DEP-02` | High | Closed | npm security advisories | 2 |
 | `CI-01` | High | Closed | No CI gate or branch protection | 2 |
@@ -314,6 +316,66 @@ future exposure assessment.
 migrated safely; reads/writes/refresh continue to work; logs and errors cannot leak
 tokens; backup/rollback is proven; provider token rotation is completed when the
 incident assessment requires it.
+
+### `META-01` — Reusable Instagram OAuth callback state and retained debug data
+
+**Evidence on `develop` at `b97d20ce1b45e19339646a3a0b4eecc28b7426f5`:**
+the callback left the session state reusable, persisted the incoming state and
+complete authorization URL in connection metadata, returned callback code/state
+data to its caller, and treated callback receipt as a successful connection even
+before checking the exchange result. A provider exchange error produced an HTTP
+`500`. No live provider callback was replayed.
+
+**Candidate remediation, 21 September 2026:** the callback now checks the saved
+workspace against the authenticated manager's current workspace, consumes valid
+state once, omits debug state/URL/code from connection metadata and result, and
+reports success only for a completed token exchange. Provider exchange errors now
+redirect with a generic failure while logging only exception type and connection
+ID. Failed attempts are marked as failed rather than left pending or assigned a
+premature connection time. Focused regressions first failed on retained
+`callback_state`, an HTTP `500`, and a pending failure status; after the fix,
+four focused tests passed with 40 assertions on SQLite, including a foreign
+workspace/session rejection. The full suite passed with 118 tests and 951
+assertions on both SQLite and PostgreSQL 16. The candidate is local only;
+production still runs the previous behavior. No authenticated Instagram channel
+test was performed under the owner's deferral.
+
+**Impact:** a callback may be replayed from the same session, sensitive OAuth
+correlation data remains longer than needed, and users can see a misleading
+connection-success message.
+
+**Close when:** the exact fix is deployed, focused tests pass in CI, a safe
+authorized callback flow confirms the status and single-use behavior, and existing
+debug metadata is assessed without exposing or dumping stored values.
+
+### `META-02` — Configured review scopes without demonstrated API journeys
+
+**Evidence on the local candidate, 23 September 2026:** the default Instagram
+OAuth scope list includes `instagram_business_manage_insights`. An owner-only,
+mock-tested account Insights read journey has now been added through the
+Instagram Login token and host, but no live grant or response has been verified.
+The current submission is limited to the five Instagram Login permissions.
+`META_COMMERCE_REVIEW_SCOPES` now defaults to empty; `business_management`,
+`catalog_management`, `ads_read`, and `ads_management` are deferred until a
+separately authenticated, code-backed provider journey exists. See
+`doc/META_APP_REVIEW_PERMISSION_MATRIX.md` for the inventory and test gaps.
+
+**Candidate containment:** commerce diagnostics and exported review packets now
+list both Instagram and commerce scopes without a code-backed API journey and
+block a `ready` summary for those scopes even when a mocked provider response
+reports a commerce scope granted. Configured OAuth scopes are stored locally as
+`requested`, not `granted`, until separate provider evidence exists. The settings
+panel no longer renders local commerce groundwork as verified proof, and the
+downloadable evidence packet exports aggregate coverage instead of message,
+comment, customer, post, webhook-error, order, or campaign samples. This implements
+a local account Insights read journey, but not ads features; it does not prove
+provider access. The official Marketing API contract requires an appropriate
+ad-account token, which the current Instagram Login flow does not establish.
+
+**Close when:** each intended requested scope maps to an implemented, authorized,
+tested, reviewer-visible API journey, or the owner explicitly approves removing
+an unsupported scope. Live provider behavior and grant status require later
+authorized tests; Meta alone decides the review outcome.
 
 ### `DEP-01` — Composer advisories
 

@@ -27,11 +27,61 @@ class MetaAppReviewEvidenceTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_current_instagram_review_evidence_does_not_call_deferred_commerce_apis(): void
+    {
+        config([
+            'services.meta.commerce_review_scopes' => '',
+            'services.instagram.scopes' => 'instagram_business_basic,instagram_business_manage_messages,instagram_business_manage_comments,instagram_business_content_publish,instagram_business_manage_insights',
+        ]);
+
+        Http::fake();
+
+        $user = User::factory()->create();
+        $workspace = Workspace::create([
+            'owner_id' => $user->id,
+            'name' => 'Instagram-only Review Workspace',
+            'slug' => 'instagram-only-review-workspace',
+        ]);
+        $workspace->members()->attach($user->id, ['role' => 'owner']);
+
+        $connection = ProviderConnection::create([
+            'workspace_id' => $workspace->id,
+            'provider' => 'instagram',
+            'provider_account_type' => 'instagram_account',
+            'provider_account_id' => '17841439881430000',
+            'provider_account_name' => 'instagram_review_account',
+            'status' => 'connected',
+            'connected_at' => now(),
+        ]);
+
+        $this->actingAs($user)
+            ->post(route('settings.commerce.app-review-evidence.generate', $connection))
+            ->assertRedirect(route('settings.index', ['section' => 'commerce']));
+
+        Http::assertNothingSent();
+
+        $packet = $connection->refresh()->meta['meta_app_review_evidence'];
+
+        $this->assertSame('needs_attention', $packet['summary']['status']);
+        $this->assertSame([], $packet['evidence']['blockers']);
+        $this->assertSame([
+            'instagram_business_basic',
+            'instagram_business_manage_messages',
+            'instagram_business_manage_comments',
+            'instagram_business_content_publish',
+            'instagram_business_manage_insights',
+        ], $packet['review_notes']['requested_scopes']);
+        $this->assertArrayNotHasKey('commerce', $packet['coverage']);
+        $this->assertArrayNotHasKey('commerce_review_packet', $packet);
+        $this->assertArrayNotHasKey('meta_commerce_review_packet', $connection->meta);
+    }
+
     public function test_it_generates_and_downloads_the_final_app_review_evidence_packet(): void
     {
         config([
             'services.meta.graph_version' => 'v25.0',
             'services.meta.commerce_review_scopes' => 'business_management,catalog_management,instagram_business_basic',
+            'services.instagram.scopes' => 'instagram_business_basic,instagram_business_manage_messages,instagram_business_manage_comments,instagram_business_content_publish',
         ]);
 
         Http::fake([
@@ -411,14 +461,11 @@ class MetaAppReviewEvidenceTest extends TestCase
         $this->assertSame('evidence_shop', $packet['account']['username']);
         $this->assertSame(1, data_get($packet, 'coverage.inbox.conversation_count'));
         $this->assertSame(2, data_get($packet, 'coverage.inbox.message_count'));
-        $this->assertSame(1, data_get($packet, 'coverage.inbox.product_share_count'));
         $this->assertSame(1, data_get($packet, 'coverage.social.post_count'));
         $this->assertSame(1, data_get($packet, 'coverage.social.comment_count'));
         $this->assertSame(1, data_get($packet, 'coverage.social.story_count'));
         $this->assertSame(2, data_get($packet, 'coverage.webhooks.event_count'));
-        $this->assertSame(1, data_get($packet, 'coverage.commerce.order_count'));
-        $this->assertSame(1, data_get($packet, 'coverage.commerce.promotion_campaign_count'));
-        $this->assertCount(9, $packet['demo_script']);
+        $this->assertCount(8, $packet['demo_script']);
         $this->assertCount(1, $connection->meta['meta_app_review_evidence_history']);
         $this->assertSame('ready', data_get($connection->meta, 'meta_commerce_review_packet.summary.status'));
 
@@ -431,9 +478,26 @@ class MetaAppReviewEvidenceTest extends TestCase
         $this->assertStringContainsString('attachment;', (string) $download->headers->get('content-disposition'));
 
         $downloadedPacket = json_decode($download->streamedContent(), true);
+        $downloadedJson = json_encode($downloadedPacket, JSON_THROW_ON_ERROR);
 
         $this->assertSame('ready', data_get($downloadedPacket, 'summary.status'));
         $this->assertSame(1, data_get($downloadedPacket, 'coverage.social.dm_reply_count'));
         $this->assertSame(2, data_get($downloadedPacket, 'coverage.webhooks.processed_count'));
+        $this->assertArrayNotHasKey('recent_activity', $downloadedPacket);
+        $this->assertArrayNotHasKey('recent_conversations', $downloadedPacket['coverage']['inbox']);
+        $this->assertArrayNotHasKey('recent_messages', $downloadedPacket['coverage']['inbox']);
+        $this->assertArrayNotHasKey('recent_posts', $downloadedPacket['coverage']['social']);
+        $this->assertArrayNotHasKey('recent_comments', $downloadedPacket['coverage']['social']);
+        $this->assertArrayNotHasKey('recent_events', $downloadedPacket['coverage']['webhooks']);
+
+        foreach ([
+            'Evidence Customer',
+            'Need more info about this product.',
+            'Can you send this in DM?',
+            'event-1',
+            'Evidence Promotion Campaign',
+        ] as $sensitiveValue) {
+            $this->assertStringNotContainsString($sensitiveValue, $downloadedJson);
+        }
     }
 }

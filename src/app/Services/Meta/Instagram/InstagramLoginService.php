@@ -4,16 +4,16 @@ namespace App\Services\Meta\Instagram;
 
 use App\Models\ProviderConnection;
 use Illuminate\Http\Request;
-use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Support\Str;
+use Throwable;
 
 class InstagramLoginService
 {
     public function __construct(
         protected InstagramTokenExchangeService $instagramTokenExchangeService
-    ) {
-    }
+    ) {}
 
     public function buildAuthorizationUrl(int $workspaceId): string
     {
@@ -37,37 +37,38 @@ class InstagramLoginService
             'state' => $state,
         ]);
 
-        Session::put('instagram_debug_authorization_url', $baseUrl . '?' . $query);
-
-        return $baseUrl . '?' . $query;
+        return $baseUrl.'?'.$query;
     }
 
     public function handleCallback(Request $request): array
     {
         $incomingState = $request->string('state')->toString();
         $sessionState = Session::get('instagram_oauth_state');
-
-        $decodedState = [];
-
-        if ($incomingState !== '') {
-            $decoded = json_decode(base64_decode($incomingState), true);
-            $decodedState = is_array($decoded) ? $decoded : [];
-        }
+        $workspaceId = Session::get('instagram_oauth_workspace_id');
 
         $stateIsValid = $incomingState !== '' &&
             $sessionState !== null &&
-            hash_equals($sessionState, $incomingState);
+            hash_equals($sessionState, $incomingState) &&
+            (int) $workspaceId > 0 &&
+            (int) $workspaceId === (int) $request->user()?->currentWorkspace()?->id;
 
-        $workspaceId = Arr::get($decodedState, 'workspace_id');
-        $status = $request->has('code')
-            ? ($stateIsValid ? 'callback_received' : 'invalid_state')
-            : 'callback_missing_code';
+        $status = ! $stateIsValid
+            ? 'invalid_state'
+            : ($request->filled('code') ? 'callback_received' : 'callback_missing_code');
+
+        if ($stateIsValid) {
+            Session::forget([
+                'instagram_oauth_state',
+                'instagram_oauth_workspace_id',
+                'instagram_debug_authorization_url',
+            ]);
+        }
 
         $savedConnectionId = null;
         $exchangeResult = null;
 
         if ($status === 'callback_received' && $workspaceId) {
-            $pendingAccountId = 'pending-instagram-account-' . $workspaceId;
+            $pendingAccountId = 'pending-instagram-account-'.$workspaceId;
 
             $connection = ProviderConnection::updateOrCreate(
                 [
@@ -79,13 +80,10 @@ class InstagramLoginService
                 [
                     'provider_account_name' => 'Pending Instagram Connection',
                     'status' => 'pending_token_exchange',
-                    'connected_at' => now(),
+                    'connected_at' => null,
                     'last_synced_at' => null,
                     'meta' => [
                         'callback_code_received' => true,
-                        'callback_state' => $decodedState,
-                        'incoming_state' => $incomingState,
-                        'authorization_url' => Session::get('instagram_debug_authorization_url'),
                         'mode' => app()->environment('local') ? 'local_debug' : 'instagram_login',
                     ],
                 ]
@@ -93,23 +91,30 @@ class InstagramLoginService
 
             $savedConnectionId = $connection->id;
 
-            $exchangeResult = $this->instagramTokenExchangeService
-                ->exchangeAndStore($connection, (string) $request->input('code'));
+            try {
+                $exchangeResult = $this->instagramTokenExchangeService
+                    ->exchangeAndStore($connection, (string) $request->input('code'));
+
+                $status = ($exchangeResult['status'] ?? null) === 'connected' ? 'connected' : 'failed';
+            } catch (Throwable $exception) {
+                Log::warning('Instagram OAuth token exchange failed.', [
+                    'connection_id' => $connection->id,
+                    'exception_type' => $exception::class,
+                ]);
+
+                $status = 'failed';
+            }
+
+            if ($status === 'failed') {
+                ProviderConnection::query()
+                    ->whereKey($connection->id)
+                    ->where('status', 'pending_token_exchange')
+                    ->update(['status' => 'failed_token_exchange']);
+            }
         }
 
         return [
             'status' => $status,
-            'code' => $request->input('code'),
-            'error' => $request->input('error'),
-            'error_reason' => $request->input('error_reason'),
-            'error_description' => $request->input('error_description'),
-            'workspace_id' => $workspaceId,
-            'state' => $decodedState,
-            'incoming_state' => $incomingState,
-            'session_state' => $sessionState,
-            'state_is_valid' => $stateIsValid,
-            'redirect_uri' => $this->resolveRedirectUri(),
-            'authorization_url' => Session::get('instagram_debug_authorization_url'),
             'saved_connection_id' => $savedConnectionId,
             'exchange_result' => $exchangeResult,
         ];
