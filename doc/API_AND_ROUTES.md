@@ -64,6 +64,55 @@ email changes clear verification and send a fresh link. Production access still
 depends on configuring a delivery-capable mail transport. Workspace membership is
 not sufficient for privileged settings operations; the role gates below apply.
 
+### Instagram OAuth callback
+
+The `GET /connect/instagram` and `GET /connect/instagram/callback` routes require
+an authenticated, email-verified workspace manager. The callback accepts only the
+authorization state saved in that browser session for the manager's current
+workspace, consumes it once, and does not persist the state, authorization URL, or
+authorization code in connection metadata. A repeated or mismatched callback
+fails without another token exchange. A success redirect requires a completed
+token exchange; a received callback alone is not proof of connection. This is the
+`fix/meta-review-software-readiness` candidate contract, not yet a verified
+production behavior. No live Instagram channel was exercised for this candidate.
+
+### Meta App Review diagnostics
+
+`GET /social/instagram/insights` is restricted to a verified workspace manager.
+It selects only a connected Instagram account in the current workspace and
+reads seven-day account reach, views, and total interactions from
+`graph.instagram.com` with its Instagram token. Provider errors are not reflected
+into the HTML response. Missing metric data is shown as unavailable, not zero.
+The response is private and not cached. No provider call has been made against a
+live channel for this candidate.
+
+The current OAuth request is limited to `instagram_business_basic`,
+`instagram_business_manage_messages`, `instagram_business_manage_comments`,
+`instagram_business_content_publish`, and
+`instagram_business_manage_insights`. Configured scopes are persisted locally as
+`requested`; local configuration alone never produces a `granted` status.
+
+`POST /settings/commerce/connections/{connection}/app-review-evidence` builds the
+current Instagram-only packet from workspace-scoped aggregate counts and the
+configured five-scope journey matrix. With the default empty
+`META_COMMERCE_REVIEW_SCOPES`, it makes no commerce-provider request and does not
+include commerce, order, campaign, message, comment, customer, or webhook payload
+samples in the exported JSON. Live Meta grants and behavior remain a separate
+verification gate.
+
+`POST /settings/commerce/connections/{connection}/diagnostics` and the review
+packet route remain owner-only and workspace-scoped. The diagnostic now separates
+provider-reported grants from local code evidence. A configured commerce scope
+without a demonstrated API journey appears in
+`permissions.without_demonstrated_api_journey`; an unsupported Instagram OAuth
+scope appears separately in
+`permissions.instagram_without_demonstrated_api_journey`. Either adds a failing
+readiness item and blocks the commerce review summary. The exported packet
+carries both gap lists and contains aggregate counts rather than recent message,
+comment, customer, post, webhook-error, order, or campaign samples. A grant alone
+never proves the feature works. See
+`META_APP_REVIEW_PERMISSION_MATRIX.md`.
+
 ## Meta webhook
 
 | Method | Path | Purpose |

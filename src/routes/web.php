@@ -3,6 +3,7 @@
 use App\Http\Controllers\ConnectionController;
 use App\Http\Controllers\InboxController;
 use App\Http\Controllers\InstagramConnectController;
+use App\Http\Controllers\InstagramInsightsController;
 use App\Http\Controllers\MessageAttachmentController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\PublicPageController;
@@ -86,6 +87,10 @@ Route::middleware(['auth', 'verified', 'can:workspace.access'])->group(function 
 
     Route::get('/social/instagram/stories', [SocialController::class, 'instagramStories'])
         ->name('social.instagram.stories');
+
+    Route::get('/social/instagram/insights', [InstagramInsightsController::class, 'index'])
+        ->middleware('can:workspace.manage')
+        ->name('social.instagram.insights');
 
     Route::post('/social/instagram/stories/publish', [SocialController::class, 'publishInstagramStory'])
         ->middleware('can:workspace.manage')

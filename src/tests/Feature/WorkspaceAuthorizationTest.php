@@ -144,6 +144,22 @@ class WorkspaceAuthorizationTest extends TestCase
             ->assertSee(route('settings.index'), false);
     }
 
+    public function test_app_review_panel_does_not_present_local_groundwork_as_verified_provider_proof(): void
+    {
+        [$owner] = $this->createWorkspaceUser('owner');
+
+        $this->actingAs($owner)
+            ->get(route('settings.index', ['section' => 'commerce']))
+            ->assertOk()
+            ->assertSee('Not part of the current Instagram App Review submission')
+            ->assertSee('Evidence tools available; provider proof still required')
+            ->assertDontSee('Run discovery')
+            ->assertDontSee('Run diagnostics')
+            ->assertDontSee('Build commerce groundwork packet')
+            ->assertDontSee('<span class="ws-commerce-pill ok">Commerce proof</span>', false)
+            ->assertDontSee('<span class="ws-commerce-pill ok">Collection ads</span>', false);
+    }
+
     public function test_foreign_workspace_objects_are_hidden_across_protected_route_groups(): void
     {
         [$owner] = $this->createWorkspaceUser('owner');
