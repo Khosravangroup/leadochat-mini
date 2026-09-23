@@ -92,6 +92,20 @@ redacted aggregate packet without calling Facebook commerce endpoints. Commerce
 diagnostics and packets remain deferred groundwork for a future, separately
 authorized permission set.
 
+Live diagnostics select the provider API family from the saved connection mode
+and token scopes. Direct Instagram Login connections read account identity and
+webhook subscriptions from `graph.instagram.com`; their locally recorded scopes
+are audit context only and are not promoted to provider-reported grants. Catalog
+checks that require a separate Facebook commerce authorization use an explicit
+`not_applicable` state instead of presenting a false live failure. Legacy or
+separately authorized commerce connections retain the Facebook Graph paths needed
+for business, catalog, and commerce checks.
+
+Provider diagnostics keep live and historical evidence separate. A successful
+empty subscription response remains empty and cannot be replaced by saved callback
+metadata. Locally recorded permission rows are returned for audit context, while
+the live-grant set stays empty when the active token uses direct Instagram Login.
+
 ### OAuth and webhooks
 
 The Instagram connection flow stores provider connection, requested-permission,

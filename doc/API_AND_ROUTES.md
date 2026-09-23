@@ -113,6 +113,22 @@ comment, customer, post, webhook-error, order, or campaign samples. A grant alon
 never proves the feature works. See
 `META_APP_REVIEW_PERMISSION_MATRIX.md`.
 
+For a direct Instagram Login connection, diagnostics read identity and subscribed
+webhook fields from `graph.instagram.com` with the token in the authorization
+header. The unsupported Facebook `/me/permissions` probe is not attempted; saved
+permission rows are reported with their recorded status for audit context but are
+never treated as live provider grants. Catalog probes are marked
+`not_applicable` instead of failed when a separate Facebook commerce authorization
+is required. Facebook Graph diagnostics remain available only for the legacy or
+separately authorized commerce path.
+
+The diagnostics response exposes `graph_api_family`, the effective
+`graph_version`, both configured values under `graph_versions`, and a three-state
+`outcome` on provider checks. Live webhook fields are derived only from a
+successful provider response; saved callback fields remain separately available
+as `webhook.saved_verified_fields`. Review packets that preserve the three-state
+catalog contract use schema version `2`.
+
 ## Meta webhook
 
 | Method | Path | Purpose |

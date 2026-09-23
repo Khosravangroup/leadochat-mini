@@ -10,6 +10,8 @@ use App\Models\ProviderConnection;
 use App\Models\ProviderPermission;
 use App\Models\User;
 use App\Models\Workspace;
+use App\Services\Meta\Commerce\MetaCommerceDiagnosticsService;
+use App\Services\Meta\Commerce\MetaCommerceReviewPacketService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -17,6 +19,299 @@ use Tests\TestCase;
 class MetaCommerceDiagnosticsTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_instagram_login_diagnostics_use_instagram_graph_without_claiming_requested_scopes_are_granted(): void
+    {
+        config([
+            'services.meta.graph_version' => 'v25.0',
+            'services.meta.commerce_review_scopes' => '',
+            'services.instagram.graph_version' => 'v26.0',
+            'services.instagram.scopes' => 'instagram_business_basic,instagram_business_manage_messages',
+        ]);
+
+        Http::fake([
+            'https://graph.instagram.com/me*' => Http::response([
+                'user_id' => 'instagram-login-account',
+                'username' => 'instagram_login_account',
+            ], 200),
+            'https://graph.instagram.com/v26.0/instagram-login-account/subscribed_apps*' => Http::response([
+                'data' => [[
+                    'id' => 'instagram-app',
+                    'name' => 'Leadochat Mini',
+                    'subscribed_fields' => ['messages', 'comments'],
+                ]],
+            ], 200),
+            'https://graph.facebook.com/*' => Http::response([
+                'error' => ['message' => 'Instagram Login tokens are not accepted here.'],
+            ], 401),
+        ]);
+
+        $owner = User::factory()->create();
+        $workspace = Workspace::create([
+            'owner_id' => $owner->id,
+            'name' => 'Instagram Login Diagnostics Workspace',
+            'slug' => 'instagram-login-diagnostics-workspace',
+        ]);
+        $workspace->members()->attach($owner->id, ['role' => 'owner']);
+
+        $connection = ProviderConnection::create([
+            'workspace_id' => $workspace->id,
+            'provider' => 'instagram',
+            'provider_account_type' => 'instagram_account',
+            'provider_account_id' => 'instagram-login-account',
+            'provider_account_name' => 'instagram_login_account',
+            'status' => 'connected',
+            'meta' => [
+                'mode' => 'instagram_login',
+                'webhook_subscription' => [
+                    'success' => true,
+                    'verified_fields' => ['messages', 'comments'],
+                ],
+            ],
+        ]);
+
+        OauthToken::create([
+            'provider_connection_id' => $connection->id,
+            'token_type' => 'access_token',
+            'access_token' => 'instagram-login-token',
+            'expires_at' => now()->addDay(),
+            'scopes' => 'instagram_business_basic,instagram_business_manage_messages',
+            'is_primary' => true,
+        ]);
+
+        foreach (['instagram_business_basic', 'instagram_business_manage_messages'] as $permission) {
+            ProviderPermission::create([
+                'provider_connection_id' => $connection->id,
+                'permission' => $permission,
+                'status' => 'requested',
+            ]);
+        }
+
+        Catalog::create([
+            'workspace_id' => $workspace->id,
+            'provider_connection_id' => $connection->id,
+            'source' => 'meta',
+            'external_catalog_id' => 'instagram-login-catalog',
+            'name' => 'Deferred Commerce Catalog',
+            'status' => 'active',
+        ]);
+
+        $diagnostics = app(MetaCommerceDiagnosticsService::class)
+            ->diagnoseForConnection($connection);
+
+        $this->assertSame(200, $diagnostics['checks']['instagram_account']['status']);
+        $this->assertSame('https://graph.instagram.com/me', $diagnostics['checks']['instagram_account']['url']);
+        $this->assertSame(200, $diagnostics['checks']['subscribed_apps']['status']);
+        $this->assertSame('instagram', $diagnostics['graph_api_family']);
+        $this->assertSame('v26.0', $diagnostics['graph_version']);
+        $this->assertSame(['instagram' => 'v26.0', 'facebook' => 'v25.0'], $diagnostics['graph_versions']);
+        $this->assertSame('instagram-login-account', $diagnostics['account']['id']);
+        $this->assertSame('instagram_login_account', $diagnostics['account']['username']);
+        $this->assertSame(
+            'separate_commerce_authorization_required',
+            $diagnostics['checks']['catalog_detail:instagram-login-catalog']['source']
+        );
+        $this->assertFalse($diagnostics['checks']['catalog_detail:instagram-login-catalog']['ok']);
+        $this->assertFalse($diagnostics['checks']['catalog_detail:instagram-login-catalog']['live']);
+        $this->assertSame('not_applicable', $diagnostics['checks']['catalog_detail:instagram-login-catalog']['outcome']);
+        $this->assertNull($diagnostics['checks']['catalog_detail:instagram-login-catalog']['status']);
+        $this->assertSame(
+            'catalog:instagram-login-catalog',
+            $diagnostics['checks']['catalog_detail:instagram-login-catalog']['resource']
+        );
+        $this->assertSame('not_applicable', $diagnostics['shop']['meta_catalogs'][0]['live_status']);
+        $this->assertSame(
+            'Live catalog access requires a separately authorized Facebook commerce connection.',
+            collect($diagnostics['readiness'])->firstWhere('key', 'catalog_access')['summary']
+        );
+        $this->assertSame(
+            'Authorize Facebook commerce separately',
+            collect($diagnostics['review']['next_actions'])->firstWhere('key', 'catalog_access')['title']
+        );
+        $this->assertSame([], $diagnostics['permissions']['granted']);
+        $this->assertSame(
+            ['requested'],
+            collect($diagnostics['permissions']['local_permissions'])->pluck('status')->unique()->values()->all()
+        );
+
+        $packet = app(MetaCommerceReviewPacketService::class)
+            ->generateForConnection($connection, $diagnostics);
+        $this->assertSame(2, $packet['version']);
+        $this->assertSame('instagram', $packet['summary']['graph_api_family']);
+        $this->assertSame('v26.0', $packet['summary']['graph_version']);
+        $this->assertSame('not_applicable', $packet['catalogs']['live_catalogs'][0]['live_status']);
+
+        $connection->update([
+            'meta' => array_merge($connection->meta, ['meta_commerce_diagnostics' => $diagnostics]),
+        ]);
+
+        $this->actingAs($owner)
+            ->get(route('settings.index', ['section' => 'commerce']))
+            ->assertOk()
+            ->assertSee('separate Facebook commerce authorization required')
+            ->assertDontSee('live check failed');
+
+        Http::assertNotSent(fn ($request) => str_starts_with($request->url(), 'https://graph.facebook.com/'));
+        Http::assertSent(fn ($request) => str_starts_with($request->url(), 'https://graph.instagram.com/')
+            && $request->hasHeader('Authorization', 'Bearer instagram-login-token')
+            && ! str_contains($request->url(), 'access_token='));
+    }
+
+    public function test_instagram_login_scope_fallback_does_not_treat_stale_local_grants_as_provider_grants(): void
+    {
+        config([
+            'services.meta.graph_version' => 'v25.0',
+            'services.meta.commerce_review_scopes' => 'business_management',
+            'services.instagram.graph_version' => 'v25.0',
+            'services.instagram.scopes' => 'instagram_business_basic,instagram_business_manage_messages',
+        ]);
+
+        Http::fake([
+            'https://graph.instagram.com/me*' => Http::response([
+                'user_id' => 'scope-fallback-account',
+                'username' => 'scope_fallback_account',
+            ], 200),
+            'https://graph.instagram.com/v25.0/scope-fallback-account/subscribed_apps*' => Http::response([
+                'data' => [],
+            ], 200),
+            'https://graph.facebook.com/*' => Http::response([
+                'error' => ['message' => 'This endpoint must not be called.'],
+            ], 500),
+        ]);
+
+        $owner = User::factory()->create();
+        $workspace = Workspace::create([
+            'owner_id' => $owner->id,
+            'name' => 'Instagram Scope Fallback Workspace',
+            'slug' => 'instagram-scope-fallback-workspace',
+        ]);
+        $workspace->members()->attach($owner->id, ['role' => 'owner']);
+
+        $connection = ProviderConnection::create([
+            'workspace_id' => $workspace->id,
+            'provider' => 'instagram',
+            'provider_account_type' => 'instagram_account',
+            'provider_account_id' => 'scope-fallback-account',
+            'provider_account_name' => 'scope_fallback_account',
+            'status' => 'connected',
+            'meta' => [
+                'webhook_subscription' => [
+                    'success' => true,
+                    'verified_fields' => ['messages', 'comments'],
+                ],
+            ],
+        ]);
+
+        OauthToken::create([
+            'provider_connection_id' => $connection->id,
+            'token_type' => 'access_token',
+            'access_token' => 'scope-fallback-token',
+            'expires_at' => now()->addDay(),
+            'scopes' => ' instagram_business_basic , instagram_business_manage_messages ',
+            'is_primary' => true,
+        ]);
+
+        ProviderPermission::create([
+            'provider_connection_id' => $connection->id,
+            'permission' => 'business_management',
+            'status' => 'granted',
+            'granted_at' => now()->subDay(),
+        ]);
+
+        ProviderPermission::create([
+            'provider_connection_id' => $connection->id,
+            'permission' => 'instagram_business_basic',
+            'status' => 'requested',
+        ]);
+
+        $diagnostics = app(MetaCommerceDiagnosticsService::class)
+            ->diagnoseForConnection($connection);
+
+        $this->assertSame('https://graph.instagram.com/me', $diagnostics['checks']['instagram_account']['url']);
+        $this->assertSame('local_recorded_permissions', $diagnostics['checks']['granted_permissions']['source']);
+        $this->assertFalse($diagnostics['checks']['granted_permissions']['live']);
+        $this->assertSame([], $diagnostics['permissions']['granted']);
+        $this->assertSame(['business_management'], $diagnostics['permissions']['missing']);
+        $this->assertSame([], $diagnostics['channel']['live_subscribed_fields']);
+        $this->assertSame([], $diagnostics['webhook']['verified_fields']);
+        $this->assertSame(['messages', 'comments'], $diagnostics['webhook']['saved_verified_fields']);
+        $this->assertSame(
+            'warn',
+            collect($diagnostics['readiness'])->firstWhere('key', 'webhook_subscription')['status']
+        );
+        $this->assertSame(
+            ['granted', 'requested'],
+            collect($diagnostics['permissions']['local_permissions'])->pluck('status')->unique()->values()->all()
+        );
+
+        Http::assertNotSent(fn ($request) => str_starts_with($request->url(), 'https://graph.facebook.com/'));
+    }
+
+    public function test_instagram_login_diagnostics_fail_closed_when_live_identity_and_subscription_checks_fail(): void
+    {
+        config([
+            'services.meta.commerce_review_scopes' => '',
+            'services.instagram.graph_version' => 'v25.0',
+            'services.instagram.scopes' => 'instagram_business_basic',
+        ]);
+
+        Http::fake([
+            'https://graph.instagram.com/me*' => Http::response([
+                'error' => ['message' => 'Rejected failure-secret-token'],
+            ], 503),
+            'https://graph.instagram.com/v25.0/failing-instagram-account/subscribed_apps*' => Http::failedConnection(
+                'Connection failed for failure-secret-token'
+            ),
+        ]);
+
+        $owner = User::factory()->create();
+        $workspace = Workspace::create([
+            'owner_id' => $owner->id,
+            'name' => 'Failing Instagram Diagnostics Workspace',
+            'slug' => 'failing-instagram-diagnostics-workspace',
+        ]);
+        $workspace->members()->attach($owner->id, ['role' => 'owner']);
+
+        $connection = ProviderConnection::create([
+            'workspace_id' => $workspace->id,
+            'provider' => 'instagram',
+            'provider_account_type' => 'instagram_account',
+            'provider_account_id' => 'failing-instagram-account',
+            'provider_account_name' => 'saved_account_name',
+            'status' => 'connected',
+            'meta' => [
+                'mode' => 'instagram_login',
+                'webhook_subscription' => [
+                    'success' => true,
+                    'verified_fields' => ['messages', 'comments'],
+                ],
+            ],
+        ]);
+
+        OauthToken::create([
+            'provider_connection_id' => $connection->id,
+            'token_type' => 'access_token',
+            'access_token' => 'failure-secret-token',
+            'expires_at' => now()->addDay(),
+            'scopes' => 'instagram_business_basic',
+            'is_primary' => true,
+        ]);
+
+        $diagnostics = app(MetaCommerceDiagnosticsService::class)
+            ->diagnoseForConnection($connection);
+
+        $this->assertSame(503, $diagnostics['checks']['instagram_account']['status']);
+        $this->assertSame('failed', $diagnostics['checks']['instagram_account']['outcome']);
+        $this->assertNull($diagnostics['checks']['subscribed_apps']['status']);
+        $this->assertSame('failed', $diagnostics['checks']['subscribed_apps']['outcome']);
+        $this->assertStringNotContainsString('failure-secret-token', $diagnostics['checks']['instagram_account']['error']);
+        $this->assertStringNotContainsString('failure-secret-token', $diagnostics['checks']['subscribed_apps']['error']);
+        $this->assertSame([], $diagnostics['channel']['live_subscribed_fields']);
+        $this->assertSame([], $diagnostics['webhook']['verified_fields']);
+        $this->assertSame(['messages', 'comments'], $diagnostics['webhook']['saved_verified_fields']);
+        $this->assertSame('fail', collect($diagnostics['readiness'])->firstWhere('key', 'channel_health')['status']);
+        $this->assertSame('fail', collect($diagnostics['review']['evidence'])->firstWhere('key', 'instagram_account')['status']);
+    }
 
     public function test_granted_ads_scopes_do_not_claim_a_demonstrable_review_journey(): void
     {
@@ -95,7 +390,7 @@ class MetaCommerceDiagnosticsTest extends TestCase
         ]);
 
         Http::fake([
-            'https://graph.facebook.com/v25.0/instagram-account-456*' => Http::response([
+            'https://graph.facebook.com/v25.0/instagram-account-456?*' => Http::response([
                 'id' => 'instagram-account-456',
                 'username' => 'mini_shop',
                 'name' => 'Mini Shop',
@@ -350,7 +645,7 @@ class MetaCommerceDiagnosticsTest extends TestCase
         ]);
 
         Http::fake([
-            'https://graph.facebook.com/v25.0/instagram-account-999*' => Http::response([
+            'https://graph.facebook.com/v25.0/instagram-account-999?*' => Http::response([
                 'id' => 'instagram-account-999',
                 'username' => 'blocked_shop',
                 'name' => 'Blocked Shop',
@@ -447,7 +742,7 @@ class MetaCommerceDiagnosticsTest extends TestCase
         ]);
 
         Http::fake([
-            'https://graph.facebook.com/v25.0/instagram-account-777*' => Http::response([
+            'https://graph.facebook.com/v25.0/instagram-account-777?*' => Http::response([
                 'id' => 'instagram-account-777',
                 'username' => 'packet_shop',
                 'name' => 'Packet Shop',
