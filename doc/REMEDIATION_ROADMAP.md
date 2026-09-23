@@ -374,6 +374,15 @@ owner-only, mock-tested Instagram account Insights read now follows Meta's
 official Instagram Login contract; ads read/write still require a distinct,
 properly authorized Marketing API token and an agreed product workflow.
 
+**Deployment result, 23 September 2026:** pull requests `#48` and `#49` passed all
+required checks and production now runs
+`00a5c678fb526d3e8948dd646841fc205960ba5f`. Reviewer login, public/legal routes,
+aggregate evidence generation, containers, queue, database, headers, and logs passed
+post-release verification. The existing Instagram token was expired, so the live
+identity and Insights probes could not prove provider access. Reconnect the test
+account, then execute and record the five permission-specific walkthroughs before
+submission.
+
 1. Configure and prove production transactional email to close `AUTH-02`.
 2. Run approved authenticated synthetic browser/provider smoke and observe CSP
    telemetry for the deployed Phase 1 controls.
