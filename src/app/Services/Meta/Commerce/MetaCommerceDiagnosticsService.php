@@ -48,35 +48,61 @@ class MetaCommerceDiagnosticsService
 
         $accessToken = $this->resolveAccessToken($connection);
         $graphVersion = $this->resolveGraphVersion();
+        $instagramGraphVersion = $this->resolveInstagramGraphVersion();
         $accountId = (string) $connection->provider_account_id;
+        $usesInstagramLogin = $this->usesInstagramLogin($connection);
+        $localPermissions = $this->localPermissions($connection);
 
         $checks = [];
-        $checks['instagram_account'] = $this->requestJson(
-            $accessToken,
-            "https://graph.facebook.com/{$graphVersion}/{$accountId}",
-            [
-                'fields' => 'id,username,name,ig_id,shopping_product_tag_eligibility,shopping_review_status',
-            ]
-        );
+        if ($usesInstagramLogin) {
+            $checks['instagram_account'] = $this->requestJson(
+                $accessToken,
+                'https://graph.instagram.com/me',
+                [
+                    'fields' => 'user_id,username',
+                ]
+            );
 
-        $checks['granted_permissions'] = $this->requestJson(
-            $accessToken,
-            "https://graph.facebook.com/{$graphVersion}/me/permissions",
-            [
-                'limit' => 200,
-            ]
-        );
+            $checks['granted_permissions'] = $this->localPermissionCheck($localPermissions);
 
-        $checks['subscribed_apps'] = $this->requestJson(
-            $accessToken,
-            "https://graph.facebook.com/{$graphVersion}/{$accountId}/subscribed_apps",
-            [
-                'fields' => 'id,name,subscribed_fields',
-                'limit' => 50,
-            ]
-        );
+            $checks['subscribed_apps'] = $this->requestJson(
+                $accessToken,
+                "https://graph.instagram.com/{$instagramGraphVersion}/{$accountId}/subscribed_apps",
+                [
+                    'fields' => 'id,name,subscribed_fields',
+                    'limit' => 50,
+                ]
+            );
+        } else {
+            $checks['instagram_account'] = $this->requestJson(
+                $accessToken,
+                "https://graph.facebook.com/{$graphVersion}/{$accountId}",
+                [
+                    'fields' => 'id,username,name,ig_id,shopping_product_tag_eligibility,shopping_review_status',
+                ]
+            );
 
-        $grantedPermissions = $this->extractGrantedPermissions($checks['granted_permissions']);
+            $checks['granted_permissions'] = $this->requestJson(
+                $accessToken,
+                "https://graph.facebook.com/{$graphVersion}/me/permissions",
+                [
+                    'limit' => 200,
+                ]
+            );
+
+            $checks['subscribed_apps'] = $this->requestJson(
+                $accessToken,
+                "https://graph.facebook.com/{$graphVersion}/{$accountId}/subscribed_apps",
+                [
+                    'fields' => 'id,name,subscribed_fields',
+                    'limit' => 50,
+                ]
+            );
+        }
+
+        $grantedPermissions = $usesInstagramLogin
+            ? []
+            : $this->extractGrantedPermissions($checks['granted_permissions']);
         $requiredPermissions = $this->requiredReviewScopes();
         $missingPermissions = array_values(array_diff($requiredPermissions, $grantedPermissions));
         $scopesWithoutJourney = array_values(array_diff($requiredPermissions, self::SCOPES_WITH_DEMONSTRATED_API_JOURNEY));
@@ -104,6 +130,14 @@ class MetaCommerceDiagnosticsService
                 continue;
             }
 
+            if ($usesInstagramLogin) {
+                $checks["catalog_detail:{$externalCatalogId}"] = $this->separateCommerceAuthorizationCheck(
+                    "catalog:{$externalCatalogId}"
+                );
+
+                continue;
+            }
+
             $checks["catalog_detail:{$externalCatalogId}"] = $this->requestJson(
                 $accessToken,
                 "https://graph.facebook.com/{$graphVersion}/{$externalCatalogId}",
@@ -128,9 +162,16 @@ class MetaCommerceDiagnosticsService
             ->unique()
             ->values()
             ->all();
-        $verifiedWebhookFields = collect($liveWebhookFields !== [] ? $liveWebhookFields : ($webhookMeta['verified_fields'] ?? []))
+        $savedWebhookFields = collect($webhookMeta['verified_fields'] ?? [])
             ->map(fn ($field) => (string) $field)
             ->filter()
+            ->unique()
+            ->values()
+            ->all();
+        $verifiedWebhookFields = collect(($checks['subscribed_apps']['ok'] ?? false) ? $liveWebhookFields : [])
+            ->map(fn ($field) => (string) $field)
+            ->filter()
+            ->unique()
             ->values()
             ->all();
         $requiredWebhookFields = ['messages', 'comments'];
@@ -138,6 +179,10 @@ class MetaCommerceDiagnosticsService
         $token = $this->primaryToken($connection);
         $tokenExpiresAt = $token?->expires_at;
         $tokenExpired = $tokenExpiresAt ? $tokenExpiresAt->isPast() : false;
+        $accountLiveOk = (bool) ($checks['instagram_account']['ok'] ?? false)
+            && filled($accountBody['id'] ?? $accountBody['user_id'] ?? null)
+            && filled($accountBody['username'] ?? null);
+        $channelHealthy = ! $tokenExpired && $accountLiveOk;
 
         $localStats = [
             'source_catalog_count' => $sourceCatalogs->count(),
@@ -192,6 +237,7 @@ class MetaCommerceDiagnosticsService
             $externalCatalogId = (string) $catalog->external_catalog_id;
             $check = $checks["catalog_detail:{$externalCatalogId}"] ?? null;
             $body = is_array($check['body'] ?? null) ? $check['body'] : [];
+            $liveStatus = $check['outcome'] ?? (($check['ok'] ?? false) ? 'ok' : 'failed');
 
             return [
                 'id' => $catalog->id,
@@ -200,23 +246,29 @@ class MetaCommerceDiagnosticsService
                 'vertical' => $body['vertical'] ?? data_get($catalog->meta, 'meta_catalog.vertical'),
                 'product_count' => $body['product_count'] ?? data_get($catalog->meta, 'meta_catalog.product_count'),
                 'status' => $catalog->meta_sync_status,
-                'live_ok' => (bool) ($check['ok'] ?? false),
+                'live_ok' => $liveStatus === 'ok',
+                'live_status' => $liveStatus,
                 'live_error' => $check['error'] ?? null,
             ];
         })->values()->all();
 
+        $catalogAccessState = $this->catalogAccessState($liveCatalogs);
+
         $readiness = [
             $this->makeReadinessCheck(
                 'channel_health',
-                ! $tokenExpired ? 'ok' : 'fail',
-                ! $tokenExpired
-                    ? 'Primary access token is present and not expired.'
-                    : 'Primary access token is expired and must be refreshed by reconnecting the channel.',
+                $channelHealthy ? 'ok' : 'fail',
+                match (true) {
+                    $tokenExpired => 'Primary access token is expired and must be refreshed by reconnecting the channel.',
+                    ! $accountLiveOk => 'Primary access token is present, but the Instagram account identity could not be verified live.',
+                    default => 'Primary access token is present and the Instagram account identity was verified live.',
+                },
                 [
                     'connected_at' => optional($connection->connected_at)?->toIso8601String(),
                     'last_synced_at' => optional($connection->last_synced_at)?->toIso8601String(),
                     'token_expires_at' => optional($tokenExpiresAt)?->toIso8601String(),
                     'token_expired' => $tokenExpired,
+                    'account_identity_live_ok' => $accountLiveOk,
                 ]
             ),
             $this->makeReadinessCheck(
@@ -281,12 +333,13 @@ class MetaCommerceDiagnosticsService
             ),
             $this->makeReadinessCheck(
                 'catalog_access',
-                collect($liveCatalogs)->every(fn (array $catalog) => $catalog['live_ok']) ? 'ok' : 'warn',
-                collect($liveCatalogs)->isEmpty()
-                    ? 'No live Meta catalog details available yet.'
-                    : (collect($liveCatalogs)->every(fn (array $catalog) => $catalog['live_ok'])
-                        ? 'Live Meta catalog details are readable for all discovered catalogs.'
-                        : 'Some discovered Meta catalogs could not be queried live.'),
+                $catalogAccessState === 'ok' ? 'ok' : 'warn',
+                match ($catalogAccessState) {
+                    'missing' => 'No live Meta catalog details available yet.',
+                    'ok' => 'Live Meta catalog details are readable for all discovered catalogs.',
+                    'not_applicable' => 'Live catalog access requires a separately authorized Facebook commerce connection.',
+                    default => 'Some discovered Meta catalogs could not be queried live.',
+                },
                 [
                     'catalogs' => $liveCatalogs,
                 ]
@@ -345,6 +398,7 @@ class MetaCommerceDiagnosticsService
         $review = $this->buildReviewSummary(
             $connection,
             $accountBody,
+            $accountLiveOk,
             $requiredPermissions,
             $missingPermissions,
             $scopesWithoutJourney,
@@ -359,11 +413,16 @@ class MetaCommerceDiagnosticsService
         return [
             'ok' => collect($readiness)->every(fn (array $item) => ($item['status'] ?? null) !== 'fail'),
             'checked_at' => now()->toIso8601String(),
-            'graph_version' => $graphVersion,
+            'graph_api_family' => $usesInstagramLogin ? 'instagram' : 'facebook',
+            'graph_version' => $usesInstagramLogin ? $instagramGraphVersion : $graphVersion,
+            'graph_versions' => [
+                'instagram' => $instagramGraphVersion,
+                'facebook' => $graphVersion,
+            ],
             'provider_connection_id' => $connection->id,
             'provider_account_id' => $accountId,
             'account' => [
-                'id' => $accountBody['id'] ?? null,
+                'id' => $accountBody['id'] ?? $accountBody['user_id'] ?? null,
                 'username' => $accountBody['username'] ?? null,
                 'name' => $accountBody['name'] ?? null,
                 'ig_id' => $accountBody['ig_id'] ?? null,
@@ -377,15 +436,7 @@ class MetaCommerceDiagnosticsService
                 'without_demonstrated_api_journey' => $scopesWithoutJourney,
                 'instagram_requested' => $instagramRequestedScopes,
                 'instagram_without_demonstrated_api_journey' => $instagramScopesWithoutJourney,
-                'local_permissions' => $connection->permissions()
-                    ->orderBy('permission')
-                    ->get(['permission', 'status'])
-                    ->map(fn ($permission) => [
-                        'permission' => $permission->permission,
-                        'status' => $permission->status,
-                    ])
-                    ->values()
-                    ->all(),
+                'local_permissions' => $localPermissions,
             ],
             'channel' => [
                 'status' => $connection->status,
@@ -407,7 +458,9 @@ class MetaCommerceDiagnosticsService
             ],
             'webhook' => [
                 'success' => (bool) ($webhookMeta['success'] ?? false),
+                'live_check_ok' => (bool) ($checks['subscribed_apps']['ok'] ?? false),
                 'verified_fields' => $verifiedWebhookFields,
+                'saved_verified_fields' => $savedWebhookFields,
                 'missing_fields' => $missingWebhookFields,
                 'verified_at' => $webhookMeta['verified_at'] ?? null,
                 'error' => $webhookMeta['error'] ?? null,
@@ -426,6 +479,7 @@ class MetaCommerceDiagnosticsService
     protected function buildReviewSummary(
         ProviderConnection $connection,
         array $accountBody,
+        bool $accountLiveOk,
         array $requiredPermissions,
         array $missingPermissions,
         array $scopesWithoutJourney,
@@ -459,8 +513,8 @@ class MetaCommerceDiagnosticsService
             $this->makeEvidenceItem(
                 'instagram_account',
                 'Instagram business account',
-                filled($connection->provider_account_id) ? 'ok' : 'fail',
-                filled($accountBody['username'] ?? null)
+                $accountLiveOk ? 'ok' : 'fail',
+                $accountLiveOk
                     ? 'Connected as @'.$accountBody['username'].'.'
                     : 'Connection exists but the account identity could not be read live.'
             ),
@@ -523,12 +577,13 @@ class MetaCommerceDiagnosticsService
                 'Live catalog access',
                 count($liveCatalogs) === 0
                     ? 'warn'
-                    : (collect($liveCatalogs)->every(fn (array $catalog) => ! empty($catalog['live_ok'])) ? 'ok' : 'warn'),
-                count($liveCatalogs) === 0
-                    ? 'Run discovery and sync to pull in live catalog assets.'
-                    : (collect($liveCatalogs)->every(fn (array $catalog) => ! empty($catalog['live_ok']))
-                        ? 'Live reads succeeded for all discovered Meta catalogs.'
-                        : 'Some discovered Meta catalogs could not be queried live.')
+                    : ($this->catalogAccessState($liveCatalogs) === 'ok' ? 'ok' : 'warn'),
+                match ($this->catalogAccessState($liveCatalogs)) {
+                    'missing' => 'Run discovery and sync to pull in live catalog assets.',
+                    'ok' => 'Live reads succeeded for all discovered Meta catalogs.',
+                    'not_applicable' => 'A separately authorized Facebook commerce connection is required for live catalog reads.',
+                    default => 'Some discovered Meta catalogs could not be queried live.',
+                }
             ),
             $this->makeEvidenceItem(
                 'merchandising_layers',
@@ -737,11 +792,7 @@ class MetaCommerceDiagnosticsService
                 'title' => 'Run catalog discovery for this account',
                 'summary' => 'Pull the real Meta catalogs into Leadochat so the shop structure can be demonstrated.',
             ],
-            'catalog_access' => [
-                'key' => 'catalog_access',
-                'title' => 'Fix live catalog access',
-                'summary' => 'Check token scope and catalog ownership until every discovered catalog responds successfully.',
-            ],
+            'catalog_access' => $this->catalogAccessNextAction($item),
             'checkout_urls' => [
                 'key' => 'checkout_urls',
                 'title' => 'Add clean HTTPS checkout URLs',
@@ -784,6 +835,7 @@ class MetaCommerceDiagnosticsService
                 'query' => $query,
                 'status' => $response->status(),
                 'ok' => $response->successful(),
+                'outcome' => $response->successful() ? 'ok' : 'failed',
                 'error' => $response->successful() ? null : ProviderSecretRedactor::text(
                     (string) Arr::get($body, 'error.message', $response->body()),
                     [$accessToken]
@@ -796,6 +848,7 @@ class MetaCommerceDiagnosticsService
                 'query' => $query,
                 'status' => null,
                 'ok' => false,
+                'outcome' => 'failed',
                 'error' => ProviderSecretRedactor::text($exception->getMessage(), [$accessToken]),
                 'body' => [],
             ];
@@ -817,6 +870,107 @@ class MetaCommerceDiagnosticsService
     protected function resolveGraphVersion(): string
     {
         return (string) config('services.meta.graph_version', config('services.instagram.graph_version', 'v25.0'));
+    }
+
+    protected function resolveInstagramGraphVersion(): string
+    {
+        return (string) config('services.instagram.graph_version', 'v25.0');
+    }
+
+    protected function usesInstagramLogin(ProviderConnection $connection): bool
+    {
+        if (data_get($connection->meta, 'mode') === 'instagram_login') {
+            return true;
+        }
+
+        $scopes = collect(explode(',', (string) ($this->primaryToken($connection)?->scopes ?? '')))
+            ->map(fn ($scope) => trim($scope))
+            ->filter();
+
+        return $scopes->contains(fn ($scope) => str_starts_with($scope, 'instagram_business_'));
+    }
+
+    protected function localPermissions(ProviderConnection $connection): array
+    {
+        return $connection->permissions()
+            ->orderBy('permission')
+            ->get(['permission', 'status'])
+            ->map(fn ($permission) => [
+                'permission' => $permission->permission,
+                'status' => $permission->status,
+            ])
+            ->values()
+            ->all();
+    }
+
+    protected function localPermissionCheck(array $permissions): array
+    {
+        return [
+            'url' => null,
+            'query' => [],
+            'status' => null,
+            'ok' => true,
+            'outcome' => 'not_applicable',
+            'error' => null,
+            'body' => ['data' => $permissions],
+            'source' => 'local_recorded_permissions',
+            'live' => false,
+        ];
+    }
+
+    protected function separateCommerceAuthorizationCheck(string $resource): array
+    {
+        return [
+            'url' => null,
+            'query' => [],
+            'status' => null,
+            'ok' => false,
+            'outcome' => 'not_applicable',
+            'error' => 'Live commerce checks require a separately authorized Facebook commerce connection.',
+            'body' => [],
+            'source' => 'separate_commerce_authorization_required',
+            'resource' => $resource,
+            'live' => false,
+        ];
+    }
+
+    protected function catalogAccessState(array $liveCatalogs): string
+    {
+        if ($liveCatalogs === []) {
+            return 'missing';
+        }
+
+        $statuses = collect($liveCatalogs)->pluck('live_status');
+
+        if ($statuses->every(fn ($status) => $status === 'ok')) {
+            return 'ok';
+        }
+
+        if ($statuses->every(fn ($status) => $status === 'not_applicable')) {
+            return 'not_applicable';
+        }
+
+        return 'failed';
+    }
+
+    protected function catalogAccessNextAction(array $item): array
+    {
+        $catalogs = collect(Arr::get($item, 'details.catalogs', []))
+            ->filter(fn ($catalog) => is_array($catalog));
+
+        if ($catalogs->isNotEmpty() && $catalogs->every(fn (array $catalog) => ($catalog['live_status'] ?? null) === 'not_applicable')) {
+            return [
+                'key' => 'catalog_access',
+                'title' => 'Authorize Facebook commerce separately',
+                'summary' => 'Use a separate compatible Facebook commerce connection before running live catalog checks.',
+            ];
+        }
+
+        return [
+            'key' => 'catalog_access',
+            'title' => 'Fix live catalog access',
+            'summary' => 'Check token scope and catalog ownership until every discovered catalog responds successfully.',
+        ];
     }
 
     protected function requiredReviewScopes(): array

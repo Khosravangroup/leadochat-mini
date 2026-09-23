@@ -3900,7 +3900,11 @@
                                                                     @if (isset($shopCatalog['product_count']))
                                                                         · {{ $shopCatalog['product_count'] }} product(s)
                                                                     @endif
-                                                                    · {{ !empty($shopCatalog['live_ok']) ? 'live ok' : 'live check failed' }}
+                                                                    · {{ match ($shopCatalog['live_status'] ?? null) {
+                                                                        'ok' => 'live ok',
+                                                                        'not_applicable' => 'separate Facebook commerce authorization required',
+                                                                        default => 'live check failed',
+                                                                    } }}
                                                                     @if (!empty($shopCatalog['live_error']))
                                                                         · {{ $shopCatalog['live_error'] }}
                                                                     @endif
