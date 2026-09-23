@@ -85,7 +85,7 @@ class MetaAppReviewEvidenceTest extends TestCase
         ]);
 
         Http::fake([
-            'https://graph.facebook.com/v25.0/instagram-account-evidence*' => Http::response([
+            'https://graph.facebook.com/v25.0/instagram-account-evidence?*' => Http::response([
                 'id' => 'instagram-account-evidence',
                 'username' => 'evidence_shop',
                 'name' => 'Evidence Shop',

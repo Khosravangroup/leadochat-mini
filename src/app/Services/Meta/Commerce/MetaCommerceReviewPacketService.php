@@ -34,7 +34,7 @@ class MetaCommerceReviewPacketService
             ->values();
 
         $packet = [
-            'version' => 1,
+            'version' => 2,
             'generated_at' => now()->toIso8601String(),
             'provider' => 'instagram',
             'workspace_id' => $connection->workspace_id,
@@ -52,7 +52,9 @@ class MetaCommerceReviewPacketService
                 'status' => $review['status'] ?? ($diagnostics['ok'] ?? false ? 'ready' : 'blocked'),
                 'headline' => $review['headline'] ?? 'Meta commerce review packet generated.',
                 'counts' => is_array($review['counts'] ?? null) ? $review['counts'] : [],
+                'graph_api_family' => $diagnostics['graph_api_family'] ?? null,
                 'graph_version' => $diagnostics['graph_version'] ?? null,
+                'graph_versions' => is_array($diagnostics['graph_versions'] ?? null) ? $diagnostics['graph_versions'] : [],
             ],
             'permissions' => [
                 'required' => array_values((array) ($permissions['required'] ?? [])),
@@ -77,6 +79,7 @@ class MetaCommerceReviewPacketService
             ],
             'webhook' => [
                 'verified_fields' => array_values((array) ($webhook['verified_fields'] ?? [])),
+                'saved_verified_fields' => array_values((array) ($webhook['saved_verified_fields'] ?? [])),
                 'missing_fields' => array_values((array) ($webhook['missing_fields'] ?? [])),
                 'verified_at' => $webhook['verified_at'] ?? null,
             ],
@@ -90,6 +93,7 @@ class MetaCommerceReviewPacketService
                         'vertical' => $catalog['vertical'] ?? null,
                         'product_count' => $catalog['product_count'] ?? null,
                         'live_ok' => (bool) ($catalog['live_ok'] ?? false),
+                        'live_status' => $catalog['live_status'] ?? (($catalog['live_ok'] ?? false) ? 'ok' : 'failed'),
                         'status' => $catalog['status'] ?? null,
                     ])
                     ->values()
