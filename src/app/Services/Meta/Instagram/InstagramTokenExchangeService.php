@@ -226,8 +226,8 @@ class InstagramTokenExchangeService
                         'permission' => $scope,
                     ],
                     [
-                        'status' => 'granted',
-                        'granted_at' => now(),
+                        'status' => 'requested',
+                        'granted_at' => null,
                         'expires_at' => null,
                     ]
                 );

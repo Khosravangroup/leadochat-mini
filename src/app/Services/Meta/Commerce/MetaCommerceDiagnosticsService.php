@@ -16,6 +16,30 @@ use RuntimeException;
 
 class MetaCommerceDiagnosticsService
 {
+    // Code-backed journeys only; this does not prove Meta has granted a permission.
+    private const SCOPES_WITH_DEMONSTRATED_API_JOURNEY = [
+        'instagram_business_basic',
+        'instagram_business_manage_messages',
+        'instagram_business_manage_comments',
+        'instagram_business_content_publish',
+        'instagram_business_manage_insights',
+        'business_management',
+        'catalog_management',
+    ];
+
+    public function instagramReviewConfiguration(): array
+    {
+        $requestedScopes = $this->instagramRequestedScopes();
+
+        return [
+            'instagram_requested' => $requestedScopes,
+            'instagram_without_demonstrated_api_journey' => array_values(array_diff(
+                $requestedScopes,
+                self::SCOPES_WITH_DEMONSTRATED_API_JOURNEY
+            )),
+        ];
+    }
+
     public function diagnoseForConnection(ProviderConnection $connection): array
     {
         if ($connection->provider !== 'instagram') {
@@ -55,6 +79,10 @@ class MetaCommerceDiagnosticsService
         $grantedPermissions = $this->extractGrantedPermissions($checks['granted_permissions']);
         $requiredPermissions = $this->requiredReviewScopes();
         $missingPermissions = array_values(array_diff($requiredPermissions, $grantedPermissions));
+        $scopesWithoutJourney = array_values(array_diff($requiredPermissions, self::SCOPES_WITH_DEMONSTRATED_API_JOURNEY));
+        $instagramReviewConfiguration = $this->instagramReviewConfiguration();
+        $instagramRequestedScopes = $instagramReviewConfiguration['instagram_requested'];
+        $instagramScopesWithoutJourney = $instagramReviewConfiguration['instagram_without_demonstrated_api_journey'];
 
         $workspace = $connection->workspace;
         $sourceCatalogs = Catalog::query()
@@ -204,6 +232,22 @@ class MetaCommerceDiagnosticsService
                 ]
             ),
             $this->makeReadinessCheck(
+                'scope_feature_coverage',
+                $scopesWithoutJourney === [] ? 'ok' : 'fail',
+                $scopesWithoutJourney === []
+                    ? 'Configured review scopes have code-backed API journeys; provider behavior still needs verification.'
+                    : 'Configured scopes lack a demonstrable API journey: '.implode(', ', $scopesWithoutJourney),
+                ['without_demonstrated_api_journey' => $scopesWithoutJourney]
+            ),
+            $this->makeReadinessCheck(
+                'instagram_scope_feature_coverage',
+                $instagramScopesWithoutJourney === [] ? 'ok' : 'fail',
+                $instagramScopesWithoutJourney === []
+                    ? 'Configured Instagram OAuth scopes have code-backed API journeys; provider behavior still needs verification.'
+                    : 'Instagram OAuth scopes lack a demonstrable API journey: '.implode(', ', $instagramScopesWithoutJourney),
+                ['without_demonstrated_api_journey' => $instagramScopesWithoutJourney]
+            ),
+            $this->makeReadinessCheck(
                 'product_tag_eligibility',
                 ! empty($accountBody['shopping_product_tag_eligibility']) ? 'ok' : 'warn',
                 ! empty($accountBody['shopping_product_tag_eligibility'])
@@ -303,6 +347,8 @@ class MetaCommerceDiagnosticsService
             $accountBody,
             $requiredPermissions,
             $missingPermissions,
+            $scopesWithoutJourney,
+            $instagramScopesWithoutJourney,
             $verifiedWebhookFields,
             $liveCatalogs,
             $localStats,
@@ -328,6 +374,9 @@ class MetaCommerceDiagnosticsService
                 'required' => $requiredPermissions,
                 'granted' => $grantedPermissions,
                 'missing' => $missingPermissions,
+                'without_demonstrated_api_journey' => $scopesWithoutJourney,
+                'instagram_requested' => $instagramRequestedScopes,
+                'instagram_without_demonstrated_api_journey' => $instagramScopesWithoutJourney,
                 'local_permissions' => $connection->permissions()
                     ->orderBy('permission')
                     ->get(['permission', 'status'])
@@ -379,6 +428,8 @@ class MetaCommerceDiagnosticsService
         array $accountBody,
         array $requiredPermissions,
         array $missingPermissions,
+        array $scopesWithoutJourney,
+        array $instagramScopesWithoutJourney,
         array $verifiedWebhookFields,
         array $liveCatalogs,
         array $localStats,
@@ -424,6 +475,24 @@ class MetaCommerceDiagnosticsService
                     'required' => $requiredPermissions,
                     'missing' => $missingPermissions,
                 ]
+            ),
+            $this->makeEvidenceItem(
+                'scope_feature_coverage',
+                'Permission-to-feature coverage',
+                $scopesWithoutJourney === [] ? 'ok' : 'fail',
+                $scopesWithoutJourney === []
+                    ? 'Configured permissions have code-backed journeys; live behavior remains unverified.'
+                    : 'No demonstrable API journey for: '.implode(', ', $scopesWithoutJourney),
+                ['without_demonstrated_api_journey' => $scopesWithoutJourney]
+            ),
+            $this->makeEvidenceItem(
+                'instagram_scope_feature_coverage',
+                'Instagram permission-to-feature coverage',
+                $instagramScopesWithoutJourney === [] ? 'ok' : 'fail',
+                $instagramScopesWithoutJourney === []
+                    ? 'Configured Instagram OAuth scopes have code-backed journeys; live behavior remains unverified.'
+                    : 'No demonstrable API journey for: '.implode(', ', $instagramScopesWithoutJourney),
+                ['without_demonstrated_api_journey' => $instagramScopesWithoutJourney]
             ),
             $this->makeEvidenceItem(
                 'product_tag_eligibility',
@@ -643,6 +712,16 @@ class MetaCommerceDiagnosticsService
                 'title' => 'Complete the review permission set',
                 'summary' => 'Grant every configured commerce review permission on the Meta app and reconnect the account.',
             ],
+            'scope_feature_coverage' => [
+                'key' => 'scope_feature_coverage',
+                'title' => 'Demonstrate each configured permission',
+                'summary' => 'Implement and verify a real API journey for each flagged scope, or review the requested set with the owner.',
+            ],
+            'instagram_scope_feature_coverage' => [
+                'key' => 'instagram_scope_feature_coverage',
+                'title' => 'Demonstrate each Instagram OAuth scope',
+                'summary' => 'Implement and verify a real API journey for each flagged Instagram scope, or review the requested set with the owner.',
+            ],
             'product_tag_eligibility' => [
                 'key' => 'product_tag_eligibility',
                 'title' => 'Confirm shop eligibility for product tagging',
@@ -745,6 +824,14 @@ class MetaCommerceDiagnosticsService
         return array_values(array_unique(array_filter(array_map(
             'trim',
             explode(',', (string) config('services.meta.commerce_review_scopes', ''))
+        ))));
+    }
+
+    protected function instagramRequestedScopes(): array
+    {
+        return array_values(array_unique(array_filter(array_map(
+            'trim',
+            explode(',', (string) config('services.instagram.scopes', ''))
         ))));
     }
 

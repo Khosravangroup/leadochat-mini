@@ -26,11 +26,10 @@ class InstagramConnectController extends Controller
         $result = $instagramLoginService->handleCallback($request);
 
         $status = (string) Arr::get($result, 'status', 'unknown');
-        $isSuccess = in_array($status, ['connected', 'success', 'callback_received'], true)
-            && !in_array($status, ['invalid_state', 'failed', 'error'], true);
+        $isSuccess = $status === 'connected';
 
         $message = match ($status) {
-            'connected', 'success', 'callback_received' => 'Instagram connection completed successfully.',
+            'connected' => 'Instagram connection completed successfully.',
             'invalid_state' => 'Instagram connection failed because the login state was invalid or expired. Please try again.',
             'failed', 'error' => 'Instagram connection failed. Please try again.',
             default => 'Instagram connection flow finished. Please review the saved connection status below.',

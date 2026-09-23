@@ -75,6 +75,10 @@ provider URLs remain remote and are not rewritten as local files.
 `SocialController` owns Instagram posts, comments, stories, publishing, moderation,
 and comment-to-DM bridging. Provider-specific API behavior is delegated to services
 under `app/Services/Meta/Instagram`.
+`InstagramInsightsController` and `InstagramInsightsService` add an owner-only,
+read-only account Insights journey using the Instagram Login token and
+`graph.instagram.com`. This is distinct from the Facebook Marketing API token
+required for ad-account operations.
 
 ### Meta commerce
 
@@ -82,10 +86,18 @@ Services under `app/Services/Meta/Commerce` own discovery, diagnostics, catalog
 synchronization, product-set and collection synchronization, order snapshots,
 promotion previews, review packets, and app-review evidence.
 
+The default Instagram-only evidence path is intentionally separated from live
+commerce diagnostics. When `META_COMMERCE_REVIEW_SCOPES` is empty, it builds a
+redacted aggregate packet without calling Facebook commerce endpoints. Commerce
+diagnostics and packets remain deferred groundwork for a future, separately
+authorized permission set.
+
 ### OAuth and webhooks
 
-The Instagram connection flow stores provider connection, permission, and token
-records. Webhook verification and request-signature checking occur in
+The Instagram connection flow stores provider connection, requested-permission,
+and token records. Configured scopes remain `requested` until independently
+verified provider evidence exists; configuration is never treated as a grant.
+Webhook verification and request-signature checking occur in
 `InstagramWebhookController`; accepted events are stored as `WebhookEvent` records
 and dispatched to `ProcessInstagramWebhookEvent`. Signature checking, event
 idempotency, workspace resolution, and queue behavior are protected contracts.

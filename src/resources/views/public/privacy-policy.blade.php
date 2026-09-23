@@ -25,8 +25,8 @@
                 'id' => 'service-data',
                 'title' => 'Personal information you provide or that we collect',
                 'body' => [
-                    'For self-hosted PHP and WordPress versions, Leadochat does not access or collect your conversations, messages, attachments, users, or generated service information. That information is stored on your own server and is not transmitted to Leadochat.',
-                    'For cloud services, service information may be stored in secure databases for product functionality. We do not process or share your conversations except as needed to provide the service you use.',
+                    'Leadochat Mini stores account, workspace, conversation, message, attachment, connected-account, and diagnostic information required to provide the features you use.',
+                    'Service information is stored in the application databases and private storage used by Leadochat Mini. We do not sell conversation content or share it except where needed to provide the service, operate an integration you enable, protect the service, or comply with law.',
                     'If you purchase through a third-party marketplace or payment provider, information you provide to that provider is handled according to that provider\'s policies.',
                 ],
             ],
@@ -69,8 +69,8 @@
                 'id' => 'contact',
                 'title' => 'Privacy contact',
                 'body' => [
-                    'If you have questions or comments about this Privacy Policy, contact us by email at info@leadochat.com.',
-                    'Postal mail or courier: Global Education LTD, 115419, Moscow, 2nd Roshchinsky proezd, building 8, building 6.',
+                    'If you have questions, comments, or a deletion request related to this Privacy Policy, contact us by email at hello@leadochat.com.',
+                    'Postal mail or courier: Leadochat, 71-75 Shelton Street, Covent Garden, London, United Kingdom, WC2H 9JQ.',
                 ],
             ],
         ];

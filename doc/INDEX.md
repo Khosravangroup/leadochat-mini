@@ -1,6 +1,6 @@
 # Documentation index
 
-Last reviewed: 21 September 2026.
+Last reviewed: 23 September 2026.
 
 ## Current sources of truth
 
@@ -16,6 +16,7 @@ Last reviewed: 21 September 2026.
 | [`DEPLOYMENT_AND_OPERATIONS.md`](DEPLOYMENT_AND_OPERATIONS.md) | Current deployment and operational runbook | Deploy, rollback, backup, or monitoring changes |
 | [`SECURITY_HEADERS_AND_CSP.md`](SECURITY_HEADERS_AND_CSP.md) | Browser-header policy, CSP telemetry, privacy, rollout, and rollback | Header directives, external origins, report handling, or CSP rollout changes |
 | [`RISK_REGISTER.md`](RISK_REGISTER.md) | Evidence-backed open findings | A risk is discovered, accepted, mitigated, or closed |
+| [`META_APP_REVIEW_PERMISSION_MATRIX.md`](META_APP_REVIEW_PERMISSION_MATRIX.md) | Configured Meta scopes mapped to code journeys, tests, and gaps | A requested scope, provider call, or reviewer journey changes |
 | [`REMEDIATION_ROADMAP.md`](REMEDIATION_ROADMAP.md) | Ordered remediation phases and acceptance gates | Scope, order, ownership, or phase status changes |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Branching, review, tests, and documentation policy | Team workflow changes |
 | [`CODEX_SKILLS.md`](CODEX_SKILLS.md) | Project-local agent skills and routing | A skill or agent workflow changes |

@@ -101,8 +101,8 @@
                 'id' => 'contact',
                 'title' => '11. Contact',
                 'body' => [
-                    'If you have questions or comments about these Policies and Procedures, contact us by email at info@leadochat.com.',
-                    'Postal mail or courier: Global Education LTD, 115419, Moscow, 2nd Roshchinsky proezd, building 8, building 6.',
+                    'If you have questions or comments about these Policies and Procedures, contact us by email at hello@leadochat.com.',
+                    'Postal mail or courier: Leadochat, 71-75 Shelton Street, Covent Garden, London, United Kingdom, WC2H 9JQ.',
                 ],
             ],
         ];

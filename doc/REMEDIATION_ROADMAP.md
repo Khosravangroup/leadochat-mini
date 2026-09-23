@@ -349,6 +349,31 @@ as current operating policy.
 
 ## Suggested execution order for the next tasks
 
+**Owner priority change, updated 23 September 2026:** prepare the software for Meta App
+Review before resuming broader host and backup automation. The owner declined a
+recurring backup program for this personal experimental project. The owner has now
+authorized the ordered App Review preparation through a final live-channel test.
+This does not close `OPS-01` or prove provider behavior before that test succeeds;
+do not perform a data migration without its applicable recovery gate. The immediate
+software sequence is: complete the Instagram OAuth callback candidate, use the
+pre-created and pre-verified owner reviewer account while production mail remains
+non-delivering, reconcile the public privacy/deletion/terms copy and contact route,
+limit the submission to the five implemented Instagram Login permissions, and run
+the smallest permission-specific reviewer journeys.
+Do not claim submission readiness while those journeys remain unverified.
+
+**Permission-to-feature evidence, 21 September 2026:**
+`doc/META_APP_REVIEW_PERMISSION_MATRIX.md` inventories the configured scopes and
+their current code/test paths. `META-02` remains open for live verification of the
+five Instagram journeys. Ads and commerce scopes are excluded from this submission
+and remain deferred. The local commerce diagnostic candidate now blocks a
+misleading `ready` status for configured Instagram or commerce scopes without
+demonstrable code-backed API actions. Configured scopes are recorded as requested,
+not granted, and exported evidence is aggregate-only. An
+owner-only, mock-tested Instagram account Insights read now follows Meta's
+official Instagram Login contract; ads read/write still require a distinct,
+properly authorized Marketing API token and an agreed product workflow.
+
 1. Configure and prove production transactional email to close `AUTH-02`.
 2. Run approved authenticated synthetic browser/provider smoke and observe CSP
    telemetry for the deployed Phase 1 controls.
