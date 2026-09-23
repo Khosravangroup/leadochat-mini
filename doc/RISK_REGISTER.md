@@ -336,9 +336,13 @@ premature connection time. Focused regressions first failed on retained
 `callback_state`, an HTTP `500`, and a pending failure status; after the fix,
 four focused tests passed with 40 assertions on SQLite, including a foreign
 workspace/session rejection. The full suite passed with 118 tests and 951
-assertions on both SQLite and PostgreSQL 16. The candidate is local only;
-production still runs the previous behavior. No authenticated Instagram channel
-test was performed under the owner's deferral.
+assertions on both SQLite and PostgreSQL 16.
+
+**Production update, 23 September 2026:** pull requests `#48` and `#49` deployed
+the callback hardening at revision
+`00a5c678fb526d3e8948dd646841fc205960ba5f`. Reviewer login passed, but the only
+connected Instagram token was expired. A successful fresh callback and its
+single-use behavior remain unverified against the provider.
 
 **Impact:** a callback may be replayed from the same session, sensitive OAuth
 correlation data remains longer than needed, and users can see a misleading
@@ -371,6 +375,12 @@ comment, customer, post, webhook-error, order, or campaign samples. This impleme
 a local account Insights read journey, but not ads features; it does not prove
 provider access. The official Marketing API contract requires an appropriate
 ad-account token, which the current Instagram Login flow does not establish.
+
+**Production update, 23 September 2026:** the five-scope aggregate evidence packet
+generated successfully through the reviewer account without a commerce-provider
+request and without recent-content samples. The existing token was expired; the
+identity probe returned `401` and Insights failed closed. Live provider proof and
+screencasts remain blocked on an owner-driven Instagram reconnect.
 
 **Close when:** each intended requested scope maps to an implemented, authorized,
 tested, reviewer-visible API journey, or the owner explicitly approves removing
