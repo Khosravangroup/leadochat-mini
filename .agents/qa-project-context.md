@@ -1,6 +1,6 @@
 # QA Project Context
 
-Last verified: 23 September 2026. This file is the source of truth for project
+Last verified: 24 September 2026. This file is the source of truth for project
 stack, environments, quality goals, and test policy. Reverify volatile production
 facts before relying on them.
 
@@ -73,6 +73,12 @@ Critical user journeys are:
   export smoke tests passed. The existing Instagram token was expired: the live
   identity probe returned `401` and Insights failed closed, so reconnect plus live
   permission walkthroughs and screencasts remain the provider-specific gate.
+- The 24 September Instagram DM automation release brings the complete suite to
+  144 tests and 1,149 assertions on both SQLite and PostgreSQL 16. Pull requests
+  `#58` and `#59` passed all required checks and production revision
+  `468ac88ef3f8fa8650fa4cfb87a5c28e546e2f05` passed public, server, queue,
+  database, Reverb, route, log, and authenticated disabled-settings smoke tests.
+  Live story-reply and comment-private-reply provider sends remain unverified.
 - PHP syntax validation passed for all PHP files in the audited revision.
 - No committed browser E2E, accessibility, visual-regression, or load suite is
   present. The Phase 2 CI workflow runs the complete existing suite against both

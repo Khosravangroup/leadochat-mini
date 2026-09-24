@@ -11,15 +11,15 @@ claim that every pressure candidate is a proven bottleneck.
 
 | Scope | Evidence | Status |
 | --- | --- | --- |
-| Current source candidate | Branch `feature/story-comment-auto-dm`, base revision `b198429ec473d7020146dd482e265bd4808d6c3e`, plus the uncommitted Instagram DM automation change | Includes the latest local feature; not deployed |
-| Last verified production release | Branch `main`, revision `df7a0d266d0b97510071587adf8c69d31915a51a` | Verified 23 September 2026 |
+| Current source | Branch `develop`, revision `2a2d86742af7967ac53bd99e54ab148e5cc6c63b` | DM automation feature merged through pull request `#58` |
+| Last verified production release | Branch `main`, revision `468ac88ef3f8fa8650fa4cfb87a5c28e546e2f05` | Verified 24 September 2026 after pull request `#59` |
 | Public edge observation | `https://mini.leadochat.com`, sampled from the Mac mini on 24 September 2026 | Live public-only observation; not an authenticated benchmark |
 | Production topology | `docker-compose.prod.yml` plus the last verified operations record | Five services: app, Nginx, PostgreSQL, queue, and Reverb |
 
-The source candidate has 134 registered routes. The production revision does not
-yet include the new `settings.automation.instagram.update` route or automatic
-story/comment DM behavior. Reverify the exact production SHA before any profiling
-or deployment decision.
+The source and deployed production revision have 134 registered routes, including
+`settings.automation.instagram.update` and the automatic story/comment DM
+behavior. Reverify the exact production SHA before any profiling or deployment
+decision.
 
 ## 1. System context
 

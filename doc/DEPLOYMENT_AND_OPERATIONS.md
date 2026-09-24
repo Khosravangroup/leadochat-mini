@@ -2,13 +2,13 @@
 
 ## Verified production snapshot
 
-Snapshot date: 23 September 2026, after the Instagram App Review software release.
+Snapshot date: 24 September 2026, after the Instagram DM automation release.
 
 - Public URL: `https://mini.leadochat.com`
 - Application directory: `/opt/leadochat`
 - Runtime: Docker Compose with `app`, `nginx`, `postgres`, `queue`, and `reverb`
 - Verified branch: `main`
-- Verified revision: `df7a0d266d0b97510071587adf8c69d31915a51a`
+- Verified revision: `468ac88ef3f8fa8650fa4cfb87a5c28e546e2f05`
 - Container state: all five running; PostgreSQL healthy at the snapshot time
 - Laravel state: production, debug off, configuration/routes/views cached
 - Database: PostgreSQL 16
@@ -20,6 +20,34 @@ Snapshot date: 23 September 2026, after the Instagram App Review software releas
 Access credentials and SSH keys are intentionally not documented in the repository.
 They remain in protected local credential storage on the Mac mini. Reverify host,
 user, repository, branch, and revision before every operation.
+
+## Instagram DM automation production release
+
+On 24 September 2026 pull request `#58` merged the reviewed automation candidate
+into `develop`, and pull request `#59` promoted that tree to `main`. Both pull
+requests passed the required SQLite, PostgreSQL 16, frontend, dependency-audit,
+secret/focused-SAST, Nginx, and Semgrep checks. Production was fast-forwarded from
+`df7a0d266d0b97510071587adf8c69d31915a51a` to
+`468ac88ef3f8fa8650fa4cfb87a5c28e546e2f05` without `git reset` or `git clean`.
+The owner had declined a fresh backup for this personal test deployment. The
+release had no migration, environment, lockfile, Docker, or deployment-flow
+change; PostgreSQL stayed running and reported nothing to migrate.
+
+Post-deploy verification confirmed all five Compose services running with zero
+restart counts, PostgreSQL healthy, queue depth zero, the two historical failed
+jobs unchanged, and Reverb reachable on its private Compose network. `/up`, `/`,
+and `/login` returned `200`; anonymous Automation settings redirected to login;
+an invalid signed-webhook request returned `403`; the expected response headers
+remained present; and no new severe Laravel log entry appeared. The server
+registered `settings.automation.instagram.update` and retained only the two
+documented untracked runtime paths after file-mode drift was ignored.
+
+An authenticated owner browser reached the deployed Automation section, which
+listed both connected Instagram accounts with both rules disabled by default.
+Saving the disabled configuration for account `centerlaghari` succeeded. No live
+story-reply or comment private-reply message was sent during this verification;
+that provider mutation requires an explicitly owner-controlled trigger and final
+operator confirmation.
 
 ## Instagram diagnostics production correction
 
