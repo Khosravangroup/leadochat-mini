@@ -220,6 +220,19 @@ and audit, clean Node 24 install/npm audit/Vite 8.3.0 build, the Nginx response-
 suite, a 113-commit Gitleaks scan, and the four-rule focused Semgrep scan passed.
 These results still do not prove a live Meta grant or provider journey.
 
+The Instagram DM automation candidate on 24 September 2026 adds eight focused
+feature tests for disabled-by-default behavior, settings rendering and validation, workspace isolation,
+automatic story-reply and comment-private-reply sends, Inbox persistence,
+duplicate suppression, non-triggering ordinary/edit/delete/self cases, and secret-safe
+provider failure. The complete SQLite and isolated PostgreSQL 16 suites each
+passed 144 tests with 1,149 assertions. The focused automation, webhook, and
+workspace-authorization set passed on isolated PostgreSQL 16 with 20 tests and
+264 assertions. Changed PHP
+files passed Pint, the Blade route rendered in feature coverage, and
+`git diff --check` passed. The Vite 8.3.0 production build also completed.
+Provider calls were mocked in this candidate validation; live deployment and
+provider evidence are recorded separately after release.
+
 Start with the smallest affected check:
 
 ```bash

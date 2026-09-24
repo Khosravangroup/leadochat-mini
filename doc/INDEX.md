@@ -1,6 +1,6 @@
 # Documentation index
 
-Last reviewed: 23 September 2026.
+Last reviewed: 24 September 2026.
 
 ## Current sources of truth
 
@@ -8,6 +8,7 @@ Last reviewed: 23 September 2026.
 | --- | --- | --- |
 | [`README.md`](../README.md) | Project entry point and quick start | Product scope or first-run flow changes |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Runtime, modules, and protected boundaries | A module, integration, or runtime boundary changes |
+| [`PERFORMANCE_ARCHITECTURE_MAP.md`](PERFORMANCE_ARCHITECTURE_MAP.md) | Current end-to-end architecture, workload flows, performance pressure candidates, and measurement handoff | Runtime, request flow, data access, realtime behavior, delivery topology, or measured performance evidence changes |
 | [`API_AND_ROUTES.md`](API_AND_ROUTES.md) | HTTP surfaces and authorization expectations | A route or external contract changes |
 | [`DATABASE_AND_DATA.md`](DATABASE_AND_DATA.md) | Data domains, ownership, migrations, and backup rules | A table, relationship, retention, or migration changes |
 | [`ENVIRONMENT_VARIABLES.md`](ENVIRONMENT_VARIABLES.md) | Environment-variable contract without values | Configuration keys or environment requirements change |

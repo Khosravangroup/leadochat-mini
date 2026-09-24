@@ -3,23 +3,24 @@
 namespace App\Jobs;
 
 use App\Events\WorkspaceRealtimeUpdated;
+use App\Models\Conversation;
+use App\Models\ConversationParticipant;
+use App\Models\Message;
+use App\Models\MessageAttachment;
 use App\Models\ProviderConnection;
 use App\Models\SocialComment;
 use App\Models\SocialPost;
 use App\Models\SocialStory;
 use App\Models\WebhookEvent;
+use App\Services\Meta\Instagram\InstagramDmAutomationService;
+use App\Services\Meta\Instagram\InstagramService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Arr;
-use Illuminate\Support\Str;
-use App\Models\Conversation;
-use App\Models\ConversationParticipant;
-use App\Models\Message;
-use App\Models\MessageAttachment;
-use App\Services\Meta\Instagram\InstagramService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class ProcessInstagramWebhookEvent implements ShouldQueue
 {
@@ -27,8 +28,7 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
 
     public function __construct(
         public int $webhookEventId
-    ) {
-    }
+    ) {}
 
     protected function detectNormalizedEventType(array $change): string
     {
@@ -48,11 +48,11 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
                 return 'message_edit';
             }
 
-            if (is_array(Arr::get($value, 'messages')) && !empty(Arr::get($value, 'messages'))) {
+            if (is_array(Arr::get($value, 'messages')) && ! empty(Arr::get($value, 'messages'))) {
                 return 'message';
             }
 
-            if (is_array(Arr::get($value, 'messaging')) && !empty(Arr::get($value, 'messaging'))) {
+            if (is_array(Arr::get($value, 'messaging')) && ! empty(Arr::get($value, 'messaging'))) {
                 return 'message';
             }
 
@@ -260,9 +260,9 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
         $value = Arr::get($change, 'value', []);
         $messages = Arr::get($value, 'messages', []);
         $messagingItems = Arr::get($value, 'messaging', []);
-        $messageNode = is_array($messages) && !empty($messages)
+        $messageNode = is_array($messages) && ! empty($messages)
             ? $messages[0]
-            : (is_array($messagingItems) && !empty($messagingItems)
+            : (is_array($messagingItems) && ! empty($messagingItems)
                 ? Arr::get($messagingItems, '0.message', [])
                 : (Arr::get($value, 'message', []) ?: []));
 
@@ -298,7 +298,7 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
 
         $messageContextType = null;
 
-        if (is_array($replyTo) && !empty($replyTo)) {
+        if (is_array($replyTo) && ! empty($replyTo)) {
             $messageContextType = 'reply';
         }
 
@@ -306,15 +306,15 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
             $messageContextType = 'story_reply';
         }
 
-        if ($messageContextType === null && is_array($storyContext) && !empty($storyContext)) {
+        if ($messageContextType === null && is_array($storyContext) && ! empty($storyContext)) {
             $messageContextType = 'story_reply';
         }
 
-        if ($messageContextType === null && is_array($referral) && !empty($referral)) {
+        if ($messageContextType === null && is_array($referral) && ! empty($referral)) {
             $messageContextType = 'referral';
         }
 
-        if ($messageContextType === null && is_array($reaction) && !empty($reaction)) {
+        if ($messageContextType === null && is_array($reaction) && ! empty($reaction)) {
             $messageContextType = 'reaction';
         }
 
@@ -347,7 +347,7 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
             'sender_id' => $senderId !== '' ? $senderId : null,
             'recipient_id' => $recipientId !== '' ? $recipientId : null,
             'text' => Arr::get($messageNode, 'text') ?? Arr::get($messageNode, 'message'),
-            'has_attachments' => !empty($attachmentItems),
+            'has_attachments' => ! empty($attachmentItems),
             'attachments' => $attachmentItems,
             'sent_at' => $timestamp,
             'message_context_type' => $messageContextType,
@@ -552,14 +552,14 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
         $text = (string) ($normalized['text'] ?? '');
         $sentAt = $this->normalizeInstagramTimestamp($normalized['sent_at'] ?? null)?->toIso8601String() ?? 'no-time';
         $attachmentSignature = collect($normalized['attachments'] ?? [])
-            ->map(fn ($attachment) => (string) (($attachment['type'] ?? 'unknown') . '|' . ($attachment['url'] ?? '') . '|' . ($attachment['title'] ?? '')))
+            ->map(fn ($attachment) => (string) (($attachment['type'] ?? 'unknown').'|'.($attachment['url'] ?? '').'|'.($attachment['title'] ?? '')))
             ->implode(';');
 
         if ($direction === 'unknown' && $senderId === '' && $recipientId === '' && $text === '' && $attachmentSignature === '') {
             return null;
         }
 
-        return 'instagram:fallback:' . sha1(implode('|', [
+        return 'instagram:fallback:'.sha1(implode('|', [
             $conversation->id,
             $direction,
             $senderId,
@@ -605,7 +605,7 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
             return null;
         }
 
-        return 'instagram:dm:' . Str::lower($accountId) . ':' . Str::lower($customerId);
+        return 'instagram:dm:'.Str::lower($accountId).':'.Str::lower($customerId);
     }
 
     protected function resolveConversation(WebhookEvent $event, array $normalized): ?Conversation
@@ -741,7 +741,7 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
                     'provider_message_id' => $providerMessageId,
                 ]);
             } else {
-                $message = new Message();
+                $message = new Message;
                 $message->conversation_id = $conversation->id;
             }
 
@@ -1398,8 +1398,18 @@ class ProcessInstagramWebhookEvent implements ShouldQueue
             return;
         }
 
+        $update = new WorkspaceRealtimeUpdated((int) $event->workspace_id, $domain, $action, $payload);
+
+        if (in_array($action, ['instagram_message_received', 'instagram_comment_received'], true)) {
+            try {
+                app(InstagramDmAutomationService::class)->handle($update);
+            } catch (\Throwable $exception) {
+                report($exception);
+            }
+        }
+
         try {
-            event(new WorkspaceRealtimeUpdated((int) $event->workspace_id, $domain, $action, $payload));
+            event($update);
         } catch (\Throwable $exception) {
             report($exception);
         }
