@@ -233,6 +233,17 @@ files passed Pint, the Blade route rendered in feature coverage, and
 Provider calls were mocked in this candidate validation; live deployment and
 provider evidence are recorded separately after release.
 
+Pull requests `#58` and `#59` promoted the candidate through `develop` to
+production `main` revision `468ac88ef3f8fa8650fa4cfb87a5c28e546e2f05`; all
+required GitHub checks passed on both promotion stages. Post-deploy smoke verified
+the exact SHA, five running services, healthy PostgreSQL, no pending migration,
+zero queued jobs, stable historical failed-job count, private Reverb connectivity,
+public health/login/header behavior, invalid-webhook rejection, and no new severe
+Laravel log entry. Authenticated browser smoke rendered both connected accounts
+with both rules disabled by default and successfully saved a disabled rule set.
+A real provider send was intentionally not triggered without a final
+owner-controlled recipient/interaction confirmation.
+
 Start with the smallest affected check:
 
 ```bash
