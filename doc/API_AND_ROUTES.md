@@ -10,9 +10,7 @@ Generate the exact current inventory with:
 docker compose exec app php artisan route:list
 ```
 
-The audited revision registered 127 routes. The cumulative Phase 1 candidate,
-including the two `DATA-01` ownership routes and CSP report receiver below,
-registers 132 routes.
+The current source revision registers 134 routes.
 
 ## Public pages
 
@@ -38,8 +36,8 @@ Routes under the `auth` and effective `verified` middleware cover:
 - `/social/instagram` posts, comments, stories, publishing, moderation, and DM
   reply;
 - `/settings` for workspace, team, tags, departments, catalogs, products, offers,
-  Meta commerce sync/diagnostics/evidence, orders, product sets, collections, and
-  promotions.
+  Instagram DM automation, Meta commerce sync/diagnostics/evidence, orders,
+  product sets, collections, and promotions.
 
 Profile edit, password, account deletion, and workspace ownership-resolution routes
 require `auth` but are outside the `verified` group. Keeping ownership resolution
@@ -133,6 +131,38 @@ The diagnostics response exposes `graph_api_family`, the effective
 successful provider response; saved callback fields remain separately available
 as `webhook.saved_verified_fields`. Review packets that preserve the three-state
 catalog contract use schema version `2`.
+
+### Instagram direct-message automation
+
+| Method | Path | Named route | Contract |
+| --- | --- | --- | --- |
+| `PATCH` | `/settings/automation/instagram/{connection}` | `settings.automation.instagram.update` | Workspace manager only; saves story-reply and comment-private-reply automation for one connected Instagram account |
+
+The route accepts `story_reply_enabled`, `story_reply_message`,
+`comment_dm_enabled`, and `comment_dm_message`. An enabled rule requires a
+non-blank message of at most 1,000 characters. A route-bound connection from
+another workspace or provider returns `404`. Settings are stored beneath
+`ProviderConnection.meta.dm_automation`; unrelated connection metadata is
+preserved and both rules default to disabled.
+
+After an inbound Instagram webhook is successfully persisted, the webhook job
+hands its workspace-scoped update to `InstagramDmAutomationService` before it
+broadcasts the same update through Reverb. Automation and realtime delivery have
+separate failure boundaries, so a Reverb outage does not suppress an eligible
+automatic reply.
+Only inbound story replies trigger the story rule; ordinary DMs and outbound
+echoes are ignored. Only newly added active external comments without an
+existing private reply trigger the comment rule; edits and deletions are ignored.
+Comment automation uses Meta's native private
+comment-reply payload and records the outbound message in Inbox.
+
+Each source message or comment is claimed in a database transaction before the
+provider call. The claim makes the behavior at-most-once and prevents duplicate
+webhook delivery from sending duplicate DMs. Provider failures are recorded with
+a stable, secret-free status on the source record and do not reopen or fail the
+already persisted webhook event. A failed automatic send is not retried
+automatically because an ambiguous provider outcome could otherwise spam the
+recipient.
 
 ## Meta webhook
 

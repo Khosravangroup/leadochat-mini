@@ -22,6 +22,9 @@ PostgreSQL    database queue worker
 Microservices, an alternate framework, or machine-specific paths must not be
 introduced without explicit architectural approval.
 
+For the full request, data, realtime, provider, deployment, and performance
+measurement map, see [`PERFORMANCE_ARCHITECTURE_MAP.md`](PERFORMANCE_ARCHITECTURE_MAP.md).
+
 ## Runtime components
 
 | Component | Responsibility |
@@ -56,6 +59,12 @@ tenant boundary. The Phase 1 candidate uses deny-by-default `workspace.access` a
 remains in progress until that exact cumulative revision is deployed and smoke-
 tested.
 
+The Automation settings section stores per-Instagram-connection direct-message
+rules under `ProviderConnection.meta.dm_automation`. Rules are disabled by
+default, preserve unrelated provider metadata, and can be changed only through
+the workspace-management capability. This feature adds no schema or environment
+configuration.
+
 ### Inbox
 
 `InboxController` owns conversation listing and state, messages, reactions, voice
@@ -75,6 +84,19 @@ provider URLs remain remote and are not rewritten as local files.
 `SocialController` owns Instagram posts, comments, stories, publishing, moderation,
 and comment-to-DM bridging. Provider-specific API behavior is delegated to services
 under `app/Services/Meta/Instagram`.
+After persistence, `ProcessInstagramWebhookEvent` passes eligible
+`WorkspaceRealtimeUpdated` message/comment updates directly to
+`InstagramDmAutomationService` before broadcasting them through Reverb. The two
+operations have independent failure boundaries, so realtime availability cannot
+silently disable automation. The service limits execution to inbound story
+replies and newly added active external comments, claims each source record
+before the provider call, and delegates sends to `InstagramService`. Story replies use the
+standard messaging endpoint; comment automation uses the native private-reply
+contract and persists the outbound Inbox message. Claim/result state is stored in
+the source record's existing JSON metadata so duplicate events cannot resend the
+same automation. Failed sends remain failed rather than being retried
+automatically, avoiding duplicate recipient messages after an ambiguous provider
+response.
 `InstagramInsightsController` and `InstagramInsightsService` add an owner-only,
 read-only account Insights journey using the Instagram Login token and
 `graph.instagram.com`. This is distinct from the Facebook Marketing API token

@@ -21,6 +21,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
 
 class WorkspaceSettingsController extends Controller
@@ -73,6 +74,7 @@ class WorkspaceSettingsController extends Controller
         $commercePromotionCampaigns = collect();
         $commercePromotablePosts = collect();
         $commercePromotionStats = [];
+        $automationConnections = collect();
 
         if ($workspace && $section === 'tags') {
             $workspaceTags = WorkspaceTag::query()
@@ -128,6 +130,16 @@ class WorkspaceSettingsController extends Controller
                     'is_ready' => false,
                 ],
             ]);
+        }
+
+        if ($workspace && $section === 'automation') {
+            $automationConnections = ProviderConnection::query()
+                ->where('workspace_id', $workspace->id)
+                ->where('provider', 'instagram')
+                ->where('status', 'connected')
+                ->orderBy('provider_account_name')
+                ->orderBy('id')
+                ->get();
         }
 
         if ($workspace && $section === 'catalogs') {
@@ -320,8 +332,60 @@ class WorkspaceSettingsController extends Controller
             'commercePromotionCampaigns' => $commercePromotionCampaigns,
             'commercePromotablePosts' => $commercePromotablePosts,
             'commercePromotionStats' => $commercePromotionStats,
+            'automationConnections' => $automationConnections,
             'canManageTeam' => (bool) ($workspace && $user),
         ]);
+    }
+
+    public function updateInstagramAutomation(Request $request, ProviderConnection $connection): RedirectResponse
+    {
+        $workspace = $request->user()?->currentWorkspace();
+
+        if (! $workspace
+            || (int) $connection->workspace_id !== (int) $workspace->id
+            || $connection->provider !== 'instagram'
+            || $connection->status !== 'connected'
+        ) {
+            abort(404);
+        }
+
+        $validated = $request->validate([
+            'story_reply_enabled' => ['nullable', 'boolean'],
+            'story_reply_message' => [
+                Rule::requiredIf($request->boolean('story_reply_enabled')),
+                'nullable',
+                'string',
+                'max:1000',
+                'not_regex:/\A\s*\z/u',
+            ],
+            'comment_dm_enabled' => ['nullable', 'boolean'],
+            'comment_dm_message' => [
+                Rule::requiredIf($request->boolean('comment_dm_enabled')),
+                'nullable',
+                'string',
+                'max:1000',
+                'not_regex:/\A\s*\z/u',
+            ],
+        ]);
+
+        $meta = is_array($connection->meta) ? $connection->meta : [];
+        $meta['dm_automation'] = [
+            'story_reply' => [
+                'enabled' => $request->boolean('story_reply_enabled'),
+                'message' => trim((string) ($validated['story_reply_message'] ?? '')),
+            ],
+            'comment_dm' => [
+                'enabled' => $request->boolean('comment_dm_enabled'),
+                'message' => trim((string) ($validated['comment_dm_message'] ?? '')),
+            ],
+            'updated_at' => now()->toIso8601String(),
+        ];
+
+        $connection->update(['meta' => $meta]);
+
+        return redirect()->route('settings.index', [
+            'section' => 'automation',
+        ])->with('status', 'Instagram DM automation settings saved.');
     }
 
     public function createTeamMember(Request $request): RedirectResponse
