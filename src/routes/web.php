@@ -123,6 +123,7 @@ Route::middleware(['auth', 'verified', 'can:workspace.access'])->group(function 
     Route::middleware('can:workspace.manage')->group(function () {
         Route::get('/settings', [WorkspaceSettingsController::class, 'index'])->name('settings.index');
         Route::patch('/settings/general', [WorkspaceSettingsController::class, 'updateGeneral'])->name('settings.general.update');
+        Route::patch('/settings/automation/instagram/{connection}', [WorkspaceSettingsController::class, 'updateInstagramAutomation'])->name('settings.automation.instagram.update');
         Route::post('/settings/team', [WorkspaceSettingsController::class, 'createTeamMember'])->name('settings.team.create');
         Route::post('/settings/tags', [WorkspaceSettingsController::class, 'createTag'])->name('settings.tags.create');
         Route::post('/settings/tags/{tag}', [WorkspaceSettingsController::class, 'updateTag'])->name('settings.tags.update');

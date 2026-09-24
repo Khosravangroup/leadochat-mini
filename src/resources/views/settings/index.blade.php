@@ -163,7 +163,7 @@
                             class="ws-nav-link {{ $section === $key ? 'is-active' : '' }}"
                         >
                             <span class="ws-nav-link-text">{{ $label }}</span>
-                            @if (in_array($key, ['automation', 'ai', 'billing', 'security', 'advanced'], true))
+                            @if (in_array($key, ['ai', 'billing', 'security', 'advanced'], true))
                                 <span class="ws-nav-pill">Soon</span>
                             @endif
                         </a>
@@ -195,7 +195,9 @@
                         Manage product catalogs that agents can send inside Instagram direct messages.
                     @elseif ($section === 'commerce')
                         Discover real Meta Commerce assets, catalog access, and product-tag readiness for App Review.
-                    @elseif (in_array($section, ['automation', 'ai', 'billing', 'security', 'advanced'], true))
+                    @elseif ($section === 'automation')
+                        Configure automatic Instagram direct messages for story replies and new comments.
+                    @elseif (in_array($section, ['ai', 'billing', 'security', 'advanced'], true))
                         This section will be added soon.
                     @else
                         This section is reserved and will be implemented in the next phases.
@@ -4835,7 +4837,225 @@
                             </div>
                         </div>
                     </div>
-                @elseif (in_array($section, ['automation', 'ai', 'billing', 'security', 'advanced'], true))
+                @elseif ($section === 'automation')
+                    <style>
+                        .ws-automation-list {
+                            display: grid;
+                            gap: 16px;
+                            margin-top: 18px;
+                        }
+
+                        .ws-automation-card {
+                            border: 1px solid #e2e8f0;
+                            border-radius: 14px;
+                            background: #fff;
+                            padding: 18px;
+                        }
+
+                        .ws-automation-account {
+                            margin: 0;
+                            color: #0f172a;
+                            font-size: 16px;
+                            font-weight: 800;
+                        }
+
+                        .ws-automation-account-meta,
+                        .ws-automation-help {
+                            margin-top: 5px;
+                            color: #64748b;
+                            font-size: 12px;
+                            line-height: 1.6;
+                        }
+
+                        .ws-automation-grid {
+                            display: grid;
+                            grid-template-columns: repeat(2, minmax(0, 1fr));
+                            gap: 14px;
+                            margin-top: 16px;
+                        }
+
+                        .ws-automation-rule {
+                            border: 1px solid #e2e8f0;
+                            border-radius: 12px;
+                            background: #f8fafc;
+                            padding: 14px;
+                        }
+
+                        .ws-automation-toggle {
+                            display: flex;
+                            align-items: center;
+                            gap: 9px;
+                            color: #1e293b;
+                            font-size: 13px;
+                            font-weight: 800;
+                        }
+
+                        .ws-automation-textarea {
+                            box-sizing: border-box;
+                            width: 100%;
+                            min-height: 112px;
+                            margin-top: 12px;
+                            resize: vertical;
+                            border: 1px solid #cbd5e1;
+                            border-radius: 10px;
+                            background: #fff;
+                            padding: 10px 12px;
+                            color: #0f172a;
+                            font: inherit;
+                            font-size: 13px;
+                            line-height: 1.55;
+                        }
+
+                        .ws-automation-textarea:focus {
+                            border-color: #818cf8;
+                            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+                            outline: none;
+                        }
+
+                        .ws-automation-actions {
+                            display: flex;
+                            justify-content: flex-end;
+                            margin-top: 14px;
+                        }
+
+                        .ws-automation-button {
+                            border: 0;
+                            border-radius: 10px;
+                            background: #4f46e5;
+                            padding: 10px 16px;
+                            color: #fff;
+                            font-size: 13px;
+                            font-weight: 800;
+                            cursor: pointer;
+                        }
+
+                        .ws-automation-notice {
+                            margin-top: 16px;
+                            border-radius: 10px;
+                            padding: 10px 12px;
+                            font-size: 13px;
+                            font-weight: 700;
+                        }
+
+                        .ws-automation-notice.is-success {
+                            border: 1px solid #bbf7d0;
+                            background: #f0fdf4;
+                            color: #166534;
+                        }
+
+                        .ws-automation-notice.is-error {
+                            border: 1px solid #fecaca;
+                            background: #fef2f2;
+                            color: #b91c1c;
+                        }
+
+                        @media (max-width: 820px) {
+                            .ws-automation-grid {
+                                grid-template-columns: 1fr;
+                            }
+                        }
+                    </style>
+
+                    @if (session('status'))
+                        <div class="ws-automation-notice is-success">
+                            {{ session('status') }}
+                        </div>
+                    @endif
+
+                    @if ($errors->any())
+                        <div class="ws-automation-notice is-error">
+                            {{ $errors->first() }}
+                        </div>
+                    @endif
+
+                    <div class="ws-automation-list">
+                        @forelse ($automationConnections as $connection)
+                            @php
+                                $dmAutomation = is_array($connection->meta['dm_automation'] ?? null)
+                                    ? $connection->meta['dm_automation']
+                                    : [];
+                                $storyReply = is_array($dmAutomation['story_reply'] ?? null)
+                                    ? $dmAutomation['story_reply']
+                                    : [];
+                                $commentDm = is_array($dmAutomation['comment_dm'] ?? null)
+                                    ? $dmAutomation['comment_dm']
+                                    : [];
+                                $usesOldAutomationValues = (string) old('automation_connection_id') === (string) $connection->id;
+                            @endphp
+
+                            <form method="POST" action="{{ route('settings.automation.instagram.update', $connection) }}" class="ws-automation-card">
+                                @csrf
+                                @method('PATCH')
+                                <input type="hidden" name="automation_connection_id" value="{{ $connection->id }}">
+
+                                <h3 class="ws-automation-account">
+                                    {{ $connection->provider_account_name ?: 'Instagram account' }}
+                                </h3>
+                                <div class="ws-automation-account-meta">
+                                    Instagram account ID: {{ $connection->provider_account_id }}
+                                </div>
+
+                                <div class="ws-automation-grid">
+                                    <div class="ws-automation-rule">
+                                        <label class="ws-automation-toggle" for="storyReplyEnabled{{ $connection->id }}">
+                                            <input type="hidden" name="story_reply_enabled" value="0">
+                                            <input
+                                                id="storyReplyEnabled{{ $connection->id }}"
+                                                type="checkbox"
+                                                name="story_reply_enabled"
+                                                value="1"
+                                                @checked($usesOldAutomationValues ? old('story_reply_enabled') : ($storyReply['enabled'] ?? false))
+                                            >
+                                            Send a DM after every story reply
+                                        </label>
+                                        <div class="ws-automation-help">
+                                            Runs only for inbound Instagram story replies. Regular direct messages are ignored.
+                                        </div>
+                                        <textarea
+                                            name="story_reply_message"
+                                            class="ws-automation-textarea"
+                                            maxlength="1000"
+                                            placeholder="Write the automatic story reply message"
+                                        >{{ $usesOldAutomationValues ? old('story_reply_message') : ($storyReply['message'] ?? '') }}</textarea>
+                                    </div>
+
+                                    <div class="ws-automation-rule">
+                                        <label class="ws-automation-toggle" for="commentDmEnabled{{ $connection->id }}">
+                                            <input type="hidden" name="comment_dm_enabled" value="0">
+                                            <input
+                                                id="commentDmEnabled{{ $connection->id }}"
+                                                type="checkbox"
+                                                name="comment_dm_enabled"
+                                                value="1"
+                                                @checked($usesOldAutomationValues ? old('comment_dm_enabled') : ($commentDm['enabled'] ?? false))
+                                            >
+                                            Send a private DM after every new comment
+                                        </label>
+                                        <div class="ws-automation-help">
+                                            Sends a private reply to the comment author and records the outbound message in Inbox.
+                                        </div>
+                                        <textarea
+                                            name="comment_dm_message"
+                                            class="ws-automation-textarea"
+                                            maxlength="1000"
+                                            placeholder="Write the automatic comment DM"
+                                        >{{ $usesOldAutomationValues ? old('comment_dm_message') : ($commentDm['message'] ?? '') }}</textarea>
+                                    </div>
+                                </div>
+
+                                <div class="ws-automation-actions">
+                                    <button type="submit" class="ws-automation-button">
+                                        Save automation
+                                    </button>
+                                </div>
+                            </form>
+                        @empty
+                            <div class="ws-placeholder">
+                                Connect an Instagram account before configuring direct-message automation.
+                            </div>
+                        @endforelse
+                    </div>
+                @elseif (in_array($section, ['ai', 'billing', 'security', 'advanced'], true))
                     <div class="ws-placeholder">
                         {{ $sections[$section] }} will be added soon.
                     </div>
