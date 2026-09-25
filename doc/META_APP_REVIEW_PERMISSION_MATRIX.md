@@ -1,6 +1,6 @@
 # Meta App Review software permission matrix
 
-Code inventory date: 24 September 2026. The Instagram DM automation release is
+Code inventory date: 25 September 2026. The Instagram DM automation release is
 deployed from `main` revision `468ac88ef3f8fa8650fa4cfb87a5c28e546e2f05`
 after the owner reconnected an authorized test account. This is an
 application-code and live-boundary inventory, not proof of a Meta grant or App
@@ -26,9 +26,9 @@ to remove those public product paths.
 | Scope | Code-backed user action and outbound boundary | Automated evidence | Current gap |
 | --- | --- | --- | --- |
 | `instagram_business_basic` | Connect account; identity read in `InstagramTokenExchangeService` and `MetaCommerceDiagnosticsService`; media read in `InstagramContentService` | `InstagramOAuthCallbackTest` covers callback boundaries with mocked exchange; `MetaCommerceDiagnosticsTest` covers direct Instagram diagnostics routing | Live read-only identity and media checks succeeded on the owner-authorized test account; the provider grant still requires Meta review |
-| `instagram_business_manage_messages` | Inbox send through `InstagramMessagingService`; signed inbound webhooks through `ProcessInstagramWebhookEvent`; configurable automatic response to inbound story replies through `InstagramDmAutomationService` | `InstagramMessagingServiceTest`, `InboxCatalogProductTest`, webhook unit tests, and `InstagramDmAutomationTest` cover the automatic story-reply journey, duplicate suppression, and non-story exclusion; the deployed disabled-by-default settings UI was verified | Live DM send/receive and automatic story-reply provider proof remain deferred |
-| `instagram_business_manage_comments` | Social comment read, reply, hide/unhide, and delete through `InstagramCommentService` and `SocialController`; configurable native private reply for new comments through `InstagramDmAutomationService` | `InstagramReviewApiJourneyTest` covers reply/hide and provider-error redaction; `InstagramDmAutomationTest` covers automatic private reply, Inbox persistence, duplicate suppression, self/deleted exclusion, workspace isolation, and safe failure; the deployed disabled-by-default settings UI was verified | Add read/delete route edges; live automatic comment-DM provider proof remains deferred |
-| `instagram_business_content_publish` | Post and story publish through `InstagramContentService` and `InstagramStoryService` | `InstagramContentServiceTest` covers post product tags; `InstagramReviewApiJourneyTest` covers story create/status/publish | Add video/failure and route-authorization edge tests; live proof deferred |
+| `instagram_business_manage_messages` | Inbox send through `InstagramMessagingService`; signed inbound webhooks through `ProcessInstagramWebhookEvent`; configurable automatic response to inbound story replies through `InstagramDmAutomationService` | `InstagramMessagingServiceTest`, `InboxCatalogProductTest`, webhook unit tests, and `InstagramDmAutomationTest` cover the automatic story-reply journey, duplicate suppression, and non-story exclusion; on 25 September a live owner-controlled Story reply was received and exactly one visible automatic DM was saved with status `sent` | Meta App Review approval remains pending; duplicate, failure, isolation, and non-story live negatives remain automated-test evidence |
+| `instagram_business_manage_comments` | Social comment read, reply, hide/unhide, and delete through `InstagramCommentService` and `SocialController`; configurable native private reply for new comments through `InstagramDmAutomationService` | `InstagramReviewApiJourneyTest` covers reply/hide and provider-error redaction; `InstagramDmAutomationTest` covers automatic private reply, Inbox persistence, duplicate suppression, self/deleted exclusion, workspace isolation, and safe failure; on 25 September a live owner-controlled comment produced exactly one visible private DM with status `sent` | Add read/delete route edges; Meta App Review approval remains pending |
+| `instagram_business_content_publish` | Post and story publish through `InstagramContentService` and `InstagramStoryService` | `InstagramContentServiceTest` covers post product tags; `InstagramReviewApiJourneyTest` covers story create/status/publish; on 25 September a live image Story was published through the application, used for the reply journey, then deleted from Instagram and marked `removed` locally | Add video/failure and route-authorization edge tests; Meta App Review approval remains pending |
 | `instagram_business_manage_insights` | Owner-only `GET /social/instagram/insights` reads account reach, views, and interactions through `graph.instagram.com` using the connected Instagram token | `InstagramInsightsTest` covers request, workspace isolation, unavailable metrics, and safe errors | The live account-level request succeeded; Meta review approval is still pending and media-level insights are not implemented |
 | `business_management` | Deferred from this submission; commerce discovery contains a mocked `/me/businesses` path | `MetaCommerceDiscoveryTest` with mocked provider responses | Requires a separate compatible login/token contract before a future review |
 | `catalog_management` | Deferred from this submission; catalog services remain local groundwork | `MetaCommerceDiscoveryTest`, `MetaCatalogProductSyncTest`, `MetaCommerceStructureSyncTest` | Requires a separate compatible login/token contract before a future review |
@@ -104,3 +104,16 @@ discovered for this direct Instagram connection. Catalog access is a warning tha
 requires separate Facebook commerce authorization, not a failed Instagram API
 probe. No outbound message, moderation action, publication, catalog mutation, or
 other provider mutation was attempted.
+
+## Live automatic-send verification on 25 September 2026
+
+With explicit owner approval and an owner-controlled Instagram test account,
+production connection `28` completed the automatic comment-private-reply and
+Story-reply journeys. The comment event produced exactly one private DM and saved
+status `sent`. The Story was published through the application, the reply arrived
+through the signed webhook path with `is_story_reply=true`, and the configured
+automatic response reached the Instagram inbox with status `sent`. Both rules were
+disabled afterward. The temporary Story was deleted from Instagram and its local
+record was marked `removed`; queue and severe-log checks remained clean. This
+provider evidence demonstrates the implemented success paths but is not a Meta
+grant or App Review decision.
