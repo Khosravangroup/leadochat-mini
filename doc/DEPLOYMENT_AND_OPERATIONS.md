@@ -2,13 +2,14 @@
 
 ## Verified production snapshot
 
-Snapshot date: 24 September 2026, after the Instagram DM automation release.
+Snapshot date: 25 September 2026, after live Instagram DM automation verification.
 
 - Public URL: `https://mini.leadochat.com`
 - Application directory: `/opt/leadochat`
 - Runtime: Docker Compose with `app`, `nginx`, `postgres`, `queue`, and `reverb`
 - Verified branch: `main`
-- Verified revision: `468ac88ef3f8fa8650fa4cfb87a5c28e546e2f05`
+- Verified checkout revision: `5a49fceafeb70166e1e6eeebf1552cad1530422d`
+- Verified application feature revision: `468ac88ef3f8fa8650fa4cfb87a5c28e546e2f05`
 - Container state: all five running; PostgreSQL healthy at the snapshot time
 - Laravel state: production, debug off, configuration/routes/views cached
 - Database: PostgreSQL 16
@@ -48,6 +49,31 @@ Saving the disabled configuration for account `centerlaghari` succeeded. No live
 story-reply or comment private-reply message was sent during this verification;
 that provider mutation requires an explicitly owner-controlled trigger and final
 operator confirmation.
+
+### Live provider verification on 25 September 2026
+
+After the owner reconnected `centerlaghari`, an owner-controlled Instagram test
+account completed both outbound automation journeys against production. A new
+comment reached the signed webhook path and caused exactly one private Instagram
+DM; the saved comment automation result was `sent`. An image Story was then
+published through LeadoChat Mini, replied to from the same test account, recognized
+as an inbound Story reply, and answered with the configured automatic DM. The
+inbound message retained `is_story_reply=true`, the automation result was `sent`,
+and the reply was visible in the Instagram inbox.
+
+Both automation rules were disabled immediately after verification. The temporary
+Story was deleted from Instagram through the owner account, its direct Story URL
+returned to the account profile, and the LeadoChat record was marked `removed`.
+Queue depth remained zero, the two historical failed jobs were unchanged, all five
+Compose services stayed running, and the ten-minute verification window contained
+no new severe application or queue log entry. No token, message body, or unrelated
+account data was retained in this evidence.
+
+One prior connection token had been invalidated by Meta before its recorded expiry,
+and the older connection token had expired normally. The owner chose manual
+reconnect for this personal test project and explicitly declined automatic token
+refresh complexity. A provider revocation such as OAuth error `190` therefore
+remains an intentional manual-reconnect condition.
 
 ## Instagram diagnostics production correction
 
