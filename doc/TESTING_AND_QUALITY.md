@@ -244,6 +244,19 @@ with both rules disabled by default and successfully saved a disabled rule set.
 A real provider send was intentionally not triggered without a final
 owner-controlled recipient/interaction confirmation.
 
+The owner supplied that confirmation on 25 September 2026. Production verification
+then exercised an owner-controlled comment and Story reply against connection `28`.
+The comment journey produced one private Instagram DM with persisted automation
+status `sent`. The Story journey published an image, received a reply through the
+signed webhook path with `is_story_reply=true`, produced one visible automatic DM,
+and persisted automation status `sent`. Both rules were disabled afterward; the
+temporary Story was deleted from Instagram and its local record was marked
+`removed`. Queue depth stayed at zero, the two historical failed jobs were
+unchanged, all five services remained running, and no new severe application or
+queue log entry appeared in the verification window. This is live provider evidence
+for the two automatic-send success paths; duplicate, failure, isolation, ordinary
+DM, edited/deleted comment, and self-event exclusions remain automated-test evidence.
+
 Start with the smallest affected check:
 
 ```bash
